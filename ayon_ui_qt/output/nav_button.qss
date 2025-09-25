@@ -1,0 +1,69 @@
+/* Generated from nav_button_css.json */
+
+QPushButton[variant="nav"] {
+    background-color: transparent;
+    color: rgb(244, 245, 245);
+    padding: 6px 16px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: transparent;
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(244, 245, 245) none 0px;
+    outline-color: rgb(244, 245, 245);
+}
+
+QPushButton[variant="nav"]:pressed {
+    background-color: 252A31;
+}
+
+QPushButton[variant="nav"]:hover {
+    background-color: #252A31;
+}
+
+QPushButton[variant="nav"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="nav"]:disabled {
+    background-color: transparent;
+}
+
+QPushButton[variant="nav"][has_icon="true"] {
+    background-color: transparent;
+    color: rgb(244, 245, 245);
+    padding: 6px 6px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: transparent;
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(244, 245, 245) none 0px;
+    outline-color: rgb(244, 245, 245);
+    qproperty-icon_color: rgb(244, 245, 245);
+}
+QPushButton[variant="nav"][has_icon="true"]:pressed {
+    background-color: 252A31;
+}
+
+QPushButton[variant="nav"][has_icon="true"]:hover {
+    background-color: #252A31;
+}
+
+QPushButton[variant="nav"][has_icon="true"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="nav"][has_icon="true"]:disabled {
+    background-color: transparent;
+}

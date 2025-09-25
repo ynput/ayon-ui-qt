@@ -1,0 +1,21 @@
+/* Generated from comment_field_css.json */
+
+AYCommentField {
+    background-color: rgb(39, 45, 53);
+    color: rgba(255, 255, 255, 0.87);
+    padding: 12px 15px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgb(40, 45, 52);
+    border-radius: 4px;
+    font-family: "Nunito Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 19.88px;
+    letter-spacing: 0.25px;
+    text-align: left;
+    text-decoration: rgba(255, 255, 255, 0.87);
+    outline: rgba(255, 255, 255, 0.87) none 0px;
+    outline-color: rgba(255, 255, 255, 0.87);
+    placeholder-text-color: #5B5F63;
+}

@@ -1,0 +1,67 @@
+/* Generated from tonal_button_css.json */
+
+QPushButton[variant="tonal"] {
+    background-color: rgb(56, 73, 86);
+    color: rgb(211, 229, 246);
+    padding: 6px 16px;
+    border-color: rgb(211, 229, 246);
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(211, 229, 246) none 0px;
+    outline-color: rgb(211, 229, 246);
+}
+
+QPushButton[variant="tonal"]:pressed {
+    background-color: #4a5b68;
+}
+
+QPushButton[variant="tonal"]:hover {
+    background-color: #445664;
+}
+
+QPushButton[variant="tonal"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="tonal"]:disabled {
+    background-color: #384956;
+    opacity: 0.5;
+}
+
+QPushButton[variant="tonal"][has_icon="true"] {
+    background-color: rgb(56, 73, 86);
+    color: rgb(211, 229, 246);
+    padding: 6px 6px;
+    border-color: rgb(211, 229, 246);
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(211, 229, 246) none 0px;
+    outline-color: rgb(211, 229, 246);
+    qproperty-icon_color: rgb(211, 229, 246);
+}
+QPushButton[variant="tonal"][has_icon="true"]:pressed {
+    background-color: #4a5b68;
+}
+
+QPushButton[variant="tonal"][has_icon="true"]:hover {
+    background-color: #445664;
+}
+
+QPushButton[variant="tonal"][has_icon="true"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="tonal"][has_icon="true"]:disabled {
+    background-color: #384956;
+    opacity: 0.5;
+}

@@ -1,0 +1,30 @@
+/* Generated from frame_css.json */
+
+AYFrame {
+    background-color: rgb(38, 42, 49);
+    color: rgba(255, 255, 255, 0.87);
+    padding: 8px;
+    font-family: "Nunito Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    text-align: start;
+    text-decoration: rgba(255, 255, 255, 0.87);
+    outline: rgba(255, 255, 255, 0.87) none 0px;
+    outline-color: rgba(255, 255, 255, 0.87);
+}
+
+AYFrame[bg="true"] {
+    background-color: #1c2026;
+    color: rgb(244, 245, 245);
+    padding: 8px;
+    font-family: "Nunito Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    text-align: start;
+    outline: rgb(244, 245, 245) none 0px;
+    outline-color: rgb(244, 245, 245);
+}

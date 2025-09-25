@@ -1,0 +1,76 @@
+import logging
+import os
+from typing import Optional
+from qtpy import QtWidgets
+
+from ayon_ui_qt import AYVBoxLayout, AYDetailPanel, AYFrame
+from ayon_ui_qt.activity_stream import AYActivityStream
+from ayon_ui_qt.utils import preprocess_payload
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("activity panel")
+
+
+class CommentsPanel(AYFrame):
+    def __init__(
+        self,
+        parent: Optional[QtWidgets.QWidget] = None,
+        activities: Optional[list] = None,
+        category: Optional[str] = None,
+    ) -> None:
+        self._activities = activities
+        self._category = category
+
+        super().__init__(parent, bg=True)
+
+        self._build()
+
+        # signals
+        self.details.signals.feed_view_changed.connect(
+            lambda x: self.update_stream(x, self._activities)
+        )
+
+        self.update_stream(self._category, self._activities)
+
+    def _build(self):
+        self.main_lyt = AYVBoxLayout(self)
+
+        # add header
+        self.details = AYDetailPanel(self)
+        self.main_lyt.addWidget(self.details, stretch=0)
+        # add tab layout with hidden tabs
+        self.stream = AYActivityStream(
+            self, activities=self._activities, category=self._category
+        )
+        self.main_lyt.addWidget(self.stream, stretch=1)
+
+    def update_stream(self, category, activities: Optional[list] = None):
+        if activities and activities != self._activities:
+            self._activities = activities
+        if self._activities:
+            self.stream.update_stream(category, self._activities)
+
+
+#  TEST =======================================================================
+
+
+if __name__ == "__main__":
+    from ayon_ui_qt.tester import test
+    import json
+
+    def build():
+        data_file = os.path.join(
+            os.path.dirname(__file__),
+            "resources",
+            "GetActivities-recieved-data.json",
+        )
+        with open(data_file, "r") as fr:
+            payload = json.load(fr)
+
+        data = preprocess_payload(payload)
+
+        w = CommentsPanel(activities=data, category="comment")
+
+        return w
+
+    test(build)

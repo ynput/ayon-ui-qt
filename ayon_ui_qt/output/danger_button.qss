@@ -1,0 +1,65 @@
+/* Generated from danger_button_css.json */
+
+QPushButton[variant="danger"] {
+    background-color: rgb(148, 15, 0);
+    color: rgb(255, 218, 214);
+    padding: 6px 16px;
+    border-color: rgb(255, 218, 214);
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(255, 218, 214) none 0px;
+    outline-color: rgb(255, 218, 214);
+}
+
+QPushButton[variant="danger"]:pressed {
+    background-color: #9e271a;
+}
+
+QPushButton[variant="danger"]:hover {
+    background-color: #9c1f11;
+}
+
+QPushButton[variant="danger"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="danger"]:disabled {
+    background-color: #940f00;
+}
+
+QPushButton[variant="danger"][has_icon="true"] {
+    background-color: rgb(148, 15, 0);
+    color: rgb(255, 218, 214);
+    padding: 6px 6px;
+    border-color: rgb(255, 218, 214);
+    border-radius: 4px;
+    font-family: "Nunito Sans";
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    text-align: center;
+    outline: rgb(255, 218, 214) none 0px;
+    outline-color: rgb(255, 218, 214);
+    qproperty-icon_color: rgb(255, 218, 214);
+}
+QPushButton[variant="danger"][has_icon="true"]:pressed {
+    background-color: #9e271a;
+}
+
+QPushButton[variant="danger"][has_icon="true"]:hover {
+    background-color: #9c1f11;
+}
+
+QPushButton[variant="danger"][has_icon="true"]:focus {
+    outline: 2px solid #8FCEFF;
+}
+
+QPushButton[variant="danger"][has_icon="true"]:disabled {
+    background-color: #940f00;
+}
