@@ -6,13 +6,14 @@ from functools import partial
 
 # from qt_material_icons import MaterialIcon
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import Qt, QObject
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QColor, QPen, QBrush
 from qtpy.QtWidgets import (
     QApplication,
     QWidget,
     QStyle,
     QStyleOption,
+    QStyleOptionButton,
     QPushButton,
 )
 
@@ -44,11 +45,10 @@ def all_enums(t):
 
 def enum_values(enum):
     # qmeta = QtCore.QMetaEnum(enum)
-    meta_object: QtCore.QMetaObject = QStyle.staticMetaObject
+    meta_object: QtCore.QMetaObject = QStyle.staticMetaObject  # type: ignore
     enum_index = meta_object.indexOfEnumerator(enum.__name__)
     meta_enum: QtCore.QMetaEnum = meta_object.enumerator(enum_index)
     num_keys = meta_enum.keyCount()
-    keys = [meta_enum.key(v) for v in range(num_keys)]
     vals = [v for v in range(num_keys) if meta_enum.key(v)]
     # print(f"=== enum = {meta_enum.scope()}.{meta_enum.enumName()} -> {keys}")
     return vals
@@ -67,10 +67,10 @@ def enum_to_str(enum, enum_value: int) -> str:
     try:
         enum_to_str._cache[cachekey] = enum.valueToKey(enum_value)  # type: ignore
     except AttributeError:
-        meta_object = QStyle.staticMetaObject
+        meta_object = QStyle.staticMetaObject  # type: ignore
         enum_index = meta_object.indexOfEnumerator(enum.__name__)
         meta_enum = meta_object.enumerator(enum_index)
-        enum_to_str._cache[cachekey] = meta_enum.valueToKey(enum_value)
+        enum_to_str._cache[cachekey] = meta_enum.valueToKey(enum_value)  # type: ignore
 
     return enum_to_str._cache[cachekey]  # type: ignore
 
@@ -123,28 +123,6 @@ class StyleData:
 
     def palette(self):
         return self.data.get("palette", {})
-
-    def widget_color(
-        self,
-        widget: str,
-        id: str,
-        variant=None,
-        state="base",
-    ) -> str:
-        vrt = (
-            variant
-            if variant
-            else self.data["widgets"][widget]["default-variant"]
-        )
-        return self.data["palette"][f"{widget}-{vrt}-{state}-{id}"]
-
-    def widget_value(self, widget: str, id: str, variant=None, state=None):
-        vrt = (
-            variant
-            if variant
-            else self.data["widgets"][widget]["default-variant"]
-        )
-        return self.data["widgets"][widget]["variants"][vrt][id]
 
     def get_style(self, widget: str, variant=None, state="base"):
         try:
@@ -284,23 +262,17 @@ class ButtonDrawer:
         widget: QWidget | None,
     ) -> None:
         """Draw the button background and frame with hover detection."""
-        if (
-            not isinstance(option, QtWidgets.QStyleOptionButton)
-            or widget is None
-        ):
+        if not isinstance(option, QStyleOptionButton) or widget is None:
             return
 
-        style = self.get_button_style(widget, option.state)  # type: ignore
-        rect = option.rect  # type: ignore
+        style = self.get_button_style(widget, option.state)
+        rect = option.rect
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Draw button background with hover awareness
         bg_color = style["background-color"]
-        # if style.get("disabled_opacity") and not (
-        #     option.state & QStyle.StateFlag.State_Enabled
-        # ):
         painter.setOpacity(style.get("opacity", 1.0))
 
         painter.setBrush(QBrush(bg_color))
@@ -310,7 +282,7 @@ class ButtonDrawer:
 
         # Draw focus outline if needed
         if (
-            option.state & QStyle.StateFlag.State_HasFocus  # type: ignore
+            option.state & QStyle.StateFlag.State_HasFocus
             and option.state  # type: ignore
             & QStyle.StateFlag.State_KeyboardFocusChange
         ):
@@ -334,10 +306,7 @@ class ButtonDrawer:
         widget: QWidget | None,
     ) -> None:
         """Draw the button text and icon."""
-        if (
-            not isinstance(option, QtWidgets.QStyleOptionButton)
-            or widget is None
-        ):
+        if not isinstance(option, QStyleOptionButton) or widget is None:
             return
 
         style = self.get_button_style(widget, option.state)  # type: ignore
@@ -445,7 +414,7 @@ class ButtonDrawer:
         """Calculate minimum size for push buttons with text, icons,
         and proper padding."""
 
-        if not isinstance(option, QtWidgets.QStyleOptionButton):
+        if not isinstance(option, QStyleOptionButton):
             # Fallback to parent if we don't have proper option data
             if option is not None:
                 return super(AYONStyle, self.style_inst).sizeFromContents(
@@ -474,6 +443,7 @@ class ButtonDrawer:
             if widget
             else not option.icon.isNull()  # type: ignore
         )
+        has_icon = not option.icon.isNull()
 
         # Determine appropriate padding
         if has_icon and not option.text:  # type: ignore
@@ -804,6 +774,7 @@ if __name__ == "__main__":
     print("> enum_to_str benchmarking --------------------------------------")
     ee = 0
     i = 0
+    s = ""
     vals = enum_values(QStyle.ControlElement)
     for i, v in enumerate(vals):
         s, e = time_it(lambda: enum_to_str(QStyle.ControlElement, v))
