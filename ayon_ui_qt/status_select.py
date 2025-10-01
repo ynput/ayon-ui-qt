@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 
 from qt_material_icons import MaterialIcon
 from qtpy import QtCore, QtGui, QtWidgets
+from qtpy.QtWidgets import QStyle
+from qtpy.QtGui import QColor, QBrush, QPen, QIcon, QPalette
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -22,49 +24,49 @@ STATUS_SIZES = ("full", "short", "icon")
 
 ALL_STATUSES = [
     {
-        "name": "Not ready",
+        "text": "Not ready",
         "short_name": "NRD",
         "icon": "fiber_new",
         "color": "#434a56",
         "state": "not_started",
     },
     {
-        "name": "Ready to start",
+        "text": "Ready to start",
         "short_name": "RDY",
         "icon": "timer",
         "color": "#bababa",
         "state": "not_started",
     },
     {
-        "name": "In progress",
+        "text": "In progress",
         "short_name": "PRG",
         "icon": "play_arrow",
         "color": "#3498db",
         "state": "in_progress",
     },
     {
-        "name": "Pending review",
+        "text": "Pending review",
         "short_name": "RVW",
         "icon": "visibility",
         "color": "#ff9b0a",
         "state": "in_progress",
     },
     {
-        "name": "Approved",
+        "text": "Approved",
         "short_name": "APP",
         "icon": "task_alt",
         "color": "#00f0b4",
         "state": "done",
     },
     {
-        "name": "On hold",
+        "text": "On hold",
         "short_name": "HLD",
         "icon": "back_hand",
         "color": "#fa6e46",
         "state": "blocked",
     },
     {
-        "name": "Omitted",
+        "text": "Omitted",
         "short_name": "OMT",
         "icon": "block",
         "color": "#cb1a1a",
@@ -75,7 +77,7 @@ ALL_STATUSES = [
 
 @dataclass
 class Status:
-    name: str
+    text: str
     short_name: Optional[str] = None
     state: Optional[str] = None
     icon: Optional[str] = None
@@ -83,87 +85,56 @@ class Status:
     original_name: Optional[str] = None
 
 
-class ItemDelegate(QtWidgets.QStyledItemDelegate):
+def txt_color(bg_color: str | QColor) -> QColor:
+    value = (
+        QColor(bg_color).valueF()
+        if isinstance(bg_color, str)
+        else bg_color.valueF()
+    )
+    return QColor("#eee") if value < 0.9 else QColor("#222")
+
+
+def colorize_icon(icon: QIcon, icon_color, mode=QIcon.Mode.Normal):
+    icon_size = icon.availableSizes()[0]
+    pixmap = QtGui.QPixmap(icon.pixmap(icon_size))
+    pntr = QtGui.QPainter(pixmap)
+    pntr.setCompositionMode(
+        QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+    )
+    pntr.fillRect(pixmap.rect(), icon_color)
+    pntr.end()
+    icon.addPixmap(pixmap, mode=mode)
+
+
+class StatusItemDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(self, parent=None, padding: int = 4) -> None:
         super().__init__(parent)
         self._padding = padding
         self._icon_size = 16
         self._icon_text_spacing = 8
 
-    def set_padding(self, padding: int) -> None:
-        """Update padding configuration."""
-        self._padding = padding
-
-    def get_content_rect(
-        self, option: QtWidgets.QStyleOptionViewItem
-    ) -> QtCore.QRect:
-        """Calculate content area after applying padding."""
-        return option.rect.adjusted(
-            self._padding, self._padding, -self._padding, -self._padding
-        )
-
     def paint(
         self,
         painter: QtGui.QPainter,
         option: QtWidgets.QStyleOptionViewItem,
-        index,
-    ):
-        status: Status = index.data(QtCore.Qt.ItemDataRole.UserRole)
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        # enable mouse hover + repaint
+        option.widget.setMouseTracking(True)
 
-        if not status or not status.color:
-            super().paint(painter, option, index)
-            return
-
-        # Determine hover state and colors
-        is_hovered = option.state & QtWidgets.QStyle.StateFlag.State_MouseOver
-        bg_color = (
-            QtGui.QColor(status.color)
-            if is_hovered
-            else option.backgroundBrush.color()
+        # change colors for highlight
+        option.palette.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Highlight,
+            index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
         )
-        text_color = (
-            QtGui.QColor("#fff") if is_hovered else QtGui.QColor(status.color)
+        option.palette.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.HighlightedText,
+            index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
         )
 
-        # Fill entire rect (including padding) for proper click/hover area
-        painter.fillRect(option.rect, bg_color)
-        painter.setPen(text_color)
-
-        # Get content area after padding
-        content_rect = self.get_content_rect(option)
-
-        # Draw icon if available
-        icon_rect = None
-        if status.icon:
-            icon_y = (
-                content_rect.top()
-                + (content_rect.height() - self._icon_size) // 2
-            )
-            icon_rect = QtCore.QRect(
-                content_rect.left(), icon_y, self._icon_size, self._icon_size
-            )
-
-            try:
-                from qt_material_icons import MaterialIcon
-
-                icon = MaterialIcon(status.icon)
-                pixmap = icon.pixmap(self._icon_size, self._icon_size)
-                painter.drawPixmap(icon_rect.topLeft(), pixmap)
-            except Exception as e:
-                logger.warning(f"Failed to load icon '{status.icon}': {e}")
-
-        # Calculate text rectangle
-        text_rect = QtCore.QRect(content_rect)
-        if icon_rect:
-            text_rect.setLeft(icon_rect.right() + self._icon_text_spacing)
-
-        # Draw text
-        painter.drawText(
-            text_rect,
-            QtCore.Qt.AlignmentFlag.AlignVCenter
-            | QtCore.Qt.AlignmentFlag.AlignLeft,
-            status.name,
-        )
+        super().paint(painter, option, index)
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index
@@ -176,7 +147,7 @@ class ItemDelegate(QtWidgets.QStyledItemDelegate):
 
         # Calculate text dimensions
         font_metrics = option.fontMetrics
-        text_size = font_metrics.size(0, status.name)
+        text_size = font_metrics.size(0, status.text)
 
         # Calculate content dimensions
         content_width = text_size.width()
@@ -196,17 +167,20 @@ class ItemDelegate(QtWidgets.QStyledItemDelegate):
         return QtCore.QSize(total_width, total_height)
 
 
-class StatusSelect(QtWidgets.QComboBox):
+class AYComboBox(QtWidgets.QComboBox):
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
         size: str = "full",
         height: int = 30,
         placeholder: Optional[str] = None,
+        inverted: bool = False,
         disabled: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(parent, **kwargs)
+        self.setMouseTracking(True)
+        self.setItemDelegate(StatusItemDelegate(self))
 
         # Initialize properties
         self._size: str = size
@@ -228,18 +202,32 @@ class StatusSelect(QtWidgets.QComboBox):
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
 
-        self.setItemDelegate(ItemDelegate(self))
+        bg_color = self.palette().color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Window
+        )
 
-        for status in self._status_collection:
-            self.addItem(status.name)
+        for idx, status in enumerate(self._status_collection):
+            icon = MaterialIcon(status.icon)
+            icon.set_color(status.color)
+            colorize_icon(icon, bg_color, mode=QIcon.Mode.Selected)
+
+            self.addItem(icon, status.text)
+
+            self.setItemData(idx, status, QtCore.Qt.ItemDataRole.UserRole)
             self.setItemData(
-                self.count() - 1,
-                status,
-                QtCore.Qt.ItemDataRole.UserRole,
+                idx,
+                QBrush(status.color),
+                QtCore.Qt.ItemDataRole.ForegroundRole,
+            )
+            self.setItemData(
+                idx,
+                QBrush(bg_color),
+                QtCore.Qt.ItemDataRole.BackgroundRole,
             )
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Custom paint event to render the selected status with its color."""
+        """Custom paint event to render the selected status with its color.
+        The menu items are drawn by the item delegate."""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
 
@@ -252,15 +240,19 @@ class StatusSelect(QtWidgets.QComboBox):
             if status and status.color:
                 # Paint background with status color
                 rect = self.rect()
-                painter.fillRect(rect, QtGui.QColor(status.color))
-                l = QtGui.QColor(status.color).valueF()
-                painter.setPen(
-                    QtGui.QColor("#fff") if l < 0.8 else QtGui.QColor("#000")
-                )  # White text on colored background
+                # painter.fillRect(rect, QColor(status.color))
+                painter.save()
+                painter.setBrush(QBrush(QColor(status.color)))
+                painter.setPen(QColor("#666"))
+                painter.drawRoundedRect(rect, 4, 4)
+                painter.restore()
+
+                # adjust label color based on background luminance
+                painter.setPen(txt_color(status.color))
 
                 # Calculate content area with padding
                 content_rect = rect.adjusted(
-                    10, 0, -30, 0
+                    10, 0, -10, 0
                 )  # Leave space for dropdown arrow
 
                 # Draw icon if available and enabled
@@ -297,7 +289,7 @@ class StatusSelect(QtWidgets.QComboBox):
                 painter.drawText(
                     text_rect,
                     QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    status.name,
+                    status.text,
                 )
 
                 return
@@ -314,9 +306,13 @@ if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
     def build():
-        w = StatusSelect()
+        w = QtWidgets.QFrame()
+        w.setMouseTracking(True)
+        w.setContentsMargins(10, 10, 10, 10)
+        l = QtWidgets.QHBoxLayout(w)
+        l.addWidget(AYComboBox())
         return w
 
     os.environ["QT_SCALE_FACTOR"] = "1"
 
-    test(build)
+    test(build, use_css=False)

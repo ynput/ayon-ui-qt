@@ -745,6 +745,7 @@ if __name__ == "__main__":
     from ayon_ui_qt.frame import AYFrame
     from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
     from ayon_ui_qt.container import AYContainer
+    from ayon_ui_qt.status_select import AYComboBox
     from ayon_ui_qt.tester import test
 
     def time_it(func):
@@ -848,6 +849,18 @@ if __name__ == "__main__":
             container_2.add_widget(b)
         container_2.addStretch()
         widget.add_widget(container_2)
+
+        container_3 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant="low",
+            margin=0,
+            layout_margin=10,
+            layout_spacing=10,
+        )
+        container_3.add_widget(QtWidgets.QCheckBox("CheckBox"))
+        container_3.addStretch()
+
+        widget.add_widget(container_3)
 
         return widget
 
