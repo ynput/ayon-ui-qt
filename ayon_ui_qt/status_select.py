@@ -28,58 +28,50 @@ ALL_STATUSES = [
         "short_name": "NRD",
         "icon": "fiber_new",
         "color": "#434a56",
-        "state": "not_started",
     },
     {
         "text": "Ready to start",
         "short_name": "RDY",
         "icon": "timer",
         "color": "#bababa",
-        "state": "not_started",
     },
     {
         "text": "In progress",
         "short_name": "PRG",
         "icon": "play_arrow",
         "color": "#3498db",
-        "state": "in_progress",
     },
     {
         "text": "Pending review",
         "short_name": "RVW",
         "icon": "visibility",
         "color": "#ff9b0a",
-        "state": "in_progress",
     },
     {
         "text": "Approved",
         "short_name": "APP",
         "icon": "task_alt",
         "color": "#00f0b4",
-        "state": "done",
     },
     {
         "text": "On hold",
         "short_name": "HLD",
         "icon": "back_hand",
         "color": "#fa6e46",
-        "state": "blocked",
     },
     {
         "text": "Omitted",
         "short_name": "OMT",
         "icon": "block",
         "color": "#cb1a1a",
-        "state": "blocked",
     },
 ]
 
 
 @dataclass
-class Status:
+class Item:
     text: str
     short_name: Optional[str] = None
-    state: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
     original_name: Optional[str] = None
@@ -140,7 +132,7 @@ class StatusItemDelegate(QtWidgets.QStyledItemDelegate):
         self, option: QtWidgets.QStyleOptionViewItem, index
     ) -> QtCore.QSize:
         """Calculate size hint including padding."""
-        status: Status = index.data(QtCore.Qt.ItemDataRole.UserRole)
+        status: Item = index.data(QtCore.Qt.ItemDataRole.UserRole)
 
         if not status:
             return super().sizeHint(option, index)
@@ -187,11 +179,11 @@ class AYComboBox(QtWidgets.QComboBox):
         self._height: int = height
         self._placeholder: Optional[str] = placeholder
         self._disabled: bool = disabled
-        self._status_collection: list = [Status(**s) for s in ALL_STATUSES]
-        self._current_status: Optional[Status] = None
+        self._status_collection: list = [Item(**s) for s in ALL_STATUSES]
+        self._current_status: Optional[Item] = None
         self._icon_size: int = 20
         self._show_icons: bool = True
-        self._custom_options: List[Status] = []
+        self._custom_options: List[Item] = []
 
         self.setMinimumHeight(self._height)
         self.setMaximumHeight(self._height)
@@ -234,7 +226,7 @@ class AYComboBox(QtWidgets.QComboBox):
         # Get the current selected status
         current_index = self.currentIndex()
         if current_index >= 0:
-            status: Status = self.itemData(
+            status: Item = self.itemData(
                 current_index, QtCore.Qt.ItemDataRole.UserRole
             )
             if status and status.color:
