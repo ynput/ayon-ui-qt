@@ -115,16 +115,32 @@ class StatusItemDelegate(QtWidgets.QStyledItemDelegate):
         option.widget.setMouseTracking(True)
 
         # change colors for highlight
-        option.palette.setColor(
-            QPalette.ColorGroup.Active,
-            QPalette.ColorRole.Highlight,
-            index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
+        highlight_color = option.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Light
         )
-        option.palette.setColor(
-            QPalette.ColorGroup.Active,
-            QPalette.ColorRole.HighlightedText,
-            index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
-        )
+
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            option.palette.setColor(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.Highlight,
+                highlight_color,
+            )
+            option.palette.setColor(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.HighlightedText,
+                index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
+            )
+        elif option.state & QStyle.StateFlag.State_Selected:
+            option.palette.setColor(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.Highlight,
+                index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
+            )
+            option.palette.setColor(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.HighlightedText,
+                index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
+            )
 
         super().paint(painter, option, index)
 
@@ -178,6 +194,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._size: str = size
         self._height: int = height
         self._placeholder: Optional[str] = placeholder
+        self._inverted: bool = inverted
         self._disabled: bool = disabled
         self._status_collection: list = [Item(**s) for s in ALL_STATUSES]
         self._current_status: Optional[Item] = None
@@ -190,10 +207,13 @@ class AYComboBox(QtWidgets.QComboBox):
 
         # Set size policy to expand horizontally
         self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
 
+        self.set_data()
+
+    def set_data(self):
         bg_color = self.palette().color(
             QPalette.ColorGroup.Active, QPalette.ColorRole.Window
         )
@@ -201,11 +221,18 @@ class AYComboBox(QtWidgets.QComboBox):
         for idx, status in enumerate(self._status_collection):
             icon = MaterialIcon(status.icon)
             icon.set_color(status.color)
-            colorize_icon(icon, bg_color, mode=QIcon.Mode.Selected)
+            colorize_icon(
+                icon,
+                bg_color if self._inverted else status.color,
+                mode=QIcon.Mode.Selected,
+            )
 
-            self.addItem(icon, status.text)
+            if idx >= self.count():
+                self.addItem(icon, status.text)
+                self.setItemData(idx, status, QtCore.Qt.ItemDataRole.UserRole)
+            else:
+                self.setItemIcon(idx, icon)
 
-            self.setItemData(idx, status, QtCore.Qt.ItemDataRole.UserRole)
             self.setItemData(
                 idx,
                 QBrush(status.color),
@@ -217,11 +244,19 @@ class AYComboBox(QtWidgets.QComboBox):
                 QtCore.Qt.ItemDataRole.BackgroundRole,
             )
 
+    def set_inverted(self, state: bool):
+        self._inverted = state
+        self.set_data()
+
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Custom paint event to render the selected status with its color.
         The menu items are drawn by the item delegate."""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+
+        bg_color = self.palette().color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Window
+        )
 
         # Get the current selected status
         current_index = self.currentIndex()
@@ -232,15 +267,19 @@ class AYComboBox(QtWidgets.QComboBox):
             if status and status.color:
                 # Paint background with status color
                 rect = self.rect()
-                # painter.fillRect(rect, QColor(status.color))
                 painter.save()
-                painter.setBrush(QBrush(QColor(status.color)))
-                painter.setPen(QColor("#666"))
+                painter.setBrush(
+                    QBrush(
+                        QColor(status.color) if self._inverted else bg_color
+                    )
+                )
+                painter.setPen(QtCore.Qt.PenStyle.NoPen)
                 painter.drawRoundedRect(rect, 4, 4)
                 painter.restore()
 
                 # adjust label color based on background luminance
-                painter.setPen(txt_color(status.color))
+                fg_color = bg_color if self._inverted else QColor(status.color)
+                painter.setPen(fg_color)
 
                 # Calculate content area with padding
                 content_rect = rect.adjusted(
@@ -262,8 +301,12 @@ class AYComboBox(QtWidgets.QComboBox):
                     )
 
                     try:
-                        icon = MaterialIcon(status.icon)
-                        pixmap = icon.pixmap(self._icon_size, self._icon_size)
+                        icon = self.itemIcon(current_index)
+                        pixmap = icon.pixmap(
+                            self._icon_size,
+                            self._icon_size,
+                            mode=QIcon.Mode.Selected,
+                        )
                         painter.drawPixmap(icon_rect.topLeft(), pixmap)
                     except Exception as e:
                         logger.warning(
@@ -301,8 +344,15 @@ if __name__ == "__main__":
         w = QtWidgets.QFrame()
         w.setMouseTracking(True)
         w.setContentsMargins(10, 10, 10, 10)
-        l = QtWidgets.QHBoxLayout(w)
-        l.addWidget(AYComboBox())
+        l = QtWidgets.QVBoxLayout(w)
+        inv = QtWidgets.QCheckBox("inverted", parent=w)
+        l.addWidget(inv)
+        cb = AYComboBox()
+        l.addWidget(cb, stretch=0, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+
+        # configure
+        inv.clicked.connect(lambda x: cb.set_inverted(x))
+
         return w
 
     os.environ["QT_SCALE_FACTOR"] = "1"
