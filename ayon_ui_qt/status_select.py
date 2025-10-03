@@ -19,8 +19,6 @@ from qtpy.QtGui import QColor, QBrush, QPen, QIcon, QPalette
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Status states
-STATUS_STATES = ("not_started", "in_progress", "done", "blocked")
 
 # Size variants
 STATUS_SIZES = ("full", "short", "icon")
