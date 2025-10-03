@@ -1,7 +1,12 @@
 import copy
 import os
-from qt_material_icons import MaterialIcon
+
 from qtpy import QtCore, QtGui, QtWidgets
+
+try:
+    from qtmaterialsymbols import get_icon
+except ImportError:
+    from vendor.qtmaterialsymbols import get_icon
 
 VARIANTS = (
     "surface",
@@ -33,8 +38,7 @@ class AYButton(QtWidgets.QPushButton):
 
     def set_icon(self, icon_name: str):
         self._icon = icon_name
-        icn = MaterialIcon(self._icon, size=self._icon_size)
-        icn.set_color(self._icon_color)
+        icn = get_icon(self._icon, color=self._icon_color)
         self.setIcon(icn)
 
     def set_label(self, label: str):
@@ -59,10 +63,7 @@ class AYButton(QtWidgets.QPushButton):
     def set_icon_color(self, value):
         val = copy.copy(value)
         if self._icon and self._icon_color != val:
-            if self._variant == "filled":
-                print(f"{self._variant}: {val}")
-            icn = MaterialIcon(self._icon, size=self._icon_size)
-            icn.set_color(val)
+            icn = get_icon(self._icon, color=val)
             self.setIcon(icn)
         self._icon_color = val
 

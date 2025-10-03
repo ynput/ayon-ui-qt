@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from qt_material_icons import MaterialIcon
+try:
+    from qtmaterialsymbols import get_icon
+except ImportError:
+    from vendor.qtmaterialsymbols import get_icon
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtWidgets import QStyle
 from qtpy.QtGui import QColor, QBrush, QPen, QIcon, QPalette
@@ -98,11 +101,13 @@ def colorize_icon(icon: QIcon, icon_color, mode=QIcon.Mode.Normal):
     icon.addPixmap(pixmap, mode=mode)
 
 
-class StatusItemDelegate(QtWidgets.QStyledItemDelegate):
-    def __init__(self, parent=None, padding: int = 4) -> None:
+class AYComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
+    def __init__(
+        self, parent=None, padding: int = 4, icon_size: int = 16
+    ) -> None:
         super().__init__(parent)
         self._padding = padding
-        self._icon_size = 16
+        self._icon_size = icon_size
         self._icon_text_spacing = 8
 
     def paint(
@@ -184,11 +189,12 @@ class AYComboBox(QtWidgets.QComboBox):
         placeholder: Optional[str] = None,
         inverted: bool = False,
         disabled: bool = False,
+        icon_size: int = 20,
         **kwargs,
     ) -> None:
         super().__init__(parent, **kwargs)
         self.setMouseTracking(True)
-        self.setItemDelegate(StatusItemDelegate(self))
+        self.setItemDelegate(AYComboBoxItemDelegate(self, icon_size=icon_size))
 
         # Initialize properties
         self._size: str = size
@@ -218,13 +224,11 @@ class AYComboBox(QtWidgets.QComboBox):
             QPalette.ColorGroup.Active, QPalette.ColorRole.Window
         )
 
-        for idx, status in enumerate(self._status_collection):
-            icon = MaterialIcon(status.icon)
-            icon.set_color(status.color)
-            colorize_icon(
-                icon,
-                bg_color if self._inverted else status.color,
-                mode=QIcon.Mode.Selected,
+        for idx, status in enumerate(self._item_list):
+            icon = get_icon(
+                status.icon,
+                color=status.color,
+                color_selected=bg_color if self._inverted else status.color,
             )
 
             if idx >= self.count():

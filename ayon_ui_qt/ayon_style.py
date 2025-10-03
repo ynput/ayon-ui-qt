@@ -4,7 +4,6 @@ import json
 import copy
 from functools import partial
 
-# from qt_material_icons import MaterialIcon
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QColor, QPen, QBrush

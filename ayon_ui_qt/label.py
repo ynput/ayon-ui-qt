@@ -1,5 +1,8 @@
 from qtpy import QtCore, QtGui, QtWidgets
-from qt_material_icons import MaterialIcon
+try:
+    from qtmaterialsymbols import get_icon
+except ImportError:
+    from vendor.qtmaterialsymbols import get_icon
 
 
 class AYLabel(QtWidgets.QLabel):
@@ -62,8 +65,7 @@ class AYLabel(QtWidgets.QLabel):
 
     def set_icon(self):
         if self._icon:
-            icn = MaterialIcon(self._icon)
-            icn.set_color(self._icon_color)
+            icn = get_icon(self._icon, color=self._icon_color)
             self.setPixmap(icn.pixmap())
 
     def get_tag(self):
