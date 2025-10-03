@@ -1,23 +1,25 @@
 from __future__ import annotations
 
-import json
 import copy
+import json
 from functools import partial
 
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import Qt, QRect
-from qtpy.QtGui import QPainter, QColor, QPen, QBrush
+from qtpy.QtCore import QRect, Qt
+from qtpy.QtGui import QBrush, QColor, QPainter, QPen
 from qtpy.QtWidgets import (
     QApplication,
-    QWidget,
+    QCheckBox,
+    QFrame,
+    QPushButton,
     QStyle,
     QStyleOption,
     QStyleOptionButton,
-    QPushButton,
+    QWidget,
 )
 
 try:
-    from qtmaterialsymbols import get_icon
+    from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from vendor.qtmaterialsymbols import get_icon
 
@@ -58,7 +60,7 @@ def enum_values(enum):
     return vals
 
 
-def enum_to_str(enum, enum_value: int, widget: str = "") -> str:
+def enum_to_str(enum, enum_value: int, widget: str) -> str:
     """Convert enum value to string representation."""
     cachekey = f"{enum.__name__}_{enum_value}_{widget}"
     try:
@@ -162,10 +164,16 @@ class ButtonDrawer:
         self.style_inst = style_inst
         self.model = style_inst.model
 
+    @property
+    def base_class(self):
+        return {"QPushButton": QPushButton}
+
     def register_drawers(self):
         return {
             enum_to_str(
-                QStyle.ControlElement, QStyle.ControlElement.CE_PushButton
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_PushButton,
+                "QPushButton",
             ): [
                 partial(
                     self.style_inst.drawControl,
@@ -179,51 +187,68 @@ class ButtonDrawer:
             enum_to_str(
                 QStyle.ControlElement,
                 QStyle.ControlElement.CE_PushButtonBevel,
+                "QPushButton",
             ): self.draw_push_button,
             enum_to_str(
                 QStyle.ControlElement,
                 QStyle.ControlElement.CE_PushButtonLabel,
+                "QPushButton",
             ): self.draw_push_button_label,
         }
 
     def register_sizers(self):
         return {
             enum_to_str(
-                QStyle.ContentsType, QStyle.ContentsType.CT_PushButton
+                QStyle.ContentsType,
+                QStyle.ContentsType.CT_PushButton,
+                "QPushButton",
             ): self.calculate_push_button_size,
             enum_to_str(
-                QStyle.SubElement, QStyle.SubElement.SE_PushButtonContents
+                QStyle.SubElement,
+                QStyle.SubElement.SE_PushButtonContents,
+                "QPushButton",
             ): self.sub_element_rect,
             enum_to_str(
-                QStyle.SubElement, QStyle.SubElement.SE_PushButtonFocusRect
+                QStyle.SubElement,
+                QStyle.SubElement.SE_PushButtonFocusRect,
+                "QPushButton",
             ): self.sub_element_rect,
         }
 
     def register_metrics(self):
         return {
             enum_to_str(
-                QStyle.PixelMetric, QStyle.PixelMetric.PM_ButtonMargin
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ButtonMargin,
+                "QPushButton",
             ): lambda: partial(
                 self.get_metric, QStyle.PixelMetric.PM_ButtonMargin
             ),
             enum_to_str(
-                QStyle.PixelMetric, QStyle.PixelMetric.PM_DefaultFrameWidth
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_DefaultFrameWidth,
+                "QPushButton",
             ): partial(
                 self.get_metric, QStyle.PixelMetric.PM_DefaultFrameWidth
             ),
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_ButtonDefaultIndicator,
+                "QPushButton",
             ): partial(
                 self.get_metric, QStyle.PixelMetric.PM_ButtonDefaultIndicator
             ),
             enum_to_str(
-                QStyle.PixelMetric, QStyle.PixelMetric.PM_FocusFrameVMargin
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_FocusFrameVMargin,
+                "QPushButton",
             ): partial(
                 self.get_metric, QStyle.PixelMetric.PM_FocusFrameVMargin
             ),
             enum_to_str(
-                QStyle.PixelMetric, QStyle.PixelMetric.PM_FocusFrameHMargin
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_FocusFrameHMargin,
+                "QPushButton",
             ): partial(
                 self.get_metric, QStyle.PixelMetric.PM_FocusFrameHMargin
             ),
@@ -585,15 +610,18 @@ class FrameDrawer:
         self.style_inst = style_inst
         self.model = style_inst.model
 
+    @property
+    def base_class(self):
+        return {"QFrame": QFrame}
+
     def register_drawers(self):
         return {
             enum_to_str(
-                QStyle.ControlElement, QStyle.ControlElement.CE_ShapedFrame
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ShapedFrame,
+                "QFrame",
             ): self.draw_frame,
         }
-
-    def register_sizers(self):
-        return {}
 
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
@@ -629,11 +657,16 @@ class CheckboxDrawer:
         self.style_inst = style_inst
         self.model = style_inst.model
 
+    @property
+    def base_class(self):
+        return {"QCheckBox": QCheckBox}
+
     def register_drawers(self):
         return {
             enum_to_str(
                 QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_IndicatorCheckBox,
+                "QCheckBox",
             ): self.draw_toggle,
         }
 
@@ -642,14 +675,17 @@ class CheckboxDrawer:
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_IndicatorWidth,
+                "QCheckBox",
             ): self.indicator_width,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_IndicatorHeight,
+                "QCheckBox",
             ): self.indicator_height,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_CheckBoxLabelSpacing,
+                "QCheckBox",
             ): self.indicator_spacing,
         }
 
@@ -713,18 +749,27 @@ class AYONStyle(QtWidgets.QCommonStyle):
         self.drawers = {}
         self.sizers = {}
         self.metrics = {}
+        self.base_classes = {}
         self.drawer_objs = [
             ButtonDrawer(self),
             FrameDrawer(self),
             CheckboxDrawer(self),
         ]
         for obj in self.drawer_objs:
+            self.base_classes.update(obj.base_class)
             if hasattr(obj, "register_drawers"):
                 self.drawers.update(obj.register_drawers())
             if hasattr(obj, "register_sizers"):
                 self.sizers.update(obj.register_sizers())
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
+
+    def widget_key(self, w: QWidget | None) -> str:
+        if w:
+            for name, wtype in self.base_classes.items():
+                if issubclass(type(w), wtype):
+                    return name
+        return ""
 
     def polish(self, widget) -> None:
         """Polish widgets to enable hover tracking."""
@@ -735,6 +780,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
             if isinstance(widget, QPushButton):
                 widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
                 widget.setMouseTracking(True)
+
         elif isinstance(widget, QApplication):
             super().polish(widget)
         else:
@@ -750,7 +796,9 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Draw control elements (buttons, labels, etc.)."""
 
         try:
-            calls = self.drawers[enum_to_str(QStyle.ControlElement, element)]
+            calls = self.drawers[
+                enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
+            ]
         except KeyError:
             # no custom drawer fallback
             super().drawControl(element, option, painter, w)
@@ -774,7 +822,9 @@ class AYONStyle(QtWidgets.QCommonStyle):
 
         try:
             draw_prim = self.drawers[
-                enum_to_str(QStyle.PrimitiveElement, element)
+                enum_to_str(
+                    QStyle.PrimitiveElement, element, self.widget_key(w)
+                )
             ]
         except KeyError:
             # Fall back to parent implementation
@@ -792,7 +842,11 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Calculate rectangles for sub-elements."""
 
         try:
-            sizer = self.sizers[enum_to_str(QStyle.SubElement, element)]
+            sizer = self.sizers[
+                enum_to_str(
+                    QStyle.SubElement, element, self.widget_key(widget)
+                )
+            ]
         except KeyError:
             # Fall back to parent implementation
             return super().subElementRect(element, option, widget)
@@ -808,7 +862,11 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Return pixel measurements for various style metrics."""
 
         try:
-            metric_func = self.metrics[enum_to_str(QStyle.PixelMetric, metric)]
+            metric_func = self.metrics[
+                enum_to_str(
+                    QStyle.PixelMetric, metric, self.widget_key(widget)
+                )
+            ]
         except KeyError:
             # Fall back to parent implementation
             return super().pixelMetric(metric, opt, widget)
@@ -843,7 +901,9 @@ class AYONStyle(QtWidgets.QCommonStyle):
 
         try:
             sizer = self.sizers[
-                enum_to_str(QStyle.ContentsType, contents_type)
+                enum_to_str(
+                    QStyle.ContentsType, contents_type, self.widget_key(widget)
+                )
             ]
         except KeyError:
             if option:
@@ -862,10 +922,11 @@ class AYONStyle(QtWidgets.QCommonStyle):
 
 if __name__ == "__main__":
     import time
+
     from ayon_ui_qt.buttons import AYButton
+    from ayon_ui_qt.container import AYContainer
     from ayon_ui_qt.frame import AYFrame
     from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
-    from ayon_ui_qt.container import AYContainer
     from ayon_ui_qt.status_select import AYComboBox
     from ayon_ui_qt.tester import test
 
@@ -899,7 +960,7 @@ if __name__ == "__main__":
     s = ""
     vals = enum_values(QStyle.ControlElement)
     for i, v in enumerate(vals):
-        s, e = time_it(lambda: enum_to_str(QStyle.ControlElement, v))
+        s, e = time_it(lambda: enum_to_str(QStyle.ControlElement, v, ""))
         ee += e
     ee /= i
     print(f"  enum_to_str = {s!r}: {ee:.6f} ms ({i} lookups)")
@@ -912,6 +973,7 @@ if __name__ == "__main__":
                 lambda: enum_to_str(
                     QStyle.ControlElement,
                     QStyle.ControlElement.CE_PushButtonBevel,
+                    "",
                 )
             )
             ee += e
