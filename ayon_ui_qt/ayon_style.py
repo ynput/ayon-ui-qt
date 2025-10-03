@@ -5,7 +5,7 @@ import copy
 from functools import partial
 
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QRect
 from qtpy.QtGui import QPainter, QColor, QPen, QBrush
 from qtpy.QtWidgets import (
     QApplication,
@@ -75,6 +75,7 @@ def enum_to_str(enum, enum_value: int) -> str:
         enum_index = meta_object.indexOfEnumerator(enum.__name__)
         meta_enum = meta_object.enumerator(enum_index)
         enum_to_str._cache[cachekey] = meta_enum.valueToKey(enum_value)  # type: ignore
+        # print(f'{cachekey}: {enum_to_str._cache[cachekey]}')
 
     return enum_to_str._cache[cachekey]  # type: ignore
 
@@ -151,6 +152,9 @@ class StyleData:
 
     def current_style(self):
         return self._cache[self.last_key]
+
+
+# ----------------------------------------------------------------------------
 
 
 class ButtonDrawer:
@@ -327,7 +331,7 @@ class ButtonDrawer:
 
         # Draw icon if present
         if not option.icon.isNull():  # type: ignore
-            icon_rect = QtCore.QRect(content_rect)
+            icon_rect = QRect(content_rect)
             if option.text:  # type: ignore
                 # Icon + text: place icon on the left
                 icon_size = option.iconSize  # type: ignore
@@ -358,7 +362,7 @@ class ButtonDrawer:
                 )
 
                 # Adjust text rectangle
-                text_rect = QtCore.QRect(content_rect)
+                text_rect = QRect(content_rect)
                 text_rect.setLeft(icon_rect.right() + 4)
 
                 # Draw text
@@ -573,6 +577,82 @@ class FrameDrawer:
 # ----------------------------------------------------------------------------
 
 
+class CheckboxDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorCheckBox,
+            ): self.draw_toggle,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_IndicatorWidth,
+            ): self.indicator_width,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_IndicatorHeight,
+            ): self.indicator_height,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing,
+            ): self.indicator_spacing,
+        }
+
+    def indicator_width(
+        self, opt: QStyleOption | None = None, widget: QWidget | None = None
+    ):
+        return 32
+
+    def indicator_height(
+        self, opt: QStyleOption | None = None, widget: QWidget | None = None
+    ):
+        return 16
+
+    def indicator_spacing(
+        self, opt: QStyleOption | None = None, widget: QWidget | None = None
+    ):
+        return 8
+
+    def draw_toggle(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        w: QWidget | None = None,
+    ):
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        checked = bool(option.state & QStyle.StateFlag.State_On)
+        style = self.model.get_style(
+            "QCheckBox", "", state="checked" if checked else "base"
+        )
+        # draw toggle background
+        painter.setBrush(QColor(style["background-color"]))
+        painter.setPen(Qt.PenStyle.NoPen)
+        half_width = option.rect.width() // 2
+        frame_rect: QRect = option.rect.adjusted(1, 0, 1, 0)
+        radius = frame_rect.height() // 2
+        painter.drawRoundedRect(frame_rect, radius, radius)
+        # draw toggle
+        painter.setBrush(QColor(style["color"]))
+        state_rect: QRect = frame_rect
+        state_rect.setWidth(frame_rect.width() // 2)
+        if checked:
+            state_rect.moveLeft(half_width)
+        painter.drawEllipse(state_rect)
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 class AYONStyle(QtWidgets.QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
@@ -585,10 +665,19 @@ class AYONStyle(QtWidgets.QCommonStyle):
         self.model = StyleData()
         self.drawers = {}
         self.sizers = {}
-        self.drawer_objs = [ButtonDrawer(self), FrameDrawer(self)]
+        self.metrics = {}
+        self.drawer_objs = [
+            ButtonDrawer(self),
+            FrameDrawer(self),
+            CheckboxDrawer(self),
+        ]
         for obj in self.drawer_objs:
-            self.drawers.update(obj.register_drawers())
-            self.sizers.update(obj.register_sizers())
+            if hasattr(obj, "register_drawers"):
+                self.drawers.update(obj.register_drawers())
+            if hasattr(obj, "register_sizers"):
+                self.sizers.update(obj.register_sizers())
+            if hasattr(obj, "register_metrics"):
+                self.metrics.update(obj.register_metrics())
 
     def polish(self, widget) -> None:
         """Polish widgets to enable hover tracking."""
@@ -636,34 +725,32 @@ class AYONStyle(QtWidgets.QCommonStyle):
     ) -> None:
         """Draw primitive elements."""
 
-        if element == QStyle.PrimitiveElement.PE_PanelButtonCommand:
-            # Button panel is handled in drawControl
-            return
-        elif element == QStyle.PrimitiveElement.PE_FrameFocusRect:
-            # Focus frame is handled in drawControl
+        try:
+            draw_prim = self.drawers[
+                enum_to_str(QStyle.PrimitiveElement, element)
+            ]
+        except KeyError:
+            # Fall back to parent implementation
+            super().drawPrimitive(element, option, painter, w)
             return
 
-        # Fall back to parent implementation
-        super().drawPrimitive(element, option, painter, w)
+        draw_prim(option, painter, w)
 
     def subElementRect(
         self,
         element: QStyle.SubElement,
         option: QStyleOption,
         widget: QWidget | None = None,
-    ) -> QtCore.QRect:
+    ) -> QRect:
         """Calculate rectangles for sub-elements."""
 
         try:
             sizer = self.sizers[enum_to_str(QStyle.SubElement, element)]
         except KeyError:
-            if option:
-                return super().subElementRect(element, option, widget)
-        else:
-            return sizer(element, option, widget)
+            # Fall back to parent implementation
+            return super().subElementRect(element, option, widget)
 
-        # Fall back to parent implementation
-        return super().subElementRect(element, option, widget)
+        return sizer(element, option, widget)
 
     def pixelMetric(
         self,
@@ -684,8 +771,13 @@ class AYONStyle(QtWidgets.QCommonStyle):
         elif metric == QStyle.PixelMetric.PM_FocusFrameHMargin:
             return 2
 
-        # Fall back to parent implementation
-        return super().pixelMetric(metric, opt, widget)
+        try:
+            metric_func = self.metrics[enum_to_str(QStyle.PixelMetric, metric)]
+        except KeyError:
+            # Fall back to parent implementation
+            return super().pixelMetric(metric, opt, widget)
+
+        return metric_func(opt, widget)
 
     def styleHint(
         self,

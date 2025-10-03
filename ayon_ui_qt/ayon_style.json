@@ -133,8 +133,25 @@
                 }
             }
         },
+        "QCheckBox": {
+            "states": [
+                "checked"
+            ],
+            "default-variant": "",
+            "variants": {
+                "": {
+                    "background-color": "button-surface-base-bg",
+                    "color": "button-nav-base-fg",
+                    "focus-outline-width": 2,
+                    "checked": {
+                        "color": "button-nav-base-fg",
+                        "background-color": "button-filled-base-bg"
+                    }
+                }
+            }
+        },
         "frame": {
-            "states":{},
+            "states": {},
             "default-variant": "",
             "variants": {
                 "": {
