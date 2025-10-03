@@ -1,5 +1,7 @@
+from __future__ import annotations
 import copy
 import os
+from typing import Literal, get_args
 
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -8,7 +10,8 @@ try:
 except ImportError:
     from vendor.qtmaterialsymbols import get_icon
 
-VARIANTS = (
+
+ButtonVariant = Literal[
     "surface",
     "tonal",
     "filled",
@@ -16,17 +19,24 @@ VARIANTS = (
     "text",
     "nav",
     "danger",
-)
+]
 
 
 class AYButton(QtWidgets.QPushButton):
-    def __init__(self, *args, **kwargs):
-        self._label = kwargs.pop("label", None)
-        self._icon = kwargs.pop("icon", None)
-        self._variant = kwargs.pop("variant", "surface")
+    def __init__(
+        self,
+        *args,
+        variant: ButtonVariant = "surface",
+        icon: str | None = None,
+        icon_size: int = 24,
+        tooltip: str = "",
+        **kwargs,
+    ):
+        self._icon = icon
+        self._variant = variant
         self._icon_color = QtGui.QColor(255, 255, 255)
-        self._icon_size = kwargs.pop("icon_size", 24)
-        self._tooltip = kwargs.pop("tooltip", None)
+        self._icon_size = icon_size
+        self._tooltip = tooltip
 
         super().__init__(*args, **kwargs)
 
@@ -40,10 +50,6 @@ class AYButton(QtWidgets.QPushButton):
         self._icon = icon_name
         icn = get_icon(self._icon, color=self._icon_color)
         self.setIcon(icn)
-
-    def set_label(self, label: str):
-        self._label = label
-        self.setText(self._label)
 
     def get_variant(self) -> str:
         return self._variant
@@ -67,6 +73,7 @@ class AYButton(QtWidgets.QPushButton):
             self.setIcon(icn)
         self._icon_color = val
 
+    # TO BE REMOVED: Properties used by the CSS implementation.
     variant = QtCore.Property(str, get_variant, set_variant)
     has_icon = QtCore.Property(bool, get_has_icon, set_has_icon)
     icon_color = QtCore.Property(QtGui.QColor, get_icon_color, set_icon_color)
@@ -80,18 +87,20 @@ def _build_test():
     widget = QtWidgets.QFrame()
     tl = QtWidgets.QVBoxLayout(widget)
 
+    variants = [v for v in get_args(ButtonVariant)]
+
     l1 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(VARIANTS):
+    for i, var in enumerate(variants):
         b = AYButton(f"{var} button", variant=var)
         l1.addWidget(b)
 
     l2 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(VARIANTS):
+    for i, var in enumerate(variants):
         b = AYButton(f"{var} button", variant=var, icon="add")
         l2.addWidget(b)
 
     l3 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(VARIANTS):
+    for i, var in enumerate(variants):
         b = AYButton(variant=var, icon="add")
         l3.addWidget(b)
     l3.addStretch(1)
@@ -107,4 +116,4 @@ if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
     os.environ["QT_SCALE_FACTOR"] = "1"
-    test(_build_test)
+    test(_build_test, use_css=True)
