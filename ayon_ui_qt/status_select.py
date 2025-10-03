@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 import os
+from typing import Literal, get_args
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # Size variants
-STATUS_SIZES = ("full", "short", "icon")
+Size = Literal["full", "short", "icon"]
 
 ALL_STATUSES = [
     {
@@ -170,7 +171,7 @@ class AYComboBox(QtWidgets.QComboBox):
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
-        size: str = "full",
+        size: Size = "full",
         height: int = 30,
         placeholder: Optional[str] = None,
         inverted: bool = False,
@@ -398,7 +399,7 @@ if __name__ == "__main__":
         cb = AYComboBox()
         w.addWidget(cb, stretch=0, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
         size = QtWidgets.QComboBox(w)
-        size.addItems(["full", "icon", "short"])
+        size.addItems([s for s in get_args(Size)])
         w.addWidget(size)
 
         # configure
