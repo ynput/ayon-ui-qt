@@ -116,4 +116,4 @@ if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
     os.environ["QT_SCALE_FACTOR"] = "1"
-    test(_build_test, use_css=True)
+    test(_build_test, use_css=False)
