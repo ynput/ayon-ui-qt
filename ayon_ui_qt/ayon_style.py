@@ -58,9 +58,9 @@ def enum_values(enum):
     return vals
 
 
-def enum_to_str(enum, enum_value: int) -> str:
+def enum_to_str(enum, enum_value: int, widget: str = "") -> str:
     """Convert enum value to string representation."""
-    cachekey = f"{enum.__name__}-{enum_value}"
+    cachekey = f"{enum.__name__}_{enum_value}_{widget}"
     try:
         return enum_to_str._cache[cachekey]  # type: ignore
     except AttributeError:
@@ -199,6 +199,53 @@ class ButtonDrawer:
             ): self.sub_element_rect,
         }
 
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric, QStyle.PixelMetric.PM_ButtonMargin
+            ): lambda: partial(
+                self.get_metric, QStyle.PixelMetric.PM_ButtonMargin
+            ),
+            enum_to_str(
+                QStyle.PixelMetric, QStyle.PixelMetric.PM_DefaultFrameWidth
+            ): partial(
+                self.get_metric, QStyle.PixelMetric.PM_DefaultFrameWidth
+            ),
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ButtonDefaultIndicator,
+            ): partial(
+                self.get_metric, QStyle.PixelMetric.PM_ButtonDefaultIndicator
+            ),
+            enum_to_str(
+                QStyle.PixelMetric, QStyle.PixelMetric.PM_FocusFrameVMargin
+            ): partial(
+                self.get_metric, QStyle.PixelMetric.PM_FocusFrameVMargin
+            ),
+            enum_to_str(
+                QStyle.PixelMetric, QStyle.PixelMetric.PM_FocusFrameHMargin
+            ): partial(
+                self.get_metric, QStyle.PixelMetric.PM_FocusFrameHMargin
+            ),
+        }
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ):
+        if metric == QStyle.PixelMetric.PM_ButtonMargin:
+            return 6
+        elif metric == QStyle.PixelMetric.PM_DefaultFrameWidth:
+            return 0
+        elif metric == QStyle.PixelMetric.PM_ButtonDefaultIndicator:
+            return 0
+        elif metric == QStyle.PixelMetric.PM_FocusFrameVMargin:
+            return 2
+        elif metric == QStyle.PixelMetric.PM_FocusFrameHMargin:
+            return 2
+
     def get_button_variant(self, widget: QWidget) -> str:
         """Extract button variant from widget properties."""
         if widget is None:
@@ -211,7 +258,7 @@ class ButtonDrawer:
             except AttributeError:
                 pass
 
-        if variant and variant in self.model.widget_variants("button"):
+        if variant and variant in self.model.widget_variants("QPushButton"):
             return variant
 
         return "surface"
@@ -248,7 +295,7 @@ class ButtonDrawer:
         elif state & QStyle.StateFlag.State_MouseOver:
             wstate = "hover"
 
-        style = self.model.get_style("button", variant, wstate)
+        style = self.model.get_style("QPushButton", variant, wstate)
 
         return style
 
@@ -508,7 +555,7 @@ class ButtonDrawer:
     ):
         if element == QStyle.SubElement.SE_PushButtonContents:
             style = self.model.get_style(
-                "button", self.get_button_variant(widget)
+                "QPushButton", self.get_button_variant(widget)
             )
             if widget and hasattr(widget, "has_icon"):
                 has_icon = self.get_button_has_icon(widget)
@@ -551,7 +598,7 @@ class FrameDrawer:
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
         variant = getattr(w, "variant", "")
-        style = self.model.get_style("frame", variant)
+        style = self.model.get_style("QFrame", variant)
         # pen setup
         border_color = QColor(style["border-color"])
         border_width = style.get("border-width", 0)
@@ -760,17 +807,6 @@ class AYONStyle(QtWidgets.QCommonStyle):
     ) -> int:
         """Return pixel measurements for various style metrics."""
 
-        if metric == QStyle.PixelMetric.PM_ButtonMargin:
-            return 6  # Vertical padding
-        elif metric == QStyle.PixelMetric.PM_DefaultFrameWidth:
-            return 0  # No frame width for our buttons
-        elif metric == QStyle.PixelMetric.PM_ButtonDefaultIndicator:
-            return 0  # No default indicator
-        elif metric == QStyle.PixelMetric.PM_FocusFrameVMargin:
-            return 2
-        elif metric == QStyle.PixelMetric.PM_FocusFrameHMargin:
-            return 2
-
         try:
             metric_func = self.metrics[enum_to_str(QStyle.PixelMetric, metric)]
         except KeyError:
@@ -843,16 +879,16 @@ if __name__ == "__main__":
     print(f"  init time: {e:.6f} ms")
 
     print("> button-surface-base: -------------------------------------------")
-    d, e = time_it(lambda: m.get_style("button", "surface", "base"))
+    d, e = time_it(lambda: m.get_style("QPushButton", "surface", "base"))
     # print(json.dumps(d, indent=4))
     print(f"  style time: {e:.6f} ms")
 
     print("> button-surface-hover -------------------------------------------")
-    d, e = time_it(lambda: m.get_style("button", "surface", "hover"))
+    d, e = time_it(lambda: m.get_style("QPushButton", "surface", "hover"))
     # print(json.dumps(d, indent=4))
     print(f"  style time: {e:.6f} ms")
 
-    d, e = time_it(lambda: m.get_style("button", "surface", "hover"))
+    d, e = time_it(lambda: m.get_style("QPushButton", "surface", "hover"))
     print(f"  cached style time: {e:.6f} ms")
 
     m.dump_cache_stats()
@@ -907,7 +943,7 @@ if __name__ == "__main__":
         )
         widget.add_widget(container_1)
 
-        variants = StyleData().widget_variants("button")
+        variants = StyleData().widget_variants("QPushButton")
 
         l1 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):

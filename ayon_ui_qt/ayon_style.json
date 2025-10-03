@@ -7,7 +7,7 @@
         "font-weight": 500
     },
     "widgets": {
-        "button": {
+        "QPushButton": {
             "states": [
                 "hover",
                 "pressed",
@@ -145,12 +145,12 @@
                     "focus-outline-width": 2,
                     "checked": {
                         "color": "button-nav-base-fg",
-                        "background-color": "button-filled-base-bg"
+                        "background-color": "button-tertiary-base-bg"
                     }
                 }
             }
         },
-        "frame": {
+        "QFrame": {
             "states": {},
             "default-variant": "",
             "variants": {
