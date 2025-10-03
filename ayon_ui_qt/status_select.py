@@ -263,7 +263,7 @@ class AYComboBox(QtWidgets.QComboBox):
         text_height = text_size.height()
 
         # Add icon space if present
-        icon_text_spacing = 6
+        icon_text_spacing = 6 if text else 0
         icon_padding = 6
         icon_width = 0
         if status.icon:
@@ -275,8 +275,12 @@ class AYComboBox(QtWidgets.QComboBox):
             padding + icon_width + icon_text_spacing + text_width + padding
         )
         total_height = max(
-            max(text_height, self._icon_size) + padding + padding, 32
+            max(text_height, self._icon_size) + padding + padding, self._height
         )
+        # print(
+        #     f"{padding} + {icon_width} + {icon_text_spacing} + {text_width} + "
+        #     f"{padding} = {total_width}"
+        # )
 
         size_hint = QtCore.QSize(total_width, total_height)
 
