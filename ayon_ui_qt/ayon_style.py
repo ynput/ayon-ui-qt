@@ -16,6 +16,11 @@ from qtpy.QtWidgets import (
     QPushButton,
 )
 
+try:
+    from qtmaterialsymbols import get_icon
+except ImportError:
+    from vendor.qtmaterialsymbols import get_icon
+
 
 def all_enums(t):
     meta_object: QtCore.QMetaObject = t.staticMetaObject
@@ -72,17 +77,6 @@ def enum_to_str(enum, enum_value: int) -> str:
         enum_to_str._cache[cachekey] = meta_enum.valueToKey(enum_value)  # type: ignore
 
     return enum_to_str._cache[cachekey]  # type: ignore
-
-
-def colorize_icon(icon, icon_size, icon_color):
-    pixmap = QtGui.QPixmap(icon.pixmap(icon_size))
-    pntr = QtGui.QPainter(pixmap)
-    pntr.setCompositionMode(
-        QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
-    )
-    pntr.fillRect(pixmap.rect(), icon_color)
-    pntr.end()
-    icon.addPixmap(pixmap)
 
 
 class StyleData:
@@ -354,7 +348,7 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                colorize_icon(option.icon, option.iconSize, text_color)
+                option.icon = get_icon(widget._icon, color=text_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
@@ -384,7 +378,7 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                colorize_icon(option.icon, option.iconSize, text_color)
+                option.icon = get_icon(widget._icon, color=text_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
