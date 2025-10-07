@@ -141,12 +141,26 @@
             "variants": {
                 "": {
                     "background-color": "button-surface-base-bg",
-                    "color": "button-nav-base-fg",
+                    "color": "button-surface-base-fg",
                     "focus-outline-width": 2,
                     "checked": {
-                        "color": "button-nav-base-fg",
+                        "color": "button-tertiary-base-fg",
                         "background-color": "button-tertiary-base-bg"
                     }
+                }
+            }
+        },
+        "QTextEdit": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "surface-container",
+                    "color": "text-color-high",
+                    "link-color": "text-color-link",
+                    "border-color": "surface-container",
+                    "border-width": 1,
+                    "border-radius": 4,
+                    "padding": [8, 12]
                 }
             }
         },
@@ -176,6 +190,7 @@
         "surface-container-low": "#1c2026",
         "text-color-high": "#f4f5f5",
         "text-color-low": "#003827",
+        "text-color-link": "#8fceff",
         "focus-color": "#8fceff",
         "button-surface-base-bg": "#424a57",
         "button-surface-base-fg": "#f4f5f5",

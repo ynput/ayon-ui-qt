@@ -5,7 +5,7 @@ import json
 from functools import partial
 
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import QRect, Qt
+from qtpy.QtCore import QRect, QRectF, Qt
 from qtpy.QtGui import QBrush, QColor, QPainter, QPen
 from qtpy.QtWidgets import (
     QApplication,
@@ -16,6 +16,7 @@ from qtpy.QtWidgets import (
     QStyleOption,
     QStyleOptionButton,
     QWidget,
+    QTextEdit,
 )
 
 try:
@@ -697,7 +698,7 @@ class CheckboxDrawer:
     def indicator_height(
         self, opt: QStyleOption | None = None, widget: QWidget | None = None
     ):
-        return 16
+        return 18
 
     def indicator_spacing(
         self, opt: QStyleOption | None = None, widget: QWidget | None = None
@@ -716,19 +717,21 @@ class CheckboxDrawer:
         style = self.model.get_style(
             "QCheckBox", "", state="checked" if checked else "base"
         )
-        # draw toggle background
         painter.setBrush(QColor(style["background-color"]))
         painter.setPen(Qt.PenStyle.NoPen)
-        half_width = option.rect.width() // 2
-        frame_rect: QRect = option.rect.adjusted(1, 0, 1, 0)
-        radius = frame_rect.height() // 2
+
+        # draw toggle background
+        frame_rect: QRectF = option.rect.toRectF().adjusted(1, 0, -1, 0)
+        radius = frame_rect.height() / 2.0
         painter.drawRoundedRect(frame_rect, radius, radius)
+
         # draw toggle
         painter.setBrush(QColor(style["color"]))
-        state_rect: QRect = frame_rect
-        state_rect.setWidth(frame_rect.width() // 2)
+        offset = frame_rect.height() * 0.125
+        state_rect: QRectF = frame_rect.adjusted(offset, offset, -offset, -offset)
+        state_rect.setWidth(state_rect.height())
         if checked:
-            state_rect.moveLeft(half_width)
+            state_rect.moveRight(frame_rect.width() - offset*0.5)
         painter.drawEllipse(state_rect)
         painter.restore()
 
@@ -1041,6 +1044,9 @@ if __name__ == "__main__":
             layout_spacing=10,
         )
         container_3.add_widget(QtWidgets.QCheckBox("CheckBox"))
+        te = QTextEdit()
+        te.setMarkdown("This is a **test** !")
+        container_3.add_widget(te)
         container_3.addStretch()
 
         widget.add_widget(container_3)

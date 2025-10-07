@@ -1,13 +1,24 @@
 from functools import partial
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtGui import QTextDocument
-from qtpy.QtWidgets import QPlainTextEdit
+from qtpy.QtGui import (
+    QTextDocument,
+    QTextCursor,
+    QTextCharFormat,
+    QFont,
+    QTextFrame,
+    QTextFrameFormat,
+    QColor,
+    QBrush,
+    QPalette,
+)
+from qtpy.QtWidgets import QTextEdit, QTextBrowser
+from qtpy.QtCore import Qt
 from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
 from ayon_ui_qt.frame import AYFrame
 from ayon_ui_qt.buttons import AYButton
 
 
-class AYTextEditor(QPlainTextEdit):
+class AYTextEditor(QTextEdit):
     def __init__(
         self, *args, max_lines: int = 4, read_only: bool = False, **kwargs
     ):
@@ -16,17 +27,42 @@ class AYTextEditor(QPlainTextEdit):
         self._read_only: bool = read_only
 
         super().__init__(*args, **kwargs)
-
-        # configure
-        # 1.4 is a magic number because the font size comes from qss so always
-        # unpredictable.
-        # FIXME: internalize QSS ?
-        line_height = int(self.fontMetrics().lineSpacing() * 1.4)
-        self.setFixedHeight(line_height * max_lines)
         self.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
+        self._style = self.style().model.get_style("QTextEdit")
+        # print(f"{self._style}")
+
+        # set styling
+        p = self.palette()
+        p.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Base,
+            QColor(self._style["background-color"]),
+        )
+        p.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Text,
+            QColor(self._style["color"]),
+        )
+        p.setColor(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Link,
+            QColor(self._style["link-color"]),
+        )
+        self.setPalette(p)
+
+        # configure
+        self.document().setMarkdown(
+            "## Title\n\nText can be **bold** or *italic*, as expected !",
+            QTextDocument.MarkdownFeature.MarkdownDialectGitHub,
+        )
+
+        # automatic bullet lists
+        self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
+
         if not self._read_only:
             self.setPlaceholderText(
                 "Comment or mention with @user, @@version, @@@task..."
@@ -35,12 +71,100 @@ class AYTextEditor(QPlainTextEdit):
 
     def set_style(self, style):
         print(f"style: {style}")
+        cursor = self.textCursor()
+        # print(f"selected: {cursor.selectedText()}")
+        if style == "stl_h1":
+            cursor.beginEditBlock()
+            char_format = cursor.blockCharFormat()
+
+            # Check if already a header (by checking font size)
+            current_size = cursor.charFormat().fontPointSize()
+            base_size = self.font().pointSize()
+
+            print(f"current_size = {current_size}   base_size = {base_size}")
+
+            # Toggle header formatting
+            if current_size > base_size:  # Already a header
+                # Remove header formatting
+                char_format.setFontPointSize(base_size)
+                char_format.setFontWeight(QFont.Weight.Normal)
+            else:  # Make it a header
+                # Apply header formatting (H2 style)
+                char_format.setFontPointSize(base_size * 1.5)  # 1.5x larger
+                char_format.setFontWeight(QFont.Weight.Bold)
+
+            # Apply to entire block
+            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+            cursor.setCharFormat(char_format)
+            cursor.endEditBlock()
+            # keep focus in editor
+            self.setFocus()
+
+        elif cursor.hasSelection():
+            fmt = cursor.charFormat()
+            cursor.beginEditBlock()
+
+            if style == "stl_bold":
+                if cursor.charFormat().fontWeight() == QFont.Weight.Normal:
+                    fmt.setFontWeight(QFont.Weight.Bold)
+                else:
+                    fmt.setFontWeight(QFont.Weight.Normal)
+                cursor.setCharFormat(fmt)
+
+            elif style == "stl_italic":
+                if cursor.charFormat().fontItalic():
+                    fmt.setFontItalic(False)
+                else:
+                    fmt.setFontItalic(True)
+                cursor.setCharFormat(fmt)
+
+            elif style == "stl_link":
+                pw = self.parentWidget()
+                if not pw:
+                    return
+
+                field = QtWidgets.QLineEdit(cursor.selectedText(), parent=pw)
+
+                def _make_link():
+                    link = field.text()
+                    fmt.setAnchor(True)
+                    fmt.setAnchorHref(link)
+                    fmt.setFontUnderline(True)
+                    cursor.setCharFormat(fmt)
+                    field.close()
+                    field.deleteLater()
+                    self.setFocus()
+                    self.update()
+
+                # open link edit field
+                field.show()
+                fr = field.rect()
+                field.setGeometry(4, 0, self.rect().width(), fr.height())
+                field.selectAll()
+                field.setFocus()
+                field.returnPressed.connect(_make_link)
+
+            elif style == "stl_code":
+                txt = cursor.selectedText()
+                frame_fmt = QTextFrameFormat()
+                cursor.insertFrame(frame_fmt)
+
+                print("IMPLEMENT ME !")
+
+            cursor.endEditBlock()
 
     def set_format(self, format):
         print(f"format: {format}")
 
 
+class AYTextBoxSignals(QtCore.QObject):
+    # Signal emitted when comment button is clicked, passes markdown content
+    comment_submitted = QtCore.Signal(str)
+
+
 class AYTextBox(AYFrame):
+    signals = AYTextBoxSignals()
+
     style_icons = {
         "stl_h1": "format_h1",
         "stl_bold": "format_bold",
@@ -99,13 +223,20 @@ class AYTextBox(AYFrame):
                 0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
             )
         )
-        lyt.addWidget(AYButton("Comment", variant="filled"))
+        self.comment_button = AYButton("Comment", variant="filled")
+        self.comment_button.clicked.connect(self._on_comment_clicked)
+        lyt.addWidget(self.comment_button)
         return lyt
+
+    def _on_comment_clicked(self) -> None:
+        """Handle comment button click and emit signal with markdown content."""
+        markdown_content = self.edit_field.document().toMarkdown()
+        self.signals.comment_submitted.emit(markdown_content)
 
     def _build(self):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
         lyt.addLayout(self._build_upper_bar())
-        lyt.addWidget(self._build_edit_field())
+        lyt.addWidget(self._build_edit_field(), stretch=10)
         lyt.addLayout(self._build_lower_bar())
 
 
@@ -118,7 +249,11 @@ if __name__ == "__main__":
     def build():
         w = QtWidgets.QWidget()
         lyt = AYVBoxLayout(w, margin=8)
-        lyt.addWidget(AYTextBox(parent=w))
+        ww = AYTextBox(parent=w)
+        lyt.addWidget(ww)
+        ww.signals.comment_submitted.connect(
+            lambda x: print(f"Comment {'=' * 70}\n{x}{'=' * 78}")
+        )
         return w
 
     test(build, use_css=False)

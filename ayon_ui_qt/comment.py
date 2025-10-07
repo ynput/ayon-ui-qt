@@ -64,7 +64,7 @@ class CommentModel:
         return self._short_date
 
 
-class AYCommentField(QtWidgets.QPlainTextEdit):
+class AYCommentField(QtWidgets.QTextBrowser):
     def __init__(self, *args, **kwargs):
         # remove our kwargs
         max_lines: int = kwargs.pop("max_lines", 4)
