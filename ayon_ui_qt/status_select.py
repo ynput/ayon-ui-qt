@@ -7,7 +7,7 @@ import os
 from typing import Literal, get_args
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, overload
 
 try:
     from qtmaterialsymbols import get_icon
@@ -171,6 +171,7 @@ class AYComboBox(QtWidgets.QComboBox):
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
+        items: List[dict] | None = None,
         size: Size = "full",
         height: int = 30,
         placeholder: Optional[str] = None,
@@ -189,7 +190,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._placeholder: Optional[str] = placeholder
         self._inverted: bool = inverted
         self._disabled: bool = disabled
-        self._item_list: list = [Item(**s) for s in ALL_STATUSES]
+        self._item_list: list = [Item(**s) for s in items] if items else []
         self._icon_size: int = icon_size
         self._custom_options: List[Item] = []
 
@@ -202,29 +203,42 @@ class AYComboBox(QtWidgets.QComboBox):
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
 
-        self.set_data()
+        self.update_items()
 
-    def set_data(self):
+    @overload
+    def add_item(self, item: dict[str, str]):
+        pass
+
+    @overload
+    def add_item(self, item: Item):
+        pass
+
+    def add_item(self, item):
+        it = Item(**item) if isinstance(item, dict) else item
+        self._item_list.append(it)
+        self.update_items()
+
+    def update_items(self):
         bg_color = self.palette().color(
             QPalette.ColorGroup.Active, QPalette.ColorRole.Window
         )
 
-        for idx, status in enumerate(self._item_list):
+        for idx, item in enumerate(self._item_list):
             icon = get_icon(
-                status.icon,
-                color=status.color,
-                color_selected=bg_color if self._inverted else status.color,
+                item.icon,
+                color=item.color,
+                color_selected=bg_color if self._inverted else item.color,
             )
 
             if idx >= self.count():
-                self.addItem(icon, status.text)
-                self.setItemData(idx, status, QtCore.Qt.ItemDataRole.UserRole)
+                self.addItem(icon, item.text)
+                self.setItemData(idx, item, QtCore.Qt.ItemDataRole.UserRole)
             else:
                 self.setItemIcon(idx, icon)
 
             self.setItemData(
                 idx,
-                QBrush(status.color),
+                QBrush(item.color),
                 QtCore.Qt.ItemDataRole.ForegroundRole,
             )
             self.setItemData(
@@ -235,11 +249,11 @@ class AYComboBox(QtWidgets.QComboBox):
 
     def set_inverted(self, state: bool):
         self._inverted = state
-        self.set_data()
+        self.update_items()
 
     def set_size(self, size: str):
         self._size = size
-        self.set_data()
+        self.update_items()
 
     def sizeHint(self) -> QtCore.QSize:
         status: Item = self.itemData(
@@ -400,7 +414,7 @@ if __name__ == "__main__":
         # l = QtWidgets.QVBoxLayout(w)
         inv = QtWidgets.QCheckBox("inverted", parent=w)
         w.addWidget(inv)
-        cb = AYComboBox()
+        cb = AYComboBox(items=ALL_STATUSES)
         w.addWidget(cb, stretch=0, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
         size = QtWidgets.QComboBox(w)
         size.addItems([s for s in get_args(Size)])
