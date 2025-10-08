@@ -33,26 +33,6 @@ class AYTextEditor(QTextEdit):
         )
 
         self._style = self.style().model.get_style("QTextEdit")
-        # print(f"{self._style}")
-
-        # set styling
-        p = self.palette()
-        p.setColor(
-            QPalette.ColorGroup.Active,
-            QPalette.ColorRole.Base,
-            QColor(self._style["background-color"]),
-        )
-        p.setColor(
-            QPalette.ColorGroup.Active,
-            QPalette.ColorRole.Text,
-            QColor(self._style["color"]),
-        )
-        p.setColor(
-            QPalette.ColorGroup.Active,
-            QPalette.ColorRole.Link,
-            QColor(self._style["link-color"]),
-        )
-        self.setPalette(p)
 
         # configure
         self.document().setMarkdown(

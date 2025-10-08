@@ -13,7 +13,7 @@ from ayon_ui_qt.frame import AYFrame
 
 class DetailSignals(QtCore.QObject):
     # Node signals
-    feed_view_changed = QtCore.Signal(str)  # node_name, position
+    feed_view_changed = QtCore.Signal(str)  # category
 
 
 class AYDetailPanel(AYFrame):

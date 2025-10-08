@@ -6,7 +6,7 @@ from functools import partial
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPen
+from qtpy.QtGui import QBrush, QColor, QPainter, QPen, QPalette
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -83,20 +83,55 @@ def enum_to_str(enum, enum_value: int, widget: str) -> str:
     return enum_to_str._cache[cachekey]  # type: ignore
 
 
+def hsl_to_html_color(hsl: str):
+    vals = hsl[4:-1].split(", ")
+    h = int(vals[0]) / 360.0
+    s = int(vals[1][:-1]) / 100.0
+    l = int(vals[2][:-1]) / 100.0
+    return QColor.fromHslF(h, s, l).name()
+
+
 class StyleData:
     def __init__(self) -> None:
         with open("ayon_ui_qt/ayon_style.json", "r") as fh:
             self.data = json.load(fh)
         # Palette values can reference each other
-        palette = self.data.get("palette", {})
-        for k, v in palette.items():
+        self._palette = self.data.get("palette", {})
+        for k, v in self._palette.items():
+            if v.startswith("hsl("):
+                self._palette[k] = hsl_to_html_color(v)
+        for k, v in self._palette.items():
             self.data["palette"][k] = self.data["palette"].get(v, v)
-        for k, v in palette.items():
-            if v in palette:
+        for k, v in self._palette.items():
+            if v in self._palette:
                 raise ValueError(f"Unresolved palette value in {k}")
         # cache
         self._cache = {}
         self.last_key = ""
+        # base palette
+        self.base_palette = self._build_palette()
+
+    def _build_palette(self):
+        bp = {
+            QPalette.ColorRole.Window: "qt-active-window",
+            QPalette.ColorRole.WindowText: "qt-active-window-text",
+            QPalette.ColorRole.Base: "qt-active-base",
+            QPalette.ColorRole.Text: "qt-active-text",
+            QPalette.ColorRole.Link: "qt-active-link",
+            QPalette.ColorRole.Button: "qt-active-button",
+            QPalette.ColorRole.ButtonText: "qt-active-button-text",
+            QPalette.ColorRole.PlaceholderText: "qt-active-placeholder-text",
+            QPalette.ColorRole.Highlight: "qt-active-highlight",
+            QPalette.ColorRole.HighlightedText: "qt-active-highlight-text",
+        }
+        p = QPalette()
+        for role, color_name in bp.items():
+            p.setColor(
+                QPalette.ColorGroup.Active,
+                role,
+                QColor(self._palette.get(color_name, "#ff0000")),
+            )
+        return p
 
     def dump_cache_stats(self):
         print(f"[StyleData] cached {len(self._cache)} styles.")
@@ -728,10 +763,12 @@ class CheckboxDrawer:
         # draw toggle
         painter.setBrush(QColor(style["color"]))
         offset = frame_rect.height() * 0.125
-        state_rect: QRectF = frame_rect.adjusted(offset, offset, -offset, -offset)
+        state_rect: QRectF = frame_rect.adjusted(
+            offset, offset, -offset, -offset
+        )
         state_rect.setWidth(state_rect.height())
         if checked:
-            state_rect.moveRight(frame_rect.width() - offset*0.5)
+            state_rect.moveRight(frame_rect.width() - offset * 0.5)
         painter.drawEllipse(state_rect)
         painter.restore()
 
@@ -778,6 +815,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Polish widgets to enable hover tracking."""
         if isinstance(widget, QWidget):
             super().polish(widget)
+            widget.setPalette(self.model.base_palette)
 
             # Enable mouse tracking for buttons to receive hover events
             if isinstance(widget, QPushButton):
@@ -931,6 +969,7 @@ if __name__ == "__main__":
     from ayon_ui_qt.frame import AYFrame
     from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
     from ayon_ui_qt.status_select import AYComboBox
+    from ayon_ui_qt.text_box import AYTextBox
     from ayon_ui_qt.tester import test
 
     def time_it(func):
@@ -1044,8 +1083,7 @@ if __name__ == "__main__":
             layout_spacing=10,
         )
         container_3.add_widget(QtWidgets.QCheckBox("CheckBox"))
-        te = QTextEdit()
-        te.setMarkdown("This is a **test** !")
+        te = AYTextBox()
         container_3.add_widget(te)
         container_3.addStretch()
 
