@@ -1061,7 +1061,6 @@ if __name__ == "__main__":
             l2.addWidget(b)
         container_1.add_layout(l2)
 
-        # l3 = AYHBoxLayout()
         container_2 = AYContainer(
             layout=AYContainer.Layout.HBox,
             variant="low",
@@ -1084,6 +1083,10 @@ if __name__ == "__main__":
         )
         container_3.add_widget(QtWidgets.QCheckBox("CheckBox"))
         te = AYTextBox()
+        te.set_markdown(
+            "## Title\nText can be **bold** or *italic*, as expected !\n"
+            "- [ ] Do this\n- [ ] Do that\n"
+        )
         container_3.add_widget(te)
         container_3.addStretch()
 

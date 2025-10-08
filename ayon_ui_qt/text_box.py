@@ -34,12 +34,6 @@ class AYTextEditor(QTextEdit):
 
         self._style = self.style().model.get_style("QTextEdit")
 
-        # configure
-        self.document().setMarkdown(
-            "## Title\n\nText can be **bold** or *italic*, as expected !",
-            QTextDocument.MarkdownFeature.MarkdownDialectGitHub,
-        )
-
         # automatic bullet lists
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
 
@@ -219,6 +213,11 @@ class AYTextBox(AYFrame):
         lyt.addWidget(self._build_edit_field(), stretch=10)
         lyt.addLayout(self._build_lower_bar())
 
+    def set_markdown(self, md: str):
+        self.edit_field.document().setMarkdown(
+            md, QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+        )
+
 
 # TEST ------------------------------------------------------------------------
 
@@ -230,6 +229,10 @@ if __name__ == "__main__":
         w = QtWidgets.QWidget()
         lyt = AYVBoxLayout(w, margin=8)
         ww = AYTextBox(parent=w)
+        ww.set_markdown(
+            "## Title\nText can be **bold** or *italic*, as expected !\n"
+            "- [ ] Do this\n- [ ] Do that\n"
+        )
         lyt.addWidget(ww)
         ww.signals.comment_submitted.connect(
             lambda x: print(f"Comment {'=' * 70}\n{x}{'=' * 78}")
