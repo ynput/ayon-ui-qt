@@ -91,6 +91,10 @@ def hsl_to_html_color(hsl: str):
     return QColor.fromHslF(h, s, l).name()
 
 
+def do_nothing(*args, **kwargs):
+    pass
+
+
 class StyleData:
     def __init__(self) -> None:
         with open("ayon_ui_qt/ayon_style.json", "r") as fh:
@@ -702,6 +706,11 @@ class CheckboxDrawer:
                 QStyle.PrimitiveElement.PE_IndicatorCheckBox,
                 "QCheckBox",
             ): self.draw_toggle,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_FrameFocusRect,
+                "QCheckBox",
+            ): do_nothing,
         }
 
     def register_metrics(self):
