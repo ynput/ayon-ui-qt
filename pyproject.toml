@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.9.6"
 dependencies = [
     "pyside6>=6.9.2",
-    "qt-material-icons>=0.2.0",
     "qtpy>=2.4.3",
     "ruff>=0.12.12",
 ]

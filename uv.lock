@@ -8,7 +8,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pyside6" },
-    { name = "qt-material-icons" },
     { name = "qtpy" },
     { name = "ruff" },
 ]
@@ -16,7 +15,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "pyside6", specifier = ">=6.9.2" },
-    { name = "qt-material-icons", specifier = ">=0.2.0" },
     { name = "qtpy", specifier = ">=2.4.3" },
     { name = "ruff", specifier = ">=0.12.12" },
 ]
@@ -76,15 +74,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9a/a1/1203d4db6919b42a937d9ac5ddb84b20ea42eb119f7c1ddeb77cb8fdb00c/pyside6_essentials-6.9.2-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:d0f701503974bd51b408966539aa6956f3d8536e547ea8002fbfb3d77796bbc3", size = 94311809, upload-time = "2025-08-26T07:46:44.924Z" },
     { url = "https://files.pythonhosted.org/packages/a8/e3/3b3e869d3e332b6db93f6f64fac3b12f5c48b84f03f2aa50ee5c044ec0de/pyside6_essentials-6.9.2-cp39-abi3-win_amd64.whl", hash = "sha256:b2f746f795138ac63eb173f9850a6db293461a1b6ce22cf6dafac7d194a38951", size = 72624566, upload-time = "2025-08-26T07:48:04.64Z" },
     { url = "https://files.pythonhosted.org/packages/91/70/db78afc8b60b2e53f99145bde2f644cca43924a4dd869ffe664e0792730a/pyside6_essentials-6.9.2-cp39-abi3-win_arm64.whl", hash = "sha256:ecd7b5cd9e271f397fb89a6357f4ec301d8163e50869c6c557f9ccc6bed42789", size = 49561720, upload-time = "2025-08-26T07:49:43.708Z" },
-]
-
-[[package]]
-name = "qt-material-icons"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9b/6a/03670a80bba974c93b2b93f0efe905f8a26ca4d9d5e176a2216fb7949dcb/qt_material_icons-0.2.0.tar.gz", hash = "sha256:4711082ceb3a91743df00a0f366df3c94adbd149bdfa73973e6a8dd0ac5c8603", size = 17474283, upload-time = "2024-10-04T22:38:30.009Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/1a/e729db8a654f7da5644f1b06c55b9e1f770d2f4744f2deee86b9f9d59c13/qt_material_icons-0.2.0-py3-none-any.whl", hash = "sha256:bdc14af68e7576b1b0847eb37b53fd68962cab9e2469c8a22a06a860b8deb604", size = 17925867, upload-time = "2024-10-04T22:38:25.992Z" },
 ]
 
 [[package]]
