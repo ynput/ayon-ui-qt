@@ -257,9 +257,7 @@ class ButtonDrawer:
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_ButtonMargin,
                 "QPushButton",
-            ): lambda: partial(
-                self.get_metric, QStyle.PixelMetric.PM_ButtonMargin
-            ),
+            ): partial(self.get_metric, QStyle.PixelMetric.PM_ButtonMargin),
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_DefaultFrameWidth,
