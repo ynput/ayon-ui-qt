@@ -825,9 +825,8 @@ class AYONStyle(QtWidgets.QCommonStyle):
             widget.setPalette(self.model.base_palette)
 
             # Enable mouse tracking for buttons to receive hover events
-            if isinstance(widget, QPushButton):
-                widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-                widget.setMouseTracking(True)
+            widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+            widget.setMouseTracking(True)
 
         elif isinstance(widget, QApplication):
             super().polish(widget)
@@ -852,11 +851,11 @@ class AYONStyle(QtWidgets.QCommonStyle):
             super().drawControl(element, option, painter, w)
             return
         else:
-            if isinstance(calls, list):
-                for call in calls:
-                    call(option, painter, w)
-            elif callable(calls):
-                calls(option, painter, w)
+            if isinstance(draw_ce_calls, list):
+                for draw_ce in draw_ce_calls:
+                    draw_ce(option, painter, w)
+            elif callable(draw_ce_calls):
+                draw_ce_calls(option, painter, w)
             return
 
     def drawPrimitive(
