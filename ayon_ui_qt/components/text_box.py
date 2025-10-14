@@ -13,9 +13,9 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import QTextEdit, QTextBrowser
 from qtpy.QtCore import Qt
-from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
-from ayon_ui_qt.frame import AYFrame
-from ayon_ui_qt.buttons import AYButton
+from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout
+from ayon_ui_qt.components.frame import AYFrame
+from ayon_ui_qt.components.buttons import AYButton
 
 
 class AYTextEditor(QTextEdit):

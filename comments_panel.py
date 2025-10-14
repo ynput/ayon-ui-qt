@@ -3,8 +3,11 @@ import os
 from typing import Optional
 from qtpy import QtWidgets
 
-from ayon_ui_qt import AYVBoxLayout, AYDetailPanel, AYFrame
-from ayon_ui_qt.activity_stream import AYActivityStream
+from ayon_ui_qt.components.layouts import AYVBoxLayout
+from ayon_ui_qt.components.frame import AYFrame
+from ayon_ui_qt.components.text_box import AYTextBox
+from detail_panel import AYDetailPanel
+from activity_stream import AYActivityStream
 from ayon_ui_qt.utils import preprocess_payload
 
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +29,7 @@ class CommentsPanel(AYFrame):
         self._build()
 
         # signals
-        self.details.signals.feed_view_changed.connect(
+        self.details.signals.view_changed.connect(
             lambda x: self.update_stream(x, self._activities)
         )
 
@@ -43,6 +46,9 @@ class CommentsPanel(AYFrame):
             self, activities=self._activities, category=self._category
         )
         self.main_lyt.addWidget(self.stream, stretch=1)
+        # add comment editor
+        self.editor = AYTextBox()
+        self.main_lyt.addWidget(self.editor, stretch=0)
 
     def update_stream(self, category, activities: Optional[list] = None):
         if activities and activities != self._activities:
@@ -61,6 +67,7 @@ if __name__ == "__main__":
     def build():
         data_file = os.path.join(
             os.path.dirname(__file__),
+            "ayon_ui_qt",
             "resources",
             "GetActivities-recieved-data.json",
         )
@@ -73,4 +80,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(build)
+    test(build, use_css=False)

@@ -21,7 +21,7 @@ def test(test_widget, use_css=True):
             }
         """
 
-        with open("ayon_ui_qt/output/complete_styles.qss", "r") as fr:
+        with open("ayon_ui_qt/old/output/complete_styles.qss", "r") as fr:
             ss += fr.read()
 
         app.setStyleSheet(ss)

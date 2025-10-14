@@ -24,9 +24,9 @@ from qtpy.QtWidgets import (
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
-    from vendor.qtmaterialsymbols import get_icon
+    from .vendor.qtmaterialsymbols import get_icon
 
-from status_select import Item
+from ayon_ui_qt.components.combo_box import Item
 
 
 def all_enums(t):
@@ -1198,13 +1198,13 @@ class AYONStyle(QtWidgets.QCommonStyle):
 if __name__ == "__main__":
     import time
 
-    from ayon_ui_qt.buttons import AYButton
-    from ayon_ui_qt.container import AYContainer
-    from ayon_ui_qt.frame import AYFrame
-    from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
-    from ayon_ui_qt.status_select import AYComboBox
+    from ayon_ui_qt.components.buttons import AYButton
+    from ayon_ui_qt.components.container import AYContainer
+    from ayon_ui_qt.components.frame import AYFrame
+    from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout
+    from ayon_ui_qt.components.combo_box import AYComboBox
     from ayon_ui_qt.tester import test
-    from ayon_ui_qt.text_box import AYTextBox
+    from ayon_ui_qt.components.text_box import AYTextBox
 
     def time_it(func):
         i = time.time()

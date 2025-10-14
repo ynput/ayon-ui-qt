@@ -2,14 +2,14 @@ import os
 from qtpy import QtWidgets
 import logging
 
-from ayon_ui_qt.layouts import AYVBoxLayout
-from ayon_ui_qt.comment import AYCommentEditor, AYComment, CommentModel
-from ayon_ui_qt.frame import AYFrame
+from ayon_ui_qt.components.layouts import AYVBoxLayout
+from ayon_ui_qt.components.comment import AYCommentEditor, AYComment, CommentModel
+from ayon_ui_qt.components.frame import AYFrame
 from ayon_ui_qt.utils import clear_layout
 
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("activity panel")
+logger = logging.getLogger("activity stream")
 
 
 class AYActivityStream(AYFrame):
@@ -34,15 +34,10 @@ class AYActivityStream(AYFrame):
 
         return self.scroll_area
 
-    def _build_editor(self):
-        self.editor = AYCommentEditor(self)
-        return self.editor
-
     def _build(self):
         lyt = AYVBoxLayout(self)
         self.setLayout(lyt)
         lyt.addWidget(self._build_stream())
-        lyt.addWidget(self._build_editor())
 
     def update_stream(self, category, activities: list):
         clear_layout(self.stream_lyt)
@@ -63,6 +58,7 @@ if __name__ == "__main__":
     def build():
         data_file = os.path.join(
             os.path.dirname(__file__),
+            "ayon_ui_qt",
             "resources",
             "GetActivities-recieved-data.json",
         )

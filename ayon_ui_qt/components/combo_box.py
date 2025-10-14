@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, overload
 try:
     from qtmaterialsymbols import get_icon
 except ImportError:
-    from vendor.qtmaterialsymbols import get_icon
+    from ayon_ui_qt.vendor.qtmaterialsymbols import get_icon
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtWidgets import QStyle, QSizePolicy
 from qtpy.QtGui import (
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     """Run the StatusSelect test interface or print status info."""
     import os
     from ayon_ui_qt.tester import test
-    from ayon_ui_qt.container import AYContainer
+    from ayon_ui_qt.components.container import AYContainer
 
     def build():
         w = AYContainer(

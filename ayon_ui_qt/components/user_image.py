@@ -111,7 +111,7 @@ class AYUserImage(QtWidgets.QLabel):
 
 if __name__ == "__main__":
     from ayon_ui_qt.tester import test
-    from ayon_ui_qt.layouts import AYHBoxLayout
+    from ayon_ui_qt.components.layouts import AYHBoxLayout
 
     def build():
         fp = "/Volumes/plp_T5/personal/plp/plp_avatar.jpg.png"

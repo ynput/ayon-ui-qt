@@ -3,17 +3,17 @@ import os
 from typing import Optional
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ayon_ui_qt.buttons import AYButton
-from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout, AYGridLayout
-from ayon_ui_qt.label import AYLabel
-from ayon_ui_qt.entity_thumbnail import AYEntityThumbnail
-from ayon_ui_qt.entity_path import AYEntityPath
-from ayon_ui_qt.frame import AYFrame
+from ayon_ui_qt.components.buttons import AYButton
+from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout, AYGridLayout
+from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
+from ayon_ui_qt.components.entity_path import AYEntityPath
+from ayon_ui_qt.components.frame import AYFrame
 
 
 class DetailSignals(QtCore.QObject):
     # Node signals
-    feed_view_changed = QtCore.Signal(str)  # category
+    view_changed = QtCore.Signal(str)  # category
 
 
 class AYDetailPanel(AYFrame):
@@ -71,16 +71,16 @@ class AYDetailPanel(AYFrame):
         self.feed_chk = AYButton(icon="checklist", variant="surface")
 
         self.feed_all.clicked.connect(
-            lambda: self.signals.feed_view_changed.emit("all")
+            lambda: self.signals.view_changed.emit("all")
         )
         self.feed_com.clicked.connect(
-            lambda: self.signals.feed_view_changed.emit("comment")
+            lambda: self.signals.view_changed.emit("comment")
         )
         self.feed_pub.clicked.connect(
-            lambda: self.signals.feed_view_changed.emit("publish")
+            lambda: self.signals.view_changed.emit("publish")
         )
         self.feed_chk.clicked.connect(
-            lambda: self.signals.feed_view_changed.emit("checklist")
+            lambda: self.signals.view_changed.emit("checklist")
         )
 
         feed_lyt = AYHBoxLayout(None)
@@ -98,7 +98,7 @@ class AYDetailPanel(AYFrame):
     def _build_attrs(self):
         self.attrs = AYButton("Attributes", parent=self, variant="surface")
         self.attrs.clicked.connect(
-            lambda: self.signals.feed_view_changed.emit("view_attributes")
+            lambda: self.signals.view_changed.emit("view_attributes")
         )
 
         lyt = AYHBoxLayout()
@@ -141,5 +141,10 @@ class AYDetailPanel(AYFrame):
 if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
+    def _build():
+        w = AYDetailPanel()
+        w.signals.view_changed.connect(lambda x: print(f"view_changed: {x}"))
+        return w
+
     os.environ["QT_SCALE_FACTOR"] = "1"
-    test(AYDetailPanel)
+    test(_build)

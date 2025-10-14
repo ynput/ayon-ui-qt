@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ayon_ui_qt.frame import AYFrame
-from ayon_ui_qt.layouts import AYVBoxLayout, AYHBoxLayout
-from ayon_ui_qt.buttons import AYButton
-from ayon_ui_qt.label import AYLabel
-from ayon_ui_qt.user_image import AYUserImage
+from ayon_ui_qt.components.frame import AYFrame
+from ayon_ui_qt.components.layouts import AYVBoxLayout, AYHBoxLayout
+from ayon_ui_qt.components.buttons import AYButton
+from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.user_image import AYUserImage
 
 
 # PUBLISH ---------------------------------------------------------------------

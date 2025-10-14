@@ -1,5 +1,5 @@
 import logging
-from ayon_ui_qt.comment import AYComment
+from ayon_ui_qt.components.comment import AYComment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
