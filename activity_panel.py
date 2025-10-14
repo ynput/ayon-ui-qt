@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from qtpy import QtWidgets
+from qtpy import QtCore, QtWidgets
 
 from ayon_ui_qt.components.layouts import AYVBoxLayout
 from ayon_ui_qt.components.frame import AYFrame
@@ -14,7 +14,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity panel")
 
 
-class CommentsPanel(AYFrame):
+class ActivityPanelSignals(QtCore.QObject):
+    # Signal emitted when comment button is clicked, passes markdown content
+    comment_submitted = QtCore.Signal(str)  # type: ignore
+    comment_edited = QtCore.Signal(int, str)  # type: ignore
+    comment_deleted = QtCore.Signal(int, str)  # type: ignore
+    priority_changed = QtCore.Signal(str)  # type: ignore
+    assignee_changed = QtCore.Signal(str)  # type: ignore
+    status_changed = QtCore.Signal(str)  # type: ignore
+
+
+class ActivityPanel(AYFrame):
+    signals = ActivityPanelSignals()
+
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
@@ -49,6 +61,9 @@ class CommentsPanel(AYFrame):
         # add comment editor
         self.editor = AYTextBox()
         self.main_lyt.addWidget(self.editor, stretch=0)
+        self.editor.signals.comment_submitted.connect(
+            self.signals.comment_submitted.emit
+        )
 
     def update_stream(self, category, activities: Optional[list] = None):
         if activities and activities != self._activities:
@@ -76,7 +91,10 @@ if __name__ == "__main__":
 
         data = preprocess_payload(payload)
 
-        w = CommentsPanel(activities=data, category="comment")
+        w = ActivityPanel(activities=data, category="comment")
+        w.signals.comment_submitted.connect(
+            lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")
+        )
 
         return w
 
