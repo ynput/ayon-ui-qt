@@ -173,6 +173,25 @@
                 }
             }
         },
+        "QComboBox": {
+            "default-variant": "",
+            "variants": {
+                "": {
+                    "border-radius": 4,
+                    "text-padding": [
+                        6,
+                        6
+                    ],
+                    "icon-padding": [
+                        6,
+                        6
+                    ],
+                    "focus-outline-width": 2,
+                    "background-color": "--md-sys-color-surface-container-highest-dark",
+                    "color": "--md-sys-color-on-surface-dark"
+                }
+            }
+        },
         "QFrame": {
             "states": {},
             "default-variant": "",

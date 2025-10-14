@@ -5,24 +5,28 @@ import json
 from functools import partial
 
 from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import QRect, QRectF, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPen, QPalette
+from qtpy.QtCore import QRect, QRectF, QSize, Qt
+from qtpy.QtGui import QBrush, QColor, QPainter, QPalette, QPen
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QFrame,
     QPushButton,
     QStyle,
     QStyleOption,
     QStyleOptionButton,
+    QStyleOptionComboBox,
     QWidget,
-    QTextEdit,
+    QSizePolicy,
 )
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from vendor.qtmaterialsymbols import get_icon
+
+from status_select import Item
 
 
 def all_enums(t):
@@ -783,11 +787,206 @@ class CheckboxDrawer:
 # ----------------------------------------------------------------------------
 
 
+class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
+    def __init__(
+        self, parent=None, padding: int = 4, icon_size: int = 16
+    ) -> None:
+        super().__init__(parent)
+        self._padding = padding
+        self._icon_size = icon_size
+        self._icon_text_spacing = 8
+
+    def paint(
+        self,
+        painter: QtGui.QPainter,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        # change colors for highlight
+        highlight_color = option.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Light
+        )
+
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
+                option.palette.setColor(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.Highlight,
+                    highlight_color,
+                )
+                option.palette.setColor(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.HighlightedText,
+                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
+                )
+        elif option.state & QStyle.StateFlag.State_Selected:
+            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
+                option.palette.setColor(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.Highlight,
+                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
+                )
+            if index.data(QtCore.Qt.ItemDataRole.BackgroundRole):
+                option.palette.setColor(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.HighlightedText,
+                    index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
+                )
+
+        super().paint(painter, option, index)
+
+    def sizeHint(
+        self, option: QtWidgets.QStyleOptionViewItem, index
+    ) -> QtCore.QSize:
+        """Calculate size hint including padding."""
+
+        # Calculate text dimensions
+        font_metrics = option.fontMetrics
+        text_size = font_metrics.size(0, option.text)
+
+        # Calculate content dimensions
+        content_width = text_size.width()
+        content_height = max(text_size.height(), self._icon_size)
+
+        # Add icon space if present
+        if option.icon:
+            content_width += self._icon_size + self._icon_text_spacing
+
+        # Add padding to get total size
+        total_width = content_width + self._padding + self._padding
+        total_height = content_height + self._padding + self._padding
+
+        # Ensure minimum height
+        total_height = max(total_height, 32)
+
+        return QtCore.QSize(total_width, total_height)
+
+
+class ComboBoxDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    @property
+    def base_class(self):
+        return {"QComboBox": QComboBox}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ComboBox,
+                "QComboBox",
+            ): self.draw_box,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ContentsType,
+                QStyle.ContentsType.CT_ComboBox,
+                "QComboBox",
+            ): self.combobox_size,
+        }
+
+    def draw_box(
+        self,
+        opt: QtWidgets.QStyleOptionComplex,
+        p: QPainter,
+        w: QComboBox | None = None,
+    ):
+        # print(f"SUB_CTL: {opt.activeSubControls}")
+        if not opt.editable:
+            bg_color = opt.palette.color(
+                QPalette.ColorGroup.Active, QPalette.ColorRole.Base
+            )
+            fg_color = opt.palette.color(
+                QPalette.ColorGroup.Active, QPalette.ColorRole.ButtonText
+            )
+
+            if not w:
+                # print("NO WIDGET")
+                return
+
+            cb_size = getattr(w, "_size", "full")
+            inverted = False
+            icon_name = ""
+
+            # Get the current selected status
+            current_index = w.currentIndex()
+            if current_index >= 0:
+                item: Item = w.itemData(
+                    current_index, QtCore.Qt.ItemDataRole.UserRole
+                )
+                if item:
+                    inverted = getattr(w, "_inverted", False)
+                    fg_color = bg_color if inverted else QColor(item.color)
+                    bg_color = QColor(item.color) if inverted else bg_color
+                    icon_name = item.icon
+
+            # Paint background with status color
+            rect = opt.rect
+            p.save()
+            p.setBrush(QBrush(bg_color))
+            p.setPen(QtCore.Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, 4, 4)
+            p.restore()
+
+            # set pen for text drawing
+            p.setPen(fg_color)
+            if icon_name:
+                opt.currentIcon = get_icon(icon_name, color=fg_color)
+        else:
+            # editable combobox - IMPLEMENT ME
+            pass
+
+    def combobox_size(
+        self,
+        contents_type: QStyle.ContentsType,
+        option: QStyleOption | None,
+        contents_size: QtCore.QSize,
+        widget: QWidget | None,
+    ) -> QtCore.QSize:
+        if not option or not isinstance(option, QStyleOptionComboBox):
+            return QSize()
+
+        style = self.model.get_style("QComboBox")
+
+        text_width = cb_height = 0
+        if option.currentText:
+            text_rect: QRect = option.fontMetrics.boundingRect(
+                option.currentText
+            )
+            text_width = text_rect.width() + style["text-padding"][0] * 2
+            cb_height = text_rect.height() + style["text-padding"][1] * 2
+
+        icon_width = 0
+        if option.currentIcon:
+            icon_size = getattr(widget, "_icon_size", 0)
+            if icon_size == 0:
+                all_sizes = option.currentIcon.availableSizes()
+                icon_size = max(all_sizes[0].width(), all_sizes[0].height())
+            icon_width = icon_size + style["icon-padding"][0] * 2
+            icon_height = icon_size + style["icon-padding"][1] * 2
+            cb_height = max(cb_height, icon_height)
+            if text_width:
+                icon_width += style["text-padding"][0]
+
+        final_size = QSize(
+            text_width + icon_width,
+            cb_height,
+        )
+        print(f"final_size = {final_size}")
+        return final_size
+
+
+# ----------------------------------------------------------------------------
+
+
 class AYONStyle(QtWidgets.QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
-    Supports all button variants: surface, tonal, filled, tertiary, text, nav, danger.
-    Features complete hover state support with smooth visual feedback.
+    Supports widget variants: surface, tonal, filled, tertiary, text, nav, etc.
     """
 
     def __init__(self) -> None:
@@ -801,6 +1000,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
             ButtonDrawer(self),
             FrameDrawer(self),
             CheckboxDrawer(self),
+            ComboBoxDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -819,7 +1019,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         return ""
 
     def polish(self, widget) -> None:
-        """Polish widgets to enable hover tracking."""
+        """Polish widgets to enable hover tracking and custom palette."""
         if isinstance(widget, QWidget):
             super().polish(widget)
             widget.setPalette(self.model.base_palette)
@@ -827,6 +1027,13 @@ class AYONStyle(QtWidgets.QCommonStyle):
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
             widget.setMouseTracking(True)
+
+            if isinstance(widget, QComboBox):
+                widget.setMinimumContentsLength(1)
+                widget.setItemDelegate(ComboBoxItemDelegate(parent=widget))
+                widget.setSizeAdjustPolicy(
+                    QComboBox.SizeAdjustPolicy.AdjustToContents
+                )
 
         elif isinstance(widget, QApplication):
             super().polish(widget)
@@ -843,7 +1050,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Draw control elements (buttons, labels, etc.)."""
 
         try:
-            calls = self.drawers[
+            draw_ce_calls = self.drawers[
                 enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
             ]
         except KeyError:
@@ -857,6 +1064,23 @@ class AYONStyle(QtWidgets.QCommonStyle):
             elif callable(draw_ce_calls):
                 draw_ce_calls(option, painter, w)
             return
+
+    def drawComplexControl(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QtWidgets.QStyleOptionComplex,
+        p: QPainter,
+        w: QWidget | None = None,
+    ) -> None:
+        try:
+            draw_cc = self.drawers[
+                enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
+            ]
+        except KeyError:
+            # no custom drawer fallback
+            return super().drawComplexControl(cc, opt, p, w)
+
+        draw_cc(opt, p, w)
 
     def drawPrimitive(
         self,
@@ -907,6 +1131,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         widget: QWidget | None = None,
     ) -> int:
         """Return pixel measurements for various style metrics."""
+        # print(f"PM: {metric}")
 
         try:
             metric_func = self.metrics[
@@ -933,6 +1158,8 @@ class AYONStyle(QtWidgets.QCommonStyle):
             return Qt.FocusPolicy.StrongFocus
         elif hint == QStyle.StyleHint.SH_RequestSoftwareInputPanel:
             return 0
+        elif hint == QStyle.StyleHint.SH_ComboBox_PopupFrameStyle:
+            return QFrame.Shape.NoFrame
 
         # Fall back to parent implementation
         return super().styleHint(hint, opt, w, shret)
@@ -945,6 +1172,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         widget: QWidget | None = None,
     ) -> QtCore.QSize:
         """Calculate minimum size requirements for widgets based on their content."""
+        # print(f"CT: {contents_type}")
 
         try:
             sizer = self.sizers[
@@ -959,7 +1187,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
                 )
             else:
                 # Create a default size if no option is provided
-                return QtCore.QSize(100, 30)  # reasonable default
+                return QtCore.QSize(100, 32)  # reasonable default
         else:
             return sizer(contents_type, option, contents_size, widget)
 
@@ -975,8 +1203,8 @@ if __name__ == "__main__":
     from ayon_ui_qt.frame import AYFrame
     from ayon_ui_qt.layouts import AYHBoxLayout, AYVBoxLayout
     from ayon_ui_qt.status_select import AYComboBox
-    from ayon_ui_qt.text_box import AYTextBox
     from ayon_ui_qt.tester import test
+    from ayon_ui_qt.text_box import AYTextBox
 
     def time_it(func):
         i = time.time()
