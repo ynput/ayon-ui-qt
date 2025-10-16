@@ -1,15 +1,15 @@
 import os
 from typing import Optional
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtWidgets
 
-from ayon_ui_qt.components.frame import AYFrame
-from ayon_ui_qt.components.layouts import AYVBoxLayout, AYHBoxLayout
-from ayon_ui_qt.components.buttons import AYButton
-from ayon_ui_qt.components.label import AYLabel
-from ayon_ui_qt.components.user_image import AYUserImage
+from .frame import AYFrame
+from .layouts import AYVBoxLayout, AYHBoxLayout
+from .buttons import AYButton
+from .label import AYLabel
+from .user_image import AYUserImage
 
 
 # PUBLISH ---------------------------------------------------------------------
@@ -219,7 +219,8 @@ class AYCommentEditor(AYFrame):
 
 
 if __name__ == "__main__":
-    from ayon_ui_qt.tester import test
+    from ..tester import test, Style
+    from .text_box import AYTextBox
 
     def build():
         av1 = os.path.join(

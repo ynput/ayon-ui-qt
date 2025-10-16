@@ -1,27 +1,20 @@
 from __future__ import annotations
 
-import copy
-import json
 import logging
 import os
 from typing import Literal, get_args
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Optional, overload
+from typing import List, Optional, overload
 
 try:
-    from qtmaterialsymbols import get_icon
+    from qtmaterialsymbols import get_icon # type: ignore
 except ImportError:
-    from ayon_ui_qt.vendor.qtmaterialsymbols import get_icon
-from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtWidgets import QStyle, QSizePolicy
+    from ..vendor.qtmaterialsymbols import get_icon
+from qtpy import QtCore, QtWidgets
 from qtpy.QtGui import (
     QColor,
     QBrush,
-    QPen,
-    QIcon,
     QPalette,
-    QStandardItemModel,
 )
 
 # Configure logging
@@ -187,8 +180,8 @@ class AYComboBox(QtWidgets.QComboBox):
 if __name__ == "__main__":
     """Run the StatusSelect test interface or print status info."""
     import os
-    from ayon_ui_qt.tester import test
-    from ayon_ui_qt.components.container import AYContainer
+    from ..tester import test, Style
+    from .container import AYContainer
 
     def build():
         w = AYContainer(

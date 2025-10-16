@@ -8,7 +8,7 @@ from qtpy import QtCore, QtGui, QtWidgets
 try:
     from qtmaterialsymbols import get_icon
 except ImportError:
-    from ayon_ui_qt.vendor.qtmaterialsymbols import get_icon
+    from ..vendor.qtmaterialsymbols import get_icon
 
 
 ButtonVariant = Literal[
@@ -113,7 +113,7 @@ def _build_test():
 
 
 if __name__ == "__main__":
-    from ayon_ui_qt.tester import test
+    from ..tester import test, Style
 
     os.environ["QT_SCALE_FACTOR"] = "1"
     test(_build_test, use_css=False)

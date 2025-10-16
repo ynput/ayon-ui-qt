@@ -1,7 +1,7 @@
 from typing import Optional
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ayon_ui_qt.components.layouts import AYHBoxLayout
+from .layouts import AYHBoxLayout
 
 
 class AYEntityPathSegment(QtWidgets.QLabel):

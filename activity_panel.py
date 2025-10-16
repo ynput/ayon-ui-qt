@@ -1,14 +1,15 @@
 import logging
 import os
 from typing import Optional
+
 from qtpy import QtCore, QtWidgets
 
-from ayon_ui_qt.components.layouts import AYVBoxLayout
-from ayon_ui_qt.components.frame import AYFrame
-from ayon_ui_qt.components.text_box import AYTextBox
-from detail_panel import AYDetailPanel
 from activity_stream import AYActivityStream
+from ayon_ui_qt.components.frame import AYFrame
+from ayon_ui_qt.components.layouts import AYVBoxLayout
+from ayon_ui_qt.components.text_box import AYTextBox
 from ayon_ui_qt.utils import preprocess_payload
+from detail_panel import AYDetailPanel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity panel")
@@ -78,6 +79,8 @@ class ActivityPanel(AYFrame):
 if __name__ == "__main__":
     from ayon_ui_qt.tester import test
     import json
+
+    from ayon_ui_qt.tester import test
 
     def build():
         data_file = os.path.join(

@@ -2,7 +2,7 @@ from qtpy import QtCore, QtGui, QtWidgets
 try:
     from qtmaterialsymbols import get_icon
 except ImportError:
-    from ayon_ui_qt.vendor.qtmaterialsymbols import get_icon
+    from ..vendor.qtmaterialsymbols import get_icon
 
 
 class AYLabel(QtWidgets.QLabel):

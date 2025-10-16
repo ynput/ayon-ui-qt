@@ -1,21 +1,15 @@
 from functools import partial
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtWidgets
 from qtpy.QtGui import (
     QTextDocument,
     QTextCursor,
-    QTextCharFormat,
     QFont,
-    QTextFrame,
     QTextFrameFormat,
-    QColor,
-    QBrush,
-    QPalette,
 )
-from qtpy.QtWidgets import QTextEdit, QTextBrowser
-from qtpy.QtCore import Qt
-from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout
-from ayon_ui_qt.components.frame import AYFrame
-from ayon_ui_qt.components.buttons import AYButton
+from qtpy.QtWidgets import QTextEdit, QSizePolicy
+from .layouts import AYHBoxLayout, AYVBoxLayout
+from .frame import AYFrame
+from .buttons import AYButton
 
 
 class AYTextEditor(QTextEdit):
@@ -223,7 +217,7 @@ class AYTextBox(AYFrame):
 
 
 if __name__ == "__main__":
-    from ayon_ui_qt.tester import test
+    from ..tester import test
 
     def build():
         w = QtWidgets.QWidget()
