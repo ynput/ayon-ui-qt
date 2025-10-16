@@ -1,6 +1,8 @@
 import sys
 from qtpy import QtWidgets
-from ayon_ui_qt.ayon_style import AYONStyle
+from .ayon_style import AYONStyle
+from pathlib import Path
+
 
 def test(test_widget, use_css=True):
     """Main function to run the Qt test."""
@@ -21,7 +23,10 @@ def test(test_widget, use_css=True):
             }
         """
 
-        with open("ayon_ui_qt/old/output/complete_styles.qss", "r") as fr:
+        fpath = Path(__file__).parent.joinpath(
+            "old", "output", "complete_styles.qss"
+        )
+        with open(fpath, "r") as fr:
             ss += fr.read()
 
         app.setStyleSheet(ss)
