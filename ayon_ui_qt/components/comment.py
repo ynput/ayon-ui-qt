@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import json
 
 from qtpy.QtWidgets import QTextEdit
 
@@ -49,6 +50,86 @@ class PublishedModel:
         return self._short_date
 
 
+class AYPublish(AYFrame):
+    def __init__(self, *args, data: PublishedModel | None = None, **kwargs):
+        self._data = data or PublishedModel()
+        super().__init__(*args, variant="high", margin=0, **kwargs)
+        self._build()
+
+    def _build_top_bar(self):
+        self.user_icon = AYUserImage(
+            parent=self,
+            size=20,
+            src=self._data.user_src,
+            name=self._data.user_name,
+            full_name=self._data.user_full_name,
+            outline=False,
+        )
+        self.user_name = AYLabel(self._data.user_full_name, bold=True)
+        self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
+        self.static = AYLabel(
+            "published a version", dim=True, rel_text_size=-2
+        )
+        cntr = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant="low",
+            layout_spacing=8,
+        )
+        cntr.add_widget(self.user_icon, stretch=0)
+        cntr.add_widget(self.user_name, stretch=0)
+        cntr.add_widget(self.static, stretch=0)
+        cntr.addStretch()
+        cntr.add_widget(self.date, stretch=0)
+        return cntr
+
+    def _build(self):
+        lyt = AYVBoxLayout(self, margin=0, spacing=0)
+        lyt.addWidget(self._build_top_bar(), stretch=0)
+        self.text_field = AYCommentField(
+            text=f"{self._data.product}\n\n{self._data.version}",
+            num_lines=3,
+            read_only=True,
+        )
+        lyt.addWidget(self.text_field, stretch=0)
+
+    def update_params(self, model: CommentModel):
+        if self._data:
+            self.user_icon.update_params(
+                self._data.user_src, self._data.user_full_name
+            )
+            self.user_name.setText(self._data.user_name)
+            self.date.setText(self._data.short_date)
+
+    @staticmethod
+    def parse(data: dict):
+        """Take a comment payload, and return a CommentModel dataclass.
+
+        Args:
+            data (dict): JSON payload from the activity stream.
+
+        Returns:
+            CommentModel: Contains all required comment data.
+        """
+        full_name = (
+            data.get("author", {}).get("attrib", {}).get("fullName", "Someone")
+        )
+
+        activity_data = data.get("activityData", {})
+        if isinstance(activity_data, str):
+            activity_data = json.loads(activity_data)
+        context = activity_data.get("context")
+        origin = activity_data.get("origin")
+
+        return PublishedModel(
+            user_full_name=full_name,
+            user_name=full_name.split()[0],
+            user_src="",
+            version=origin.get("name", "no version"),
+            product=context.get("productName", "no product name"),
+            date=data.get("updatedAt", "not available"),
+        )
+
+
 # COMMENT ---------------------------------------------------------------------
 
 
@@ -84,13 +165,15 @@ class AYCommentField(QTextEdit):
         self.setMarkdown(self._text)
 
         # configure
-        int(self.fontMetrics().lineSpacing())
+        if num_lines:
+            height = int(self.fontMetrics().lineSpacing()) * num_lines + 8 + 8
+            self.setFixedHeight(height)
 
         if not self._read_only:
             self.setPlaceholderText(
                 "Comment or mention with @user, @@version, @@@task..."
             )
-        # self.setReadOnly(self._read_only)
+        self.setReadOnly(self._read_only)
 
     def _adjust(self, *args):
         print(f"adjust: {args}  {self.document().size()}")
