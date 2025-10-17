@@ -3,7 +3,7 @@ name = "ayon-ui-qt"
 version = "0.1.0"
 description = "A Qt Widget library based on AYON's React Component Library"
 readme = "README.md"
-requires-python = ">=3.9.6"
+requires-python = ">=3.9.6,<3.10"
 dependencies = [
     "pyside6>=6.9.2",
     "qtpy>=2.4.3",
