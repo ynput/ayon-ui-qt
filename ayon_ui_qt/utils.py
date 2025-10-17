@@ -51,6 +51,8 @@ def clear_layout(layout):
     if layout is None:
         return
 
+    # print(f"layout = {layout}")
+
     # Work backwards through the layout to avoid index issues when removing items
     for i in reversed(range(layout.count())):
         item = layout.takeAt(i)
@@ -63,7 +65,7 @@ def clear_layout(layout):
         if widget:
             # Recursively clear any layouts this widget might have
             # (in case it's a container widget with its own layouts)
-            if hasattr(widget, 'layout') and widget.layout():
+            if hasattr(widget, "layout") and widget.layout():
                 clear_layout(widget.layout())
             # Delete the widget
             widget.setParent(None)

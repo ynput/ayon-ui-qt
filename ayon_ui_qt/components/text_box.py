@@ -1,32 +1,40 @@
 from functools import partial
+
 from qtpy import QtCore, QtWidgets
 from qtpy.QtGui import (
-    QTextDocument,
-    QTextCursor,
     QFont,
+    QTextCursor,
+    QTextDocument,
     QTextFrameFormat,
 )
-from qtpy.QtWidgets import QTextEdit, QSizePolicy
-from .layouts import AYHBoxLayout, AYVBoxLayout
-from .frame import AYFrame
+from qtpy.QtWidgets import QSizePolicy, QTextEdit
+
 from .buttons import AYButton
+from .frame import AYFrame
+from .layouts import AYHBoxLayout, AYVBoxLayout
 
 
 class AYTextEditor(QTextEdit):
     def __init__(
-        self, *args, max_lines: int = 4, read_only: bool = False, **kwargs
+        self, *args, num_lines: int = 0, read_only: bool = False, **kwargs
     ):
         # remove our kwargs
-        self.max_lines: int = max_lines
+        self.num_lines: int = num_lines
         self._read_only: bool = read_only
 
         super().__init__(*args, **kwargs)
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
 
-        self._style = self.style().model.get_style("QTextEdit")
+        if self.num_lines:
+            self.setFixedHeight(
+                self.fontMetrics().lineSpacing() * self.num_lines + 8
+            )
+
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+            if self.num_lines
+            else QSizePolicy.Policy.Fixed,
+        )
 
         # automatic bullet lists
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
@@ -38,7 +46,6 @@ class AYTextEditor(QTextEdit):
         self.setReadOnly(self._read_only)
 
     def set_style(self, style):
-        print(f"style: {style}")
         cursor = self.textCursor()
         # print(f"selected: {cursor.selectedText()}")
         if style == "stl_h1":
@@ -127,7 +134,7 @@ class AYTextEditor(QTextEdit):
 
 class AYTextBoxSignals(QtCore.QObject):
     # Signal emitted when comment button is clicked, passes markdown content
-    comment_submitted = QtCore.Signal(str)
+    comment_submitted = QtCore.Signal(str)  # type: ignore
 
 
 class AYTextBox(AYFrame):
@@ -146,9 +153,9 @@ class AYTextBox(AYFrame):
         "fmt_checklist": "checklist",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, num_lines=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._build()
+        self._build(num_lines)
 
     def _build_upper_bar(self):
         grp_spacing = 16
@@ -164,14 +171,12 @@ class AYTextBox(AYFrame):
         lyt.addSpacing(grp_spacing)
         lyt.addWidget(AYButton(self, variant="nav", icon="attach_file"))
         lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
+            QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
         )
         return lyt
 
-    def _build_edit_field(self):
-        self.edit_field = AYTextEditor(self)
+    def _build_edit_field(self, num_lines):
+        self.edit_field = AYTextEditor(self, num_lines=num_lines)
         for var in self.style_icons:
             getattr(self, var).clicked.connect(
                 partial(self.edit_field.set_style, var)
@@ -187,9 +192,7 @@ class AYTextBox(AYFrame):
         for icn in ("person", "layers", "check_circle"):
             lyt.addWidget(AYButton(self, variant="nav", icon=icn))
         lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
+            QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
         )
         self.comment_button = AYButton("Comment", variant="filled")
         self.comment_button.clicked.connect(self._on_comment_clicked)
@@ -201,10 +204,10 @@ class AYTextBox(AYFrame):
         markdown_content = self.edit_field.document().toMarkdown()
         self.signals.comment_submitted.emit(markdown_content)
 
-    def _build(self):
+    def _build(self, num_lines):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
         lyt.addLayout(self._build_upper_bar())
-        lyt.addWidget(self._build_edit_field(), stretch=10)
+        lyt.addWidget(self._build_edit_field(num_lines), stretch=10)
         lyt.addLayout(self._build_lower_bar())
 
     def set_markdown(self, md: str):
@@ -217,20 +220,20 @@ class AYTextBox(AYFrame):
 
 
 if __name__ == "__main__":
-    from ..tester import test
+    from ..tester import Style, test
+    from .container import AYContainer
 
     def build():
-        w = QtWidgets.QWidget()
-        lyt = AYVBoxLayout(w, margin=8)
+        w = AYContainer(layout=AYContainer.Layout.HBox, margin=8)
         ww = AYTextBox(parent=w)
         ww.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
         )
-        lyt.addWidget(ww)
+        w.addWidget(ww)
         ww.signals.comment_submitted.connect(
             lambda x: print(f"Comment {'=' * 70}\n{x}{'=' * 78}")
         )
         return w
 
-    test(build, use_css=False)
+    test(build, style=Style.Widget)

@@ -5,8 +5,7 @@ from typing import Optional
 from qtpy import QtCore, QtWidgets
 
 from activity_stream import AYActivityStream
-from ayon_ui_qt.components.frame import AYFrame
-from ayon_ui_qt.components.layouts import AYVBoxLayout
+from ayon_ui_qt.components.container import AYContainer, AYFrame
 from ayon_ui_qt.components.text_box import AYTextBox
 from ayon_ui_qt.utils import preprocess_payload
 from detail_panel import AYDetailPanel
@@ -25,7 +24,7 @@ class ActivityPanelSignals(QtCore.QObject):
     status_changed = QtCore.Signal(str)  # type: ignore
 
 
-class ActivityPanel(AYFrame):
+class ActivityPanel(AYContainer):
     signals = ActivityPanelSignals()
 
     def __init__(
@@ -37,7 +36,13 @@ class ActivityPanel(AYFrame):
         self._activities = activities
         self._category = category
 
-        super().__init__(parent, bg=True)
+        super().__init__(
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.Low,
+            layout_margin=8,
+            layout_spacing=8,
+            parent=parent,
+        )
 
         self._build()
 
@@ -49,19 +54,18 @@ class ActivityPanel(AYFrame):
         self.update_stream(self._category, self._activities)
 
     def _build(self):
-        self.main_lyt = AYVBoxLayout(self)
-
         # add header
         self.details = AYDetailPanel(self)
-        self.main_lyt.addWidget(self.details, stretch=0)
+        self.addWidget(self.details, stretch=0)
         # add tab layout with hidden tabs
         self.stream = AYActivityStream(
             self, activities=self._activities, category=self._category
         )
-        self.main_lyt.addWidget(self.stream, stretch=1)
+        self.addWidget(self.stream, stretch=10)
         # add comment editor
-        self.editor = AYTextBox()
-        self.main_lyt.addWidget(self.editor, stretch=0)
+        self.editor = AYTextBox(num_lines=3)
+        self.addWidget(self.editor, stretch=0)
+        # connect signals
         self.editor.signals.comment_submitted.connect(
             self.signals.comment_submitted.emit
         )
@@ -77,10 +81,9 @@ class ActivityPanel(AYFrame):
 
 
 if __name__ == "__main__":
-    from ayon_ui_qt.tester import test
     import json
 
-    from ayon_ui_qt.tester import test
+    from ayon_ui_qt.tester import Style, test
 
     def build():
         data_file = os.path.join(
@@ -101,4 +104,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(build, use_css=False)
+    test(build, style=Style.Widget)

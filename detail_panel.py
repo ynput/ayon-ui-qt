@@ -1,36 +1,44 @@
-import sys
 import os
 from typing import Optional
-from qtpy import QtCore, QtGui, QtWidgets
+
+from qtpy import QtCore, QtWidgets
 
 from ayon_ui_qt.components.buttons import AYButton
-from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout, AYGridLayout
-from ayon_ui_qt.components.label import AYLabel
-from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
+from ayon_ui_qt.components.container import AYContainer, AYFrame
 from ayon_ui_qt.components.entity_path import AYEntityPath
-from ayon_ui_qt.components.frame import AYFrame
+from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
+from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.layouts import (
+    AYGridLayout,
+    AYHBoxLayout,
+    AYVBoxLayout,
+)
 
 
 class DetailSignals(QtCore.QObject):
     # Node signals
-    view_changed = QtCore.Signal(str)  # category
+    view_changed = QtCore.Signal(str)  # type: ignore # category
 
 
-class AYDetailPanel(AYFrame):
+class AYDetailPanel(AYContainer):
     signals = DetailSignals()
 
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
-        super().__init__(parent, bg=True)
-        self._build2()
+        super().__init__(
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.Low,
+            parent=parent,
+        )
+        self._build()
 
     def _build_thumbnail(self):
         self.entity_thumbnail = AYEntityThumbnail(self)
-        self.entity_name = AYLabel("entity", tag="h3")
+        self.entity_name = AYLabel("entity")
         self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
-        self.task_info = AYLabel("Task - Render", tag="h4")
+        self.task_info = AYLabel("Task - Render")
 
         thumb_lyt = AYHBoxLayout()
         thumb_lyt.addWidget(self.entity_thumbnail)
@@ -41,11 +49,7 @@ class AYDetailPanel(AYFrame):
         thumb_info_lyt.addLayout(name_tag_lyt)
         thumb_info_lyt.addWidget(self.task_info)
         thumb_lyt.addLayout(thumb_info_lyt)
-        thumb_lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
+        thumb_lyt.addStretch()
         return thumb_lyt
 
     def _build_status(self):
@@ -88,15 +92,11 @@ class AYDetailPanel(AYFrame):
         feed_lyt.addWidget(self.feed_com)
         feed_lyt.addWidget(self.feed_pub)
         feed_lyt.addWidget(self.feed_chk)
-        feed_lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
+        feed_lyt.addStretch()
         return feed_lyt
 
     def _build_attrs(self):
-        self.attrs = AYButton("Attributes", parent=self, variant="surface")
+        self.attrs = AYButton("Details", parent=self, variant="surface")
         self.attrs.clicked.connect(
             lambda: self.signals.view_changed.emit("view_attributes")
         )
@@ -110,7 +110,7 @@ class AYDetailPanel(AYFrame):
         lyt.addWidget(self.attrs)
         return lyt
 
-    def _build2(self):
+    def _build(self):
         self.entity_path = AYEntityPath(self)
         self.thumbnail = self._build_thumbnail()
         self.status = self._build_status()
@@ -119,8 +119,6 @@ class AYDetailPanel(AYFrame):
         self.priority = self._build_priority()
         self.streams = self._build_streams()
         self.attrs = self._build_attrs()
-
-        lyt = AYVBoxLayout(self)
 
         grid_lyt = AYGridLayout()
         grid_lyt.addLayout(self.thumbnail, 0, 0)
@@ -131,8 +129,8 @@ class AYDetailPanel(AYFrame):
         grid_lyt.addLayout(self.streams, 3, 0)
         grid_lyt.addLayout(self.attrs, 3, 1)
 
-        lyt.addWidget(self.entity_path)
-        lyt.addLayout(grid_lyt)
+        self.addWidget(self.entity_path)
+        self.addLayout(grid_lyt)
 
 
 # TEST =======================================================================

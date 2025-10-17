@@ -1,18 +1,30 @@
-import os
-from typing import Optional
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
-from qtpy import QtWidgets
+from qtpy.QtWidgets import QTextEdit
 
-from .frame import AYFrame
-from .layouts import AYVBoxLayout, AYHBoxLayout
-from .buttons import AYButton
+from .container import AYContainer, AYFrame
 from .label import AYLabel
+from .layouts import AYVBoxLayout
 from .user_image import AYUserImage
 
 
+def short_date(date_str: str) -> str:
+    if date_str:
+        try:
+            # Parse the ISO string
+            dt = datetime.fromisoformat(date_str)
+            return dt.strftime("%b %d, %I:%M %p")
+        except ValueError:
+            # Handle invalid date format
+            return date_str
+    else:
+        return "No date available"
+
+
 # PUBLISH ---------------------------------------------------------------------
+
 
 @dataclass
 class PublishedModel:
@@ -24,10 +36,7 @@ class PublishedModel:
     date: str = ""
 
     def __post_init__(self):
-        if self.date:
-            # Parse the ISO string
-            dt = datetime.fromisoformat(self.date)
-            self._short_date = dt.strftime("%b %d, %I:%M %p")
+        self._short_date = short_date(self.date)
 
     @property
     def type(self):
@@ -50,10 +59,7 @@ class CommentModel:
     comment_date: str = ""
 
     def __post_init__(self):
-        if self.comment_date:
-            # Parse the ISO string
-            dt = datetime.fromisoformat(self.comment_date)
-            self._short_date = dt.strftime("%b %d, %I:%M %p")
+        self._short_date = short_date(self.comment_date)
 
     @property
     def type(self):
@@ -64,42 +70,40 @@ class CommentModel:
         return self._short_date
 
 
-class AYCommentField(QtWidgets.QTextBrowser):
-    def __init__(self, *args, **kwargs):
+class AYCommentField(QTextEdit):
+    def __init__(self, *args, text="", read_only=False, num_lines=0, **kwargs):
         # remove our kwargs
-        max_lines: int = kwargs.pop("max_lines", 4)
-        self._text: str = kwargs.pop("text", None)
-        self._read_only: bool = kwargs.pop("read_only", False)
+        self._num_lines = num_lines
+        self._text: str = text
+        self._read_only: bool = read_only
 
         super().__init__(*args, **kwargs)
+        self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
+        self.setMarkdown(self._text)
 
         # configure
-        # 1.4 is a magic number because the font size comes from qss so always
-        # unpredictable.
-        # FIXME: internalize QSS ?
-        line_height = int(self.fontMetrics().lineSpacing() * 1.4)
-        self.setFixedHeight(line_height * max_lines)
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        int(self.fontMetrics().lineSpacing())
+
         if not self._read_only:
             self.setPlaceholderText(
                 "Comment or mention with @user, @@version, @@@task..."
             )
-        self.setReadOnly(self._read_only)
+        # self.setReadOnly(self._read_only)
+
+    def _adjust(self, *args):
+        print(f"adjust: {args}  {self.document().size()}")
 
 
 class AYComment(AYFrame):
-    def __init__(self, *args, **kwargs):
-        self._data: CommentModel = kwargs.pop("data", CommentModel())
+    def __init__(self, *args, data: CommentModel | None = None, **kwargs):
+        self._data = data if data else CommentModel()
 
-        super().__init__(*args, bg=True, **kwargs)
+        super().__init__(*args, variant=AYFrame.Variant.Low, **kwargs)
 
         self._build()
         # configure
         if self._data:
-            self.text_field.setPlainText(self._data.comment)
+            self.text_field.setMarkdown(self._data.comment)
             self.date.setText(self._data.short_date)
 
     def _build_top_bar(self):
@@ -111,22 +115,22 @@ class AYComment(AYFrame):
             full_name=self._data.user_full_name,
             outline=False,
         )
-        self.user_name = AYLabel(self._data.user_full_name, tag="h4")
-        self.date = AYLabel(self._data.short_date, tag="h4", dim=True)
-        lyt = AYHBoxLayout(margin=0)
-        lyt.addWidget(self.user_icon)
-        lyt.addWidget(self.user_name)
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
+        self.user_name = AYLabel(self._data.user_full_name, bold=True)
+        self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
+        cntr = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYFrame.Variant.Low,
+            layout_spacing=8,
         )
-        lyt.addWidget(self.date)
-        return lyt
+        cntr.addWidget(self.user_icon)
+        cntr.addWidget(self.user_name)
+        cntr.addStretch()
+        cntr.addWidget(self.date)
+        return cntr
 
     def _build(self):
-        lyt = AYVBoxLayout(self, margin=0)
-        lyt.addLayout(self._build_top_bar())
+        lyt = AYVBoxLayout(self, margin=0, spacing=0)
+        lyt.addWidget(self._build_top_bar())
         self.text_field = AYCommentField(
             self, text=self._data.comment, read_only=True
         )
@@ -162,96 +166,51 @@ class AYComment(AYFrame):
         )
 
 
-class AYCommentEditor(AYFrame):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._build()
-
-    def _build_upper_bar(self):
-        grp_spacing = 16
-        lyt = AYHBoxLayout(self, spacing=0, margin=0)
-        for icn in (
-            "format_h1",
-            "format_bold",
-            "format_italic",
-            "link",
-            "code",
-        ):
-            lyt.addWidget(AYButton(self, variant="nav", icon=icn))
-        # separator
-        lyt.addSpacing(grp_spacing)
-        for icn in (
-            "format_list_numbered",
-            "format_list_bulleted",
-            "checklist",
-        ):
-            lyt.addWidget(AYButton(self, variant="nav", icon=icn))
-        lyt.addSpacing(grp_spacing)
-        lyt.addWidget(AYButton(self, variant="nav", icon="attach_file"))
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
-        return lyt
-
-    def _build_edit_field(self):
-        self.edit_field = AYCommentField(self)
-        return self.edit_field
-
-    def _build_lower_bar(self):
-        lyt = AYHBoxLayout(self, margin=0, spacing=0)
-        for icn in ("person", "layers", "check_circle"):
-            lyt.addWidget(AYButton(self, variant="nav", icon=icn))
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
-        lyt.addWidget(AYButton("Comment", variant="filled"))
-        return lyt
-
-    def _build(self):
-        lyt = AYVBoxLayout(self)
-        lyt.addLayout(self._build_upper_bar())
-        lyt.addWidget(self._build_edit_field())
-        lyt.addLayout(self._build_lower_bar())
-
-
 if __name__ == "__main__":
-    from ..tester import test, Style
+    from ..tester import Style, test
+    from .container import AYContainer
     from .text_box import AYTextBox
 
     def build():
-        av1 = os.path.join(
-            os.path.dirname(__file__), "resources", "avatar1.jpg"
+        rsrc_dir = Path(__file__).parent.parent / "resources"
+        av1 = rsrc_dir / "avatar1.jpg"
+        av2 = rsrc_dir / "avatar2.jpg"
+
+        w = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            # margin=8,
+            layout_spacing=4,
+            layout_margin=16,
+            variant=AYFrame.Variant.Low,
         )
-        av2 = os.path.join(
-            os.path.dirname(__file__), "resources", "avatar2.jpg"
-        )
-        w = QtWidgets.QWidget()
-        lyt = AYVBoxLayout(w, margin=8)
-        lyt.addWidget(
+
+        w.addWidget(
             AYComment(
-                user_src=av1,
-                user_full_name="Bob Morane",
-                comment="This is great !",
+                data=CommentModel(
+                    user_src=str(av1),
+                    user_full_name="Bob Morane",
+                    comment="This is great !",
+                )
             )
         )
-        lyt.addWidget(
+        w.addWidget(
             AYComment(
-                user_src=av2,
-                user_full_name="Leia Organa",
-                comment="Can you avoid the dark side @Luke ?",
+                data=CommentModel(
+                    user_src=(str(av2)),
+                    user_full_name="Leia Organa",
+                    comment="Can you avoid the dark side @Luke ?",
+                )
             )
         )
-        lyt.addWidget(
+        w.addWidget(
             AYComment(
-                user_full_name="Katniss Evergreen",
-                comment="One squirrel...\nTwo squirrels\nThree squirrels...\n",
+                data=CommentModel(
+                    user_full_name="Katniss Evergreen",
+                    comment="One squirrel...\nTwo squirrels\nThree squirrels !",
+                )
             )
         )
-        lyt.addWidget(AYCommentEditor())
+        w.addWidget(AYTextBox(num_lines=3))
         return w
 
-    test(build)
+    test(build, style=Style.Widget)

@@ -206,4 +206,4 @@ if __name__ == "__main__":
 
     os.environ["QT_SCALE_FACTOR"] = "1"
 
-    test(build, use_css=False)
+    test(build, style=Style.Widget)

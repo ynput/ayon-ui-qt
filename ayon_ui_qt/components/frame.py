@@ -1,8 +1,17 @@
-from qtpy import QtCore, QtGui, QtWidgets
+from enum import StrEnum
+
+from qtpy import QtCore, QtWidgets
 
 
 class AYFrame(QtWidgets.QFrame):
-    def __init__(self, *args, bg=False, variant="", margin=0, **kwargs):
+    class Variant(StrEnum):
+        Base = ""
+        Low = "low"
+        High = "high"
+
+    def __init__(
+        self, *args, bg=False, variant=Variant.Base, margin=0, **kwargs
+    ):
         self._bg: bool = bg
         self.variant = variant
 
@@ -16,4 +25,4 @@ class AYFrame(QtWidgets.QFrame):
     def set_bg(self, value):
         pass
 
-    bg = QtCore.Property(bool, get_bg, set_bg)
+    bg = QtCore.Property(bool, get_bg, set_bg)  # type: ignore

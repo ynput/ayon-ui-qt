@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from functools import partial
+from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -12,13 +13,13 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
+    QLabel,
     QPushButton,
     QStyle,
     QStyleOption,
     QStyleOptionButton,
     QStyleOptionComboBox,
     QWidget,
-    QSizePolicy,
 )
 
 try:
@@ -26,10 +27,10 @@ try:
 except ImportError:
     from .vendor.qtmaterialsymbols import get_icon
 
-from ayon_ui_qt.components.combo_box import Item
+from .components.combo_box import Item
 
 
-def all_enums(t):
+def _all_enums(t):
     meta_object: QtCore.QMetaObject = t.staticMetaObject
     enums = [
         meta_object.enumerator(v) for v in range(meta_object.enumeratorCount())
@@ -54,7 +55,7 @@ def all_enums(t):
                 print(f"    {i}: {enum.valueToKey(i)}")
 
 
-def enum_values(enum):
+def _enum_values(enum):
     # qmeta = QtCore.QMetaEnum(enum)
     meta_object: QtCore.QMetaObject = QStyle.staticMetaObject  # type: ignore
     enum_index = meta_object.indexOfEnumerator(enum.__name__)
@@ -81,7 +82,9 @@ def enum_to_str(enum, enum_value: int, widget: str) -> str:
         meta_object = QStyle.staticMetaObject  # type: ignore
         enum_index = meta_object.indexOfEnumerator(enum.__name__)
         meta_enum = meta_object.enumerator(enum_index)
-        enum_to_str._cache[cachekey] = meta_enum.valueToKey(enum_value)  # type: ignore
+        enum_to_str._cache[cachekey] = (  # type: ignore
+            f"{meta_enum.valueToKey(enum_value)}-{widget}"  # type: ignore
+        )
         # print(f'{cachekey}: {enum_to_str._cache[cachekey]}')
 
     return enum_to_str._cache[cachekey]  # type: ignore
@@ -89,10 +92,10 @@ def enum_to_str(enum, enum_value: int, widget: str) -> str:
 
 def hsl_to_html_color(hsl: str):
     vals = hsl[4:-1].split(", ")
-    h = int(vals[0]) / 360.0
-    s = int(vals[1][:-1]) / 100.0
-    l = int(vals[2][:-1]) / 100.0
-    return QColor.fromHslF(h, s, l).name()
+    hue = int(vals[0]) / 360.0
+    sat = int(vals[1][:-1]) / 100.0
+    lum = int(vals[2][:-1]) / 100.0
+    return QColor.fromHslF(hue, sat, lum).name()
 
 
 def do_nothing(*args, **kwargs):
@@ -101,7 +104,8 @@ def do_nothing(*args, **kwargs):
 
 class StyleData:
     def __init__(self) -> None:
-        with open("ayon_ui_qt/ayon_style.json", "r") as fh:
+        fpath = Path(__file__).parent / "ayon_style.json"
+        with open(fpath, "r") as fh:
             self.data = json.load(fh)
         # Palette values can reference each other
         self._palette = self.data.get("palette", {})
@@ -983,6 +987,28 @@ class ComboBoxDrawer:
 # ----------------------------------------------------------------------------
 
 
+class LabelDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    @property
+    def base_class(self):
+        return {"QLabel": QLabel}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ShapedFrame,
+                "QLabel",
+            ): do_nothing,
+        }
+
+
+# ----------------------------------------------------------------------------
+
+
 class AYONStyle(QtWidgets.QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
@@ -997,10 +1023,11 @@ class AYONStyle(QtWidgets.QCommonStyle):
         self.metrics = {}
         self.base_classes = {}
         self.drawer_objs = [
+            LabelDrawer(self),  # first because QLabel inherits from QFrame.
             ButtonDrawer(self),
-            FrameDrawer(self),
             CheckboxDrawer(self),
             ComboBoxDrawer(self),
+            FrameDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -1198,13 +1225,12 @@ class AYONStyle(QtWidgets.QCommonStyle):
 if __name__ == "__main__":
     import time
 
-    from ayon_ui_qt.components.buttons import AYButton
-    from ayon_ui_qt.components.container import AYContainer
-    from ayon_ui_qt.components.frame import AYFrame
-    from ayon_ui_qt.components.layouts import AYHBoxLayout, AYVBoxLayout
-    from ayon_ui_qt.components.combo_box import AYComboBox
-    from ayon_ui_qt.tester import test
-    from ayon_ui_qt.components.text_box import AYTextBox
+    from .components.buttons import AYButton
+    from .components.container import AYContainer, AYFrame
+    from .components.label import AYLabel
+    from .components.layouts import AYHBoxLayout
+    from .components.text_box import AYTextBox
+    from .tester import Style, test
 
     def time_it(func):
         i = time.time()
@@ -1234,7 +1260,7 @@ if __name__ == "__main__":
     ee = 0
     i = 0
     s = ""
-    vals = enum_values(QStyle.ControlElement)
+    vals = _enum_values(QStyle.ControlElement)
     for i, v in enumerate(vals):
         s, e = time_it(lambda: enum_to_str(QStyle.ControlElement, v, ""))
         ee += e
@@ -1265,7 +1291,7 @@ if __name__ == "__main__":
         # Create and show the test widget
         widget = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="",
+            variant=AYFrame.Variant.Base,
             margin=0,
             layout_spacing=10,
             layout_margin=10,
@@ -1274,7 +1300,7 @@ if __name__ == "__main__":
         container_1 = AYContainer(
             widget,
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYFrame.Variant.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
@@ -1297,7 +1323,7 @@ if __name__ == "__main__":
 
         container_2 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYFrame.Variant.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
@@ -1310,7 +1336,7 @@ if __name__ == "__main__":
 
         container_3 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYFrame.Variant.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
@@ -1322,10 +1348,12 @@ if __name__ == "__main__":
             "- [ ] Do this\n- [ ] Do that\n"
         )
         container_3.add_widget(te)
+        container_3.add_widget(AYLabel("Normal"))
+        container_3.add_widget(AYLabel("Dimmed", dim=True))
         container_3.addStretch()
 
         widget.add_widget(container_3)
 
         return widget
 
-    test(_ui_test, use_css=False)
+    test(_ui_test, style=Style.Widget)

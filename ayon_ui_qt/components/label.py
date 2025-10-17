@@ -1,65 +1,32 @@
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtGui, QtWidgets
+from qtpy.QtGui import QFont, QPalette
+
 try:
-    from qtmaterialsymbols import get_icon
+    from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
 
 class AYLabel(QtWidgets.QLabel):
-    def __init__(self, *args, **kwargs):
-        self._tag = kwargs.pop("tag", None)
-        self._dim = kwargs.pop("dim", False)
-        self._icon = kwargs.pop("icon", None)
-        self._icon_color = kwargs.pop("icon_color", "#ffffff")
+    def __init__(
+        self,
+        *args,
+        dim: bool = False,
+        icon: str = "",
+        icon_color: str = "",
+        rel_text_size: int = 0,
+        bold: bool = False,
+        **kwargs,
+    ):
+        self._dim = dim
+        self._icon = icon
+        self._icon_color = icon_color if icon_color else "#ffffff"
+        self._rel_text_size = rel_text_size
+        self._bold = bold
+        self._text_is_set = False
+        self._style_palette = None
+
         super().__init__(*args, **kwargs)
-
-        self.setStyleSheet(
-            """
-            AYLabel {
-                font-size: 14px;
-                color:#deffffff;
-                background-color: transparent;
-            }
-
-            AYLabel[tag="h2"] {
-                font-size: 16px;
-            }
-
-            AYLabel[tag="h3"] {
-                font-size: 14px;
-            }
-
-            AYLabel[tag="h4"] {
-                font-size: 12px;
-            }
-
-            AYLabel[tag="h5"] {
-                font-size: 10px;
-            }
-
-            AYLabel[dim="true"] {
-                font-size: 14px;
-                color:#80ffffff;
-                background-color: transparent;
-            }
-
-            AYLabel[tag="h2"][dim="true"] {
-                font-size: 16px;
-            }
-
-            AYLabel[tag="h3"][dim="true"] {
-                font-size: 14px;
-            }
-
-            AYLabel[tag="h4"][dim="true"] {
-                font-size: 12px;
-            }
-
-            AYLabel[tag="h4"][dim="true"] {
-                font-size: 10px;
-            }
-            """
-        )
 
         self.set_icon()
 
@@ -68,17 +35,34 @@ class AYLabel(QtWidgets.QLabel):
             icn = get_icon(self._icon, color=self._icon_color)
             self.setPixmap(icn.pixmap())
 
-    def get_tag(self):
-        return self._tag
+    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
+        if not self._style_palette:
+            self._style_palette = self.palette()
 
-    def set_tag(self, value):
-        self._tag = value
+        if not self._text_is_set:
+            self._text_is_set = True
+            font = self.font()
+            if self._rel_text_size != 0:
+                point_size = font.pointSize() + self._rel_text_size
+                font.setPointSize(point_size)
+            if self._bold:
+                font.setWeight(QFont.Weight.Bold)
+            else:
+                font.setWeight(QFont.Weight.Normal)
+            self.setFont(font)
 
-    def get_dim(self):
-        return self._dim
+        if self._dim:
+            p = QPalette(self._style_palette)
+            p.setColor(
+                QPalette.ColorGroup.Active,
+                self.foregroundRole(),
+                self._style_palette.color(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.PlaceholderText,
+                ),
+            )
+            self.setPalette(p)
+        else:
+            self.setPalette(self._style_palette)
 
-    def set_dim(self, value):
-        self._dim = value
-
-    tag = QtCore.Property(str, get_tag, set_tag)
-    dim = QtCore.Property(bool, get_dim, set_dim)
+        super().paintEvent(arg__1)

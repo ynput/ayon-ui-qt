@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import copy
 import os
 from typing import Literal, get_args
@@ -6,7 +7,7 @@ from typing import Literal, get_args
 from qtpy import QtCore, QtGui, QtWidgets
 
 try:
-    from qtmaterialsymbols import get_icon
+    from qtmaterialsymbols import get_icon # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
@@ -74,46 +75,68 @@ class AYButton(QtWidgets.QPushButton):
         self._icon_color = val
 
     # TO BE REMOVED: Properties used by the CSS implementation.
-    variant = QtCore.Property(str, get_variant, set_variant)
-    has_icon = QtCore.Property(bool, get_has_icon, set_has_icon)
-    icon_color = QtCore.Property(QtGui.QColor, get_icon_color, set_icon_color)
+    variant = QtCore.Property(str, get_variant, set_variant)  # type: ignore
+    has_icon = QtCore.Property(bool, get_has_icon, set_has_icon)  # type: ignore
+    icon_color = QtCore.Property(QtGui.QColor, get_icon_color, set_icon_color)  # type: ignore
 
 
 # TEST =======================================================================
 
 
-def _build_test():
-    # Create and show the test widget
-    widget = QtWidgets.QFrame()
-    tl = QtWidgets.QVBoxLayout(widget)
-
-    variants = [v for v in get_args(ButtonVariant)]
-
-    l1 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(variants):
-        b = AYButton(f"{var} button", variant=var)
-        l1.addWidget(b)
-
-    l2 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(variants):
-        b = AYButton(f"{var} button", variant=var, icon="add")
-        l2.addWidget(b)
-
-    l3 = QtWidgets.QHBoxLayout()
-    for i, var in enumerate(variants):
-        b = AYButton(variant=var, icon="add")
-        l3.addWidget(b)
-    l3.addStretch(1)
-
-    tl.addLayout(l1)
-    tl.addLayout(l2)
-    tl.addLayout(l3)
-
-    return widget
-
-
 if __name__ == "__main__":
-    from ..tester import test, Style
+    from ..tester import Style, test
+    from .container import AYContainer, AYFrame
+
+    def _build_test():
+        # Create and show the test widget
+        widget = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.High,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+
+        variants = [v for v in get_args(ButtonVariant)]
+
+        l1 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYFrame.Variant.Low,
+            parent=widget,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+        for i, var in enumerate(variants):
+            b = AYButton(f"{var} button", variant=var)
+            l1.add_widget(b)
+
+        l2 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYFrame.Variant.Low,
+            parent=widget,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+        for i, var in enumerate(variants):
+            b = AYButton(f"{var} button", variant=var, icon="add")
+            l2.add_widget(b)
+
+        l3 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYFrame.Variant.Low,
+            parent=widget,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+        for i, var in enumerate(variants):
+            b = AYButton(variant=var, icon="add")
+            l3.add_widget(b)
+        l3.addStretch(1)
+
+        widget.add_widget(l1)
+        widget.add_widget(l2)
+        widget.add_widget(l3)
+
+        return widget
 
     os.environ["QT_SCALE_FACTOR"] = "1"
-    test(_build_test, use_css=False)
+    test(_build_test, style=Style.Widget)

@@ -199,14 +199,22 @@
                 "": {
                     "border-radius": 4,
                     "border-width": 0,
-                    "border-color": "--md-sys-color-surface-container-dark",
-                    "background-color": "--md-sys-color-surface-container-dark"
+                    "border-color": "--md-sys-color-background-dark",
+                    "background-color": "--md-sys-color-background-dark"
                 },
                 "low": {
                     "background-color": "--md-sys-color-surface-container-low-dark"
                 },
                 "high": {
-                    "background-color": "--md-sys-color-surface-container-high-dark"
+                    "background-color": "--md-sys-color-surface-container-dark"
+                }
+            }
+        },
+        "QLabel": {
+            "default-variant": "",
+            "variants": {
+                "": {
+                    "background-color": "transparent"
                 }
             }
         }
@@ -371,13 +379,14 @@
         "--md-ref-palette-neutral-variant98": "#f6faff",
         "--md-ref-palette-neutral-variant99": "#fcfcff",
         "--md-ref-palette-neutral-variant100": "#ffffff",
-        "qt-active-window": "--md-sys-color-surface-container-high-dark",
+        "qt-active-window": "--md-sys-color-background-dark",
         "qt-active-window-text": "--md-sys-color-on-surface-dark",
         "qt-active-base": "--md-sys-color-surface-container-dark",
         "qt-active-text": "--md-sys-color-on-surface-dark",
         "qt-active-link": "text-color-link",
         "qt-active-button": "-md-sys-color-surface-container-highest-dark",
         "qt-active-button-text": "--md-sys-color-on-surface-dark",
+        "qt-active-placeholder-text": "--md-ref-palette-neutral-variant50",
         "qt-active-highlight": "--md-sys-color-primary-dark",
         "qt-active-highlight-text": "--md-sys-color-on-primary-dark"
     }

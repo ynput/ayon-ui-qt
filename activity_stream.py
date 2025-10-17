@@ -1,59 +1,63 @@
-import os
-from qtpy import QtWidgets
 import logging
+import os
 
-from ayon_ui_qt.components.layouts import AYVBoxLayout
-from ayon_ui_qt.components.comment import AYCommentEditor, AYComment, CommentModel
-from ayon_ui_qt.components.frame import AYFrame
+from qtpy import QtWidgets
+
+from ayon_ui_qt.components.comment import AYComment
+from ayon_ui_qt.components.container import AYContainer, AYFrame
 from ayon_ui_qt.utils import clear_layout
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
 
 
-class AYActivityStream(AYFrame):
+class AYActivityStream(AYContainer):
     def __init__(self, *args, **kwargs):
         self._activities = kwargs.pop("activities", {})
         self._category = kwargs.pop("category", "comment")
 
-        super().__init__(*args, bg=True, **kwargs)
+        super().__init__(
+            *args,
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.Low,
+            **kwargs,
+        )
 
         self._build()
         self.update_stream(self._category, self._activities)
 
     def _build_stream(self):
         self.scroll_area = QtWidgets.QScrollArea()
-        self.scroll_wdgt = QtWidgets.QWidget()
+        self.scroll_ctnr = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.Low,
+            layout_spacing=20,
+        )
 
-        self.stream_lyt = AYVBoxLayout(self.scroll_wdgt)
-
-        self.scroll_wdgt.setLayout(self.stream_lyt)
-        self.scroll_area.setWidget(self.scroll_wdgt)
+        self.scroll_area.setWidget(self.scroll_ctnr)
         self.scroll_area.setWidgetResizable(True)
 
         return self.scroll_area
 
     def _build(self):
-        lyt = AYVBoxLayout(self)
-        self.setLayout(lyt)
-        lyt.addWidget(self._build_stream())
+        self.add_widget(self._build_stream())
 
     def update_stream(self, category, activities: list):
-        clear_layout(self.stream_lyt)
+        clear_layout(self.scroll_ctnr)
         for event in activities:
             if event.type != category:
                 continue
-            self.stream_lyt.addWidget(AYComment(self, data=event))
+            self.scroll_ctnr.add_widget(AYComment(self, data=event))
 
 
 #  TEST ======================================================================
 
 
 if __name__ == "__main__":
+    import json
+
     from ayon_ui_qt.tester import test
     from ayon_ui_qt.utils import preprocess_payload
-    import json
 
     def build():
         data_file = os.path.join(

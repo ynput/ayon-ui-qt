@@ -1,7 +1,9 @@
 from enum import Enum
 from typing import Any
-from qtpy import QtCore, QtGui, QtWidgets
+
+from qtpy import QtWidgets
 from qtpy.QtCore import Qt
+
 from .frame import AYFrame
 from .layouts import AYGridLayout, AYHBoxLayout, AYVBoxLayout
 
@@ -15,8 +17,8 @@ class AYContainer(AYFrame):
     def __init__(
         self,
         *args,
-        layout=Layout.HBox,
-        variant="",
+        layout: Layout = Layout.HBox,
+        variant: AYFrame.Variant = AYFrame.Variant.Base,
         margin=0,
         layout_spacing=0,
         layout_margin=0,
@@ -45,7 +47,7 @@ class AYContainer(AYFrame):
         stretch: int = 0,
         row: int = 0,
         column: int = 0,
-        alignment: Qt.AlignmentFlag = 0,
+        alignment: Qt.AlignmentFlag = 0,  # type: ignore
     ):
         if isinstance(self._layout, (AYHBoxLayout, AYVBoxLayout)):
             self._layout.addWidget(w, stretch=stretch)
@@ -60,7 +62,7 @@ class AYContainer(AYFrame):
         stretch: int = 0,
         row: int = 0,
         column: int = 0,
-        alignment: Qt.AlignmentFlag = 0,
+        alignment: Qt.AlignmentFlag = 0,  # type: ignore
     ):
         if isinstance(self._layout, (AYHBoxLayout, AYVBoxLayout)):
             self._layout.addLayout(l, stretch=stretch)
@@ -72,3 +74,41 @@ class AYContainer(AYFrame):
     def __getattr__(self, name: str) -> Any:
         """allow to call layout methods"""
         return getattr(self._layout, name)
+
+
+if __name__ == "__main__":
+    from ayon_ui_qt.tester import Style, test
+
+    def build():
+        w = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYFrame.Variant.Low,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+        w.add_widget(
+            AYContainer(
+                layout=AYContainer.Layout.VBox,
+                variant=AYFrame.Variant.High,
+                layout_margin=10,
+            )
+        )
+        w.add_widget(
+            AYContainer(
+                layout=AYContainer.Layout.VBox,
+                variant=AYFrame.Variant.High,
+                layout_margin=10,
+            )
+        )
+        w.add_widget(
+            AYContainer(
+                layout=AYContainer.Layout.VBox,
+                variant=AYFrame.Variant.High,
+                layout_margin=10,
+            )
+        )
+        w.setMinimumWidth(200)
+        w.setMinimumHeight(400)
+        return w
+
+    test(build, style=Style.Widget)

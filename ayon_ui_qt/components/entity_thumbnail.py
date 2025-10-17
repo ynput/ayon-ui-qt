@@ -11,12 +11,12 @@ class AYEntityThumbnail(QtWidgets.QPushButton):
         )
         self.setFixedSize(85, 48)
 
-        self.setStyleSheet(
-            """AYEntityThumbnail {
-                background-color: #000000;
-                border: 2px #8B9198;
-                border-style: solid;
-                border-radius: 4px;
-            }
-            """
-        )
+        # self.setStyleSheet(
+        #     """AYEntityThumbnail {
+        #         background-color: #000000;
+        #         border: 2px #8B9198;
+        #         border-style: solid;
+        #         border-radius: 4px;
+        #     }
+        #     """
+        # )

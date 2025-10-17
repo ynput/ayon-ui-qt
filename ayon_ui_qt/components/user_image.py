@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from qtpy import QtCore, QtGui, QtWidgets
 
 
@@ -21,8 +23,6 @@ class AYUserImage(QtWidgets.QLabel):
         self._green = QtGui.QColor(107, 225, 172)
 
         super().__init__(*args, **kwargs)
-
-        self.setStyleSheet("background-color: transparent;")
 
         self.set_image()
 
@@ -110,25 +110,29 @@ class AYUserImage(QtWidgets.QLabel):
 
 
 if __name__ == "__main__":
-    from ..tester import test
-    from .layouts import AYHBoxLayout
+    from ..tester import Style, test
+    from .container import AYContainer
 
     def build():
-        fp = "/Volumes/plp_T5/personal/plp/plp_avatar.jpg.png"
-        w = QtWidgets.QWidget()
-        lyt = AYHBoxLayout(w, margin=16)
-        lyt.addWidget(AYUserImage(src=fp))
-        lyt.addWidget(AYUserImage(src=fp, highlight=True))
-        lyt.addWidget(AYUserImage(src=fp, outline=False))
-        lyt.addWidget(AYUserImage(full_name="Oliver Cromwell"))
-        lyt.addWidget(AYUserImage(name="Oliver"))
-        lyt.addWidget(AYUserImage(highlight=True))
-        lyt.addWidget(AYUserImage(name="Oliver", outline=False))
-        lyt.addWidget(AYUserImage(name="Oliver", outline=False, highlight=True))
-        lyt.addWidget(AYUserImage(src=fp, outline=False, size=60))
-        lyt.addWidget(AYUserImage(src=fp, highlight=True, size=60))
-        lyt.addWidget(AYUserImage(full_name="Oliver Cromwell", size=60))
-        lyt.addWidget(AYUserImage(name="Oliver", outline=False, size=60))
+        fp = Path(__file__).parent.parent.joinpath("resources", "avatar2.jpg")
+        w = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            margin=8,
+            layout_margin=8,
+            layout_spacing=4,
+        )
+        w.addWidget(AYUserImage(src=fp))
+        w.addWidget(AYUserImage(src=fp, highlight=True))
+        w.addWidget(AYUserImage(src=fp, outline=False))
+        w.addWidget(AYUserImage(full_name="Oliver Cromwell"))
+        w.addWidget(AYUserImage(name="Oliver"))
+        w.addWidget(AYUserImage(highlight=True))
+        w.addWidget(AYUserImage(name="Oliver", outline=False))
+        w.addWidget(AYUserImage(name="Oliver", outline=False, highlight=True))
+        w.addWidget(AYUserImage(src=fp, outline=False, size=60))
+        w.addWidget(AYUserImage(src=fp, highlight=True, size=60))
+        w.addWidget(AYUserImage(full_name="Oliver Cromwell", size=60))
+        w.addWidget(AYUserImage(name="Oliver", outline=False, size=60))
         return w
 
-    test(build)
+    test(build, style=Style.Widget)
