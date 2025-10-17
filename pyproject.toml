@@ -7,5 +7,5 @@ requires-python = ">=3.9.6"
 dependencies = [
     "pyside6>=6.9.2",
     "qtpy>=2.4.3",
-    "ruff>=0.12.12",
+    "ruff>=0.11.4",
 ]
