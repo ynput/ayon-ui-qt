@@ -19,7 +19,7 @@ class AYActivityStream(AYContainer):
         super().__init__(
             *args,
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             **kwargs,
         )
 
@@ -30,7 +30,7 @@ class AYActivityStream(AYContainer):
         self.scroll_area = QtWidgets.QScrollArea()
         self.scroll_ctnr = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             layout_spacing=20,
         )
 

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
@@ -18,7 +18,7 @@ class AYContainer(AYFrame):
         self,
         *args,
         layout: Layout = Layout.HBox,
-        variant: AYFrame.Variant = AYFrame.Variant.Base,
+        variant: Literal["", "low", "high"] = "",
         margin=0,
         layout_spacing=0,
         layout_margin=0,
@@ -82,28 +82,28 @@ if __name__ == "__main__":
     def build():
         w = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             layout_spacing=10,
             layout_margin=10,
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant=AYFrame.Variant.High,
+                variant="high",
                 layout_margin=10,
             )
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant=AYFrame.Variant.High,
+                variant="high",
                 layout_margin=10,
             )
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant=AYFrame.Variant.High,
+                variant="high",
                 layout_margin=10,
             )
         )

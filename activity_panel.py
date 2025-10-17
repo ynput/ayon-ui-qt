@@ -38,7 +38,7 @@ class ActivityPanel(AYContainer):
 
         super().__init__(
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             layout_margin=8,
             layout_spacing=8,
             parent=parent,

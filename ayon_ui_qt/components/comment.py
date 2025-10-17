@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -98,7 +100,7 @@ class AYComment(AYFrame):
     def __init__(self, *args, data: CommentModel | None = None, **kwargs):
         self._data = data if data else CommentModel()
 
-        super().__init__(*args, variant=AYFrame.Variant.Low, **kwargs)
+        super().__init__(*args, variant="low", **kwargs)
 
         self._build()
         # configure
@@ -119,7 +121,7 @@ class AYComment(AYFrame):
         self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             layout_spacing=8,
         )
         cntr.addWidget(self.user_icon)
@@ -181,7 +183,7 @@ if __name__ == "__main__":
             # margin=8,
             layout_spacing=4,
             layout_margin=16,
-            variant=AYFrame.Variant.Low,
+            variant="low",
         )
 
         w.addWidget(

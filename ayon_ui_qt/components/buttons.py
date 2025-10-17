@@ -91,7 +91,7 @@ if __name__ == "__main__":
         # Create and show the test widget
         widget = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.High,
+            variant="high",
             layout_spacing=10,
             layout_margin=10,
         )
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
         l1 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             parent=widget,
             layout_spacing=10,
             layout_margin=10,
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
         l2 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             parent=widget,
             layout_spacing=10,
             layout_margin=10,
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
         l3 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             parent=widget,
             layout_spacing=10,
             layout_margin=10,

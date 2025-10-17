@@ -29,7 +29,7 @@ class AYDetailPanel(AYContainer):
     ) -> None:
         super().__init__(
             layout=AYContainer.Layout.VBox,
-            variant=AYFrame.Variant.Low,
+            variant="low",
             parent=parent,
         )
         self._build()

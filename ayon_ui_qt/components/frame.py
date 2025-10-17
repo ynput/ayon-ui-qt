@@ -1,16 +1,16 @@
-from enum import StrEnum
+from typing import Literal
 
 from qtpy import QtCore, QtWidgets
 
 
 class AYFrame(QtWidgets.QFrame):
-    class Variant(StrEnum):
-        Base = ""
-        Low = "low"
-        High = "high"
-
     def __init__(
-        self, *args, bg=False, variant=Variant.Base, margin=0, **kwargs
+        self,
+        *args,
+        bg=False,
+        variant: Literal["", "low", "high"] = "",
+        margin=0,
+        **kwargs,
     ):
         self._bg: bool = bg
         self.variant = variant
