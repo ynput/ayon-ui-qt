@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Literal
 
-from ayon_ui_qt.components.comment import AYComment, AYPublish
+from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.utils import clear_layout, preprocess_payload
 from qtpy import QtWidgets
@@ -107,7 +107,13 @@ class AYActivityStream(AYContainer):
             if event.type == "comment":
                 self.scroll_ctnr.add_widget(AYComment(self, data=event))
             elif event.type == "publish":
-                self.scroll_ctnr.add_widget(AYPublish(self, data=event), stretch=0)
+                self.scroll_ctnr.add_widget(
+                    AYPublish(self, data=event), stretch=0
+                )
+            elif event.type == "status":
+                self.scroll_ctnr.add_widget(
+                    AYStatusChange(self, data=event), stretch=0
+                )
         self.scroll_ctnr.addStretch(100)
 
 
@@ -117,7 +123,7 @@ class AYActivityStream(AYContainer):
 if __name__ == "__main__":
     import json
 
-    from ayon_ui_qt.tester import test
+    from ayon_ui_qt.tester import test, Style
     from ayon_ui_qt.utils import preprocess_payload
 
     def _build() -> QtWidgets.QWidget:
@@ -134,4 +140,4 @@ if __name__ == "__main__":
 
         return AYActivityStream(activities=data)
 
-    test(_build)
+    test(_build, style=Style.Widget)

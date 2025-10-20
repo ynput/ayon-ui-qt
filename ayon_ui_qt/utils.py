@@ -1,5 +1,5 @@
 import logging
-from .components.comment import AYComment, AYPublish
+from .components.comment import AYComment, AYPublish, AYStatusChange
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +36,8 @@ def preprocess_payload(data: dict):
                 ui_data.append(AYComment.parse(node))
             elif activity_type == "version.publish":
                 ui_data.append(AYPublish.parse(node))
+            elif activity_type == "status.change":
+                ui_data.append(AYStatusChange.parse(node))
 
     return ui_data
 

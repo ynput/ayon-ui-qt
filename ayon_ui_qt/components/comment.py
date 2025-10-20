@@ -11,6 +11,7 @@ from .container import AYContainer, AYFrame
 from .label import AYLabel
 from .layouts import AYVBoxLayout
 from .user_image import AYUserImage
+from .combo_box import ALL_STATUSES
 
 
 def short_date(date_str: str) -> str:
@@ -24,6 +25,148 @@ def short_date(date_str: str) -> str:
             return date_str
     else:
         return "No date available"
+
+
+# STATUS ---------------------------------------------------------------------
+
+
+@dataclass
+class StatusChangeModel:
+    user_full_name: str = ""
+    user_name: str = ""
+    user_src: str = ""
+    product: str = ""
+    version: str = ""
+    old_status: str = ""
+    new_status: str = ""
+    date: str = ""
+
+    def __post_init__(self):
+        self._short_date = short_date(self.date)
+
+    @property
+    def type(self):
+        return "status"
+
+    @property
+    def short_date(self):
+        return self._short_date
+
+
+@dataclass
+class StatusModel:
+    text: str = ""
+    short_text: str = ""
+    icon: str = ""
+    color: str = ""
+
+
+class AYStatusChange(AYFrame):
+    def __init__(
+        self,
+        *args,
+        data: StatusChangeModel | None = None,
+        status_definitions: dict | None = None,
+        **kwargs,
+    ):
+        self._data = data or StatusChangeModel()
+        self.statuses = {
+            kw["text"]: StatusModel(**kw)
+            for kw in status_definitions or ALL_STATUSES
+        }
+        super().__init__(*args, variant="low", margin=0, **kwargs)
+        self._build()
+
+    @property
+    def unknown_status(self):
+        return StatusModel(
+            "Unknown Status", "UKN", "shield_question", "#d05050"
+        )
+
+    def status_icon(self, status):
+        model = self.statuses.get(status, self.unknown_status)
+        return model.icon, model.color
+
+    def _build_top_bar(self):
+        small_icon_size = 14
+        self.str_1 = AYLabel(
+            f"{self._data.user_full_name} - {self._data.product} / {self._data.version} -",
+            dim=True,
+            rel_text_size=-2,
+        )
+        icon_name_0, icon_color_0 = self.status_icon(self._data.old_status)
+        self.status_0 = AYLabel(
+            self._data.old_status,
+            icon=icon_name_0,
+            icon_color=icon_color_0,
+            icon_size=small_icon_size,
+            icon_text_spacing=3,
+            dim=True,
+            rel_text_size=-2,
+        )
+        self.str_2 = AYLabel(" → ", dim=True, rel_text_size=-2)
+        icon_name_1, icon_color_1 = self.status_icon(self._data.new_status)
+        self.status_1 = AYLabel(
+            self._data.new_status,
+            icon=icon_name_1,
+            icon_color=icon_color_1,
+            icon_size=small_icon_size,
+            icon_text_spacing=3,
+            dim=True,
+            rel_text_size=-2,
+        )
+        self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
+        cntr = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant="low",
+            layout_spacing=0,
+        )
+        cntr.add_widget(self.str_1, stretch=0)
+        cntr.add_widget(self.status_0, stretch=0)
+        cntr.add_widget(self.str_2, stretch=0)
+        cntr.add_widget(self.status_1, stretch=0)
+        cntr.addStretch()
+        cntr.add_widget(self.date, stretch=0)
+        return cntr
+
+    def _build(self):
+        lyt = AYVBoxLayout(self, margin=0, spacing=0)
+        lyt.addWidget(self._build_top_bar(), stretch=0)
+
+    @staticmethod
+    def parse(data: dict):
+        """Take a comment payload, and return a CommentModel dataclass.
+
+        Args:
+            data (dict): JSON payload from the activity stream.
+
+        Returns:
+            CommentModel: Contains all required comment data.
+        """
+        full_name = (
+            data.get("author", {}).get("attrib", {}).get("fullName", "Someone")
+        )
+
+        activity_data = data.get("activityData", {})
+        if isinstance(activity_data, str):
+            activity_data = json.loads(activity_data)
+        # print(f"STATUS CHANGE: {json.dumps(activity_data, indent=4)}")
+        parents = activity_data.get("parents")
+        product = [p for p in parents if p["type"] == "product"][0].get(
+            "name", "UnknownProduct"
+        )
+        version = activity_data.get("origin", {}).get("name", "v???")
+
+        return StatusChangeModel(
+            user_full_name=full_name,
+            user_name=full_name.split()[0],
+            user_src="",
+            product=product,
+            version=version,
+            old_status=activity_data.get("oldValue", "oldValue"),
+            new_status=activity_data.get("newValue", "newValue"),
+            date=data.get("updatedAt", "UnknownDate"),
+        )
 
 
 # PUBLISH ---------------------------------------------------------------------
@@ -53,7 +196,7 @@ class PublishedModel:
 class AYPublish(AYFrame):
     def __init__(self, *args, data: PublishedModel | None = None, **kwargs):
         self._data = data or PublishedModel()
-        super().__init__(*args, variant="high", margin=0, **kwargs)
+        super().__init__(*args, variant="low", margin=0, **kwargs)
         self._build()
 
     def _build_top_bar(self):
