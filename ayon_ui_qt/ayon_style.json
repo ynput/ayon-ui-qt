@@ -201,7 +201,8 @@
                     "slider-hover-color": "--md-sys-color-primary-dark",
                     "border-width":10,
                     "border-radius": 8,
-                    "width": 16
+                    "width": 16,
+                    "min-length": 32
                 }
             }
         },

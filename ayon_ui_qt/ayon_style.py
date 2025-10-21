@@ -1093,9 +1093,13 @@ class ScrollBarDrawer:
         widget: QWidget | None = None,
     ) -> int:
         if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
-            return int(self._style["width"])  # Width/height of scrollbar
+            # Width of a vertical scroll bar and the height of a horizontal
+            # scroll bar.
+            return int(self._style["width"])
         elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
-            return int(self._style["width"] * 3)
+            # The minimum height of a vertical scroll bar's slider and the
+            # minimum width of a horizontal scroll bar's slider.
+            return int(self._style["min-length"])
         return 0
 
     def draw_scrollbar_slider(
