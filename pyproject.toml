@@ -6,6 +6,20 @@ readme = "README.md"
 requires-python = ">=3.9.6,<3.10"
 dependencies = ["pyside6>=6.9.2", "qtpy>=2.4.3", "ruff>=0.11.4"]
 
+[build-system]
+requires = ["poetry-core", "setuptools"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 packages = [{ include = "ayon_ui_qt/**/*" }]
+include = [
+    { path = "ayon_ui_qt/*.json", format = [
+        "sdist",
+        "wheel",
+    ] },
+    { path = "ayon_ui_qt/vendor/resources/*.*", format = [
+        "sdist",
+        "wheel",
+    ] },
+]
 exclude = ["ayon_ui_qt/old"]
