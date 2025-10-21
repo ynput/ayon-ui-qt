@@ -12,6 +12,7 @@ from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QCommonStyle,
     QFrame,
     QLabel,
     QPushButton,
@@ -19,6 +20,7 @@ from qtpy.QtWidgets import (
     QStyleOption,
     QStyleOptionButton,
     QStyleOptionComboBox,
+    QStyleOptionComplex,
     QWidget,
 )
 
@@ -269,35 +271,27 @@ class ButtonDrawer:
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_ButtonMargin,
                 "QPushButton",
-            ): partial(self.get_metric, QStyle.PixelMetric.PM_ButtonMargin),
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_DefaultFrameWidth,
                 "QPushButton",
-            ): partial(
-                self.get_metric, QStyle.PixelMetric.PM_DefaultFrameWidth
-            ),
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_ButtonDefaultIndicator,
                 "QPushButton",
-            ): partial(
-                self.get_metric, QStyle.PixelMetric.PM_ButtonDefaultIndicator
-            ),
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_FocusFrameVMargin,
                 "QPushButton",
-            ): partial(
-                self.get_metric, QStyle.PixelMetric.PM_FocusFrameVMargin
-            ),
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_FocusFrameHMargin,
                 "QPushButton",
-            ): partial(
-                self.get_metric, QStyle.PixelMetric.PM_FocusFrameHMargin
-            ),
+            ): self.get_metric,
         }
 
     def get_metric(
@@ -727,33 +721,32 @@ class CheckboxDrawer:
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_IndicatorWidth,
                 "QCheckBox",
-            ): self.indicator_width,
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_IndicatorHeight,
                 "QCheckBox",
-            ): self.indicator_height,
+            ): self.get_metric,
             enum_to_str(
                 QStyle.PixelMetric,
                 QStyle.PixelMetric.PM_CheckBoxLabelSpacing,
                 "QCheckBox",
-            ): self.indicator_spacing,
+            ): self.get_metric,
         }
 
-    def indicator_width(
-        self, opt: QStyleOption | None = None, widget: QWidget | None = None
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
     ):
-        return 32
-
-    def indicator_height(
-        self, opt: QStyleOption | None = None, widget: QWidget | None = None
-    ):
-        return 18
-
-    def indicator_spacing(
-        self, opt: QStyleOption | None = None, widget: QWidget | None = None
-    ):
-        return 8
+        if metric == QStyle.PixelMetric.PM_IndicatorWidth:
+            return 32
+        elif metric == QStyle.PixelMetric.PM_IndicatorHeight:
+            return 18
+        elif metric == QStyle.PixelMetric.PM_CheckBoxLabelSpacing:
+            return 8
+        return 0
 
     def draw_toggle(
         self,
@@ -987,6 +980,811 @@ class ComboBoxDrawer:
 # ----------------------------------------------------------------------------
 
 
+class ScrollBarDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollBar")
+        self._cache = {}
+
+    @property
+    def base_class(self):
+        return {"QScrollBar": QtWidgets.QScrollBar}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSlider,
+                "QScrollBar",
+            ): self.draw_scrollbar_slider,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarAddPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSubPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ScrollBar,
+                "QScrollBar",
+            ): self.get_size,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarExtent,
+                "QScrollBar",
+            ): self.get_metric,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarSliderMin,
+                "QScrollBar",
+            ): self.get_metric,
+        }
+
+    def get_size(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect | None:
+        if not w:
+            raise ValueError
+
+        sup = super(AYONStyle, w.style())  # type: ignore
+        try:
+            als = self._cache["add_line_size"]
+        except KeyError:
+            als = self._cache["add_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+        try:
+            sls = self._cache["sub_line_size"]
+        except KeyError:
+            sls = self._cache["sub_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+
+        if (
+            sc == QStyle.SubControl.SC_ScrollBarSlider
+            or sc == QStyle.SubControl.SC_ScrollBarGroove
+        ):
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, als.height())
+            else:
+                rect.adjust(-sls.width(), 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, 0, 0, als.height())
+            else:
+                rect.adjust(0, 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, 0)
+            else:
+                rect.adjust(-sls.width(), 0, 0, 0)
+            return rect
+
+        raise ValueError
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
+            return int(self._style["width"])  # Width/height of scrollbar
+        elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
+            return int(self._style["width"] * 3)
+        return 0
+
+    def draw_scrollbar_slider(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the scrollbar slider/thumb."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("slider-color"))))
+        pen = QPen(QColor(style.get("background-color")))
+        pen.setWidth(style.get("border-width"))
+        painter.setPen(pen)
+        radius = style.get("border-radius")
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+        painter.restore()
+
+    def draw_scrollbar_page(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw scrollbar page buttons."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("background-color"))))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class ScrollBarDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollBar")
+        self._cache = {}
+
+    @property
+    def base_class(self):
+        return {"QScrollBar": QtWidgets.QScrollBar}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSlider,
+                "QScrollBar",
+            ): self.draw_scrollbar_slider,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarAddPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSubPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ScrollBar,
+                "QScrollBar",
+            ): self.get_size,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarExtent,
+                "QScrollBar",
+            ): self.get_metric,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarSliderMin,
+                "QScrollBar",
+            ): self.get_metric,
+        }
+
+    def get_size(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect | None:
+        if not w:
+            raise ValueError
+
+        sup = super(AYONStyle, w.style())  # type: ignore
+        try:
+            als = self._cache["add_line_size"]
+        except KeyError:
+            als = self._cache["add_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+        try:
+            sls = self._cache["sub_line_size"]
+        except KeyError:
+            sls = self._cache["sub_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+
+        if (
+            sc == QStyle.SubControl.SC_ScrollBarSlider
+            or sc == QStyle.SubControl.SC_ScrollBarGroove
+        ):
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, als.height())
+            else:
+                rect.adjust(-sls.width(), 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, 0, 0, als.height())
+            else:
+                rect.adjust(0, 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, 0)
+            else:
+                rect.adjust(-sls.width(), 0, 0, 0)
+            return rect
+
+        raise ValueError
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
+            return int(self._style["width"])  # Width/height of scrollbar
+        elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
+            return int(self._style["width"] * 3)
+        return 0
+
+    def draw_scrollbar_slider(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the scrollbar slider/thumb."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("slider-color"))))
+        pen = QPen(QColor(style.get("background-color")))
+        pen.setWidth(style.get("border-width"))
+        painter.setPen(pen)
+        radius = style.get("border-radius")
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+        painter.restore()
+
+    def draw_scrollbar_page(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw scrollbar page buttons."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("background-color"))))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class ScrollBarDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollBar")
+        self._cache = {}
+
+    @property
+    def base_class(self):
+        return {"QScrollBar": QtWidgets.QScrollBar}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSlider,
+                "QScrollBar",
+            ): self.draw_scrollbar_slider,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarAddPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSubPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ScrollBar,
+                "QScrollBar",
+            ): self.get_size,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarExtent,
+                "QScrollBar",
+            ): self.get_metric,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarSliderMin,
+                "QScrollBar",
+            ): self.get_metric,
+        }
+
+    def get_size(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect | None:
+        if not w:
+            raise ValueError
+
+        sup = super(AYONStyle, w.style())  # type: ignore
+        try:
+            als = self._cache["add_line_size"]
+        except KeyError:
+            als = self._cache["add_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+        try:
+            sls = self._cache["sub_line_size"]
+        except KeyError:
+            sls = self._cache["sub_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+
+        if (
+            sc == QStyle.SubControl.SC_ScrollBarSlider
+            or sc == QStyle.SubControl.SC_ScrollBarGroove
+        ):
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, als.height())
+            else:
+                rect.adjust(-sls.width(), 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, 0, 0, als.height())
+            else:
+                rect.adjust(0, 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, 0)
+            else:
+                rect.adjust(-sls.width(), 0, 0, 0)
+            return rect
+
+        raise ValueError
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
+            return int(self._style["width"])  # Width/height of scrollbar
+        elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
+            return int(self._style["width"] * 3)
+        return 0
+
+    def draw_scrollbar_slider(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the scrollbar slider/thumb."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("slider-color"))))
+        pen = QPen(QColor(style.get("background-color")))
+        pen.setWidth(style.get("border-width"))
+        painter.setPen(pen)
+        radius = style.get("border-radius")
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+        painter.restore()
+
+    def draw_scrollbar_page(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw scrollbar page buttons."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("background-color"))))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class ScrollBarDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollBar")
+        self._cache = {}
+
+    @property
+    def base_class(self):
+        return {"QScrollBar": QtWidgets.QScrollBar}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSlider,
+                "QScrollBar",
+            ): self.draw_scrollbar_slider,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarAddPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSubPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ScrollBar,
+                "QScrollBar",
+            ): self.get_size,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarExtent,
+                "QScrollBar",
+            ): self.get_metric,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarSliderMin,
+                "QScrollBar",
+            ): self.get_metric,
+        }
+
+    def get_size(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect | None:
+        if not w:
+            raise ValueError
+
+        sup = super(AYONStyle, w.style())  # type: ignore
+        try:
+            als = self._cache["add_line_size"]
+        except KeyError:
+            als = self._cache["add_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+        try:
+            sls = self._cache["sub_line_size"]
+        except KeyError:
+            sls = self._cache["sub_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+
+        if (
+            sc == QStyle.SubControl.SC_ScrollBarSlider
+            or sc == QStyle.SubControl.SC_ScrollBarGroove
+        ):
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, als.height())
+            else:
+                rect.adjust(-sls.width(), 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, 0, 0, als.height())
+            else:
+                rect.adjust(0, 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, 0)
+            else:
+                rect.adjust(-sls.width(), 0, 0, 0)
+            return rect
+
+        raise ValueError
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
+            return int(self._style["width"])  # Width/height of scrollbar
+        elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
+            return int(self._style["width"] * 3)
+        return 0
+
+    def draw_scrollbar_slider(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the scrollbar slider/thumb."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("slider-color"))))
+        pen = QPen(QColor(style.get("background-color")))
+        pen.setWidth(style.get("border-width"))
+        painter.setPen(pen)
+        radius = style.get("border-radius")
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+        painter.restore()
+
+    def draw_scrollbar_page(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw scrollbar page buttons."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("background-color"))))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class ScrollBarDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollBar")
+        self._cache = {}
+
+    @property
+    def base_class(self):
+        return {"QScrollBar": QtWidgets.QScrollBar}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSlider,
+                "QScrollBar",
+            ): self.draw_scrollbar_slider,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarAddPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ScrollBarSubPage,
+                "QScrollBar",
+            ): self.draw_scrollbar_page,
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.ComplexControl,
+                QStyle.ComplexControl.CC_ScrollBar,
+                "QScrollBar",
+            ): self.get_size,
+        }
+
+    def register_metrics(self):
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarExtent,
+                "QScrollBar",
+            ): self.get_metric,
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_ScrollBarSliderMin,
+                "QScrollBar",
+            ): self.get_metric,
+        }
+
+    def get_size(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect | None:
+        if not w:
+            raise ValueError
+
+        sup = super(AYONStyle, w.style())  # type: ignore
+        try:
+            als = self._cache["add_line_size"]
+        except KeyError:
+            als = self._cache["add_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+        try:
+            sls = self._cache["sub_line_size"]
+        except KeyError:
+            sls = self._cache["sub_line_size"] = sup.subControlRect(
+                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+            ).size()
+
+        if (
+            sc == QStyle.SubControl.SC_ScrollBarSlider
+            or sc == QStyle.SubControl.SC_ScrollBarGroove
+        ):
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, als.height())
+            else:
+                rect.adjust(-sls.width(), 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, 0, 0, als.height())
+            else:
+                rect.adjust(0, 0, als.width(), 0)
+            return rect
+
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+            rect = sup.subControlRect(cc, opt, sc, w)
+            if opt.orientation == Qt.Orientation.Vertical:
+                rect.adjust(0, -sls.height(), 0, 0)
+            else:
+                rect.adjust(-sls.width(), 0, 0, 0)
+            return rect
+
+        raise ValueError
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
+            return int(self._style["width"])  # Width/height of scrollbar
+        elif metric == QStyle.PixelMetric.PM_ScrollBarSliderMin:
+            return int(self._style["width"] * 3)
+        return 0
+
+    def draw_scrollbar_slider(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the scrollbar slider/thumb."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("slider-color"))))
+        pen = QPen(QColor(style.get("background-color")))
+        pen.setWidth(style.get("border-width"))
+        painter.setPen(pen)
+        radius = style.get("border-radius")
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+        painter.restore()
+
+    def draw_scrollbar_page(
+        self,
+        option: QStyleOptionComplex,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw scrollbar page buttons."""
+        style = self.model.get_style("QScrollBar")
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw slider background
+        painter.setBrush(QBrush(QColor(style.get("background-color"))))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 class LabelDrawer:
     def __init__(self, style_inst: AYONStyle) -> None:
         self.style_inst = style_inst
@@ -1009,7 +1807,7 @@ class LabelDrawer:
 # ----------------------------------------------------------------------------
 
 
-class AYONStyle(QtWidgets.QCommonStyle):
+class AYONStyle(QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
     Supports widget variants: surface, tonal, filled, tertiary, text, nav, etc.
@@ -1027,6 +1825,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
             ButtonDrawer(self),
             CheckboxDrawer(self),
             ComboBoxDrawer(self),
+            ScrollBarDrawer(self),
             FrameDrawer(self),
         ]
         for obj in self.drawer_objs:
@@ -1049,6 +1848,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
         """Polish widgets to enable hover tracking and custom palette."""
         if isinstance(widget, QWidget):
             super().polish(widget)
+            # TODO(plp): move to QStyle:polishPalette(QPalette)
             widget.setPalette(self.model.base_palette)
 
             # Enable mouse tracking for buttons to receive hover events
@@ -1151,6 +1951,26 @@ class AYONStyle(QtWidgets.QCommonStyle):
 
         return sizer(element, option, widget)
 
+    def subControlRect(
+        self,
+        cc: QStyle.ComplexControl,
+        opt: QtWidgets.QStyleOptionComplex,
+        sc: QStyle.SubControl,
+        w: QWidget | None = None,
+    ) -> QRect:
+        try:
+            sizer = self.sizers[
+                enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
+            ]
+        except KeyError:
+            # Fall back to parent implementation
+            return super().subControlRect(cc, opt, sc, w)
+
+        try:
+            return sizer(cc, opt, sc, w)
+        except ValueError:
+            return super().subControlRect(cc, opt, sc, w)
+
     def pixelMetric(
         self,
         metric: QStyle.PixelMetric,
@@ -1170,7 +1990,7 @@ class AYONStyle(QtWidgets.QCommonStyle):
             # Fall back to parent implementation
             return super().pixelMetric(metric, opt, widget)
 
-        return metric_func(opt, widget)
+        return metric_func(metric, opt, widget)
 
     def styleHint(
         self,

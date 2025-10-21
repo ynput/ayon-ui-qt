@@ -192,6 +192,19 @@
                 }
             }
         },
+        "QScrollBar": {
+            "default-variant": "",
+            "variants": {
+                "": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "slider-color": "--md-sys-color-surface-container-highest-dark",
+                    "slider-hover-color": "--md-sys-color-primary-dark",
+                    "border-width":10,
+                    "border-radius": 8,
+                    "width": 16
+                }
+            }
+        },
         "QFrame": {
             "states": {},
             "default-variant": "",
@@ -222,7 +235,6 @@
     "layouts": {},
     "palette": {
         "text-color-link": "--md-sys-color-primary-dark",
-
         "--md-sys-color-primary-dark": "#8fceff",
         "--md-sys-color-on-primary-dark": "#00344f",
         "--md-sys-color-primary-container-dark": "#004b70",
