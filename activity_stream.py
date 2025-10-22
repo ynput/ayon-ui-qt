@@ -6,13 +6,21 @@ import logging
 import os
 from typing import Literal
 
+from qtpy.QtCore import QObject, Signal  # type: ignore
+from qtpy.QtWidgets import QButtonGroup, QScrollArea, QWidget
+
+from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
-from ayon_ui_qt.components.container import AYContainer
+from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
 from ayon_ui_qt.utils import clear_layout, preprocess_payload
-from qtpy import QtWidgets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
+
+
+class ActivityStreamSignals(QObject):
+    # Node signals
+    view_changed = Signal(str)  # type: ignore # category
 
 
 class AYActivityStream(AYContainer):
@@ -27,6 +35,8 @@ class AYActivityStream(AYContainer):
         scroll_area (QtWidgets.QScrollArea): Scrollable area for activities.
         scroll_ctnr (AYContainer): Container holding activity widgets.
     """
+
+    signals = ActivityStreamSignals()
 
     def __init__(
         self,
@@ -48,7 +58,7 @@ class AYActivityStream(AYContainer):
         """
         self._project = {}
         self._activities = activities or []
-        self._category = kwargs.pop("category", "comment")
+        self._category = category
 
         super().__init__(
             *args,
@@ -59,7 +69,75 @@ class AYActivityStream(AYContainer):
 
         self._build()
 
-    def _build_stream(self) -> QtWidgets.QScrollArea:
+    def _build_buttons(self):
+        self.feed_all = AYButton(
+            icon="forum",
+            variant="surface",
+            checkable=True,
+            tooltip="All activity",
+        )
+        self.feed_com = AYButton(
+            icon="chat", variant="surface", checkable=True, tooltip="Comments"
+        )
+        self.feed_pub = AYButton(
+            icon="layers",
+            variant="surface",
+            checkable=True,
+            tooltip="Published versions",
+        )
+        self.feed_chk = AYButton(
+            icon="checklist",
+            variant="surface",
+            checkable=True,
+            tooltip="Checklists",
+        )
+        self.feed_det = AYButton(
+            "Details",
+            parent=self,
+            variant="surface",
+            checkable=True,
+        )
+
+        self.feed_all.clicked.connect(
+            lambda: self.signals.view_changed.emit("all")
+        )
+        self.feed_com.clicked.connect(
+            lambda: self.signals.view_changed.emit("comment")
+        )
+        self.feed_pub.clicked.connect(
+            lambda: self.signals.view_changed.emit("publish")
+        )
+        self.feed_chk.clicked.connect(
+            lambda: self.signals.view_changed.emit("checklist")
+        )
+        self.feed_det.clicked.connect(
+            lambda: self.signals.view_changed.emit("view_attributes")
+        )
+
+        self.button_grp = QButtonGroup(self)
+        self.button_grp.setExclusive(True)
+        self.button_grp.addButton(self.feed_all)
+        self.button_grp.addButton(self.feed_com)
+        self.button_grp.addButton(self.feed_pub)
+        self.button_grp.addButton(self.feed_chk)
+        self.button_grp.addButton(self.feed_det)
+
+        feed_lyt = AYHBoxLayout(None)
+        feed_lyt.addWidget(self.feed_all)
+        feed_lyt.addWidget(self.feed_com)
+        feed_lyt.addWidget(self.feed_pub)
+        feed_lyt.addWidget(self.feed_chk)
+        feed_lyt.addStretch()
+        feed_lyt.addWidget(self.feed_det)
+
+        self.feed_all.setChecked(self._category == "all")
+        self.feed_com.setChecked(self._category == "comment")
+        self.feed_pub.setChecked(self._category == "publish")
+        self.feed_det.setChecked(self._category == "details")
+
+        return feed_lyt
+
+    def _build_stream(self) -> QScrollArea:
         """Build and configure the scrollable activity stream container.
 
         Creates a QScrollArea with a vertical box layout container for
@@ -69,7 +147,7 @@ class AYActivityStream(AYContainer):
             QtWidgets.QScrollArea: Configured scroll area containing the
                 activity container.
         """
-        self.scroll_area = QtWidgets.QScrollArea()
+        self.scroll_area = QScrollArea()
         self.scroll_ctnr = AYContainer(
             layout=AYContainer.Layout.VBox,
             variant="low",
@@ -86,7 +164,8 @@ class AYActivityStream(AYContainer):
 
         Adds the scrollable stream to the main container.
         """
-        self.add_widget(self._build_stream())
+        self.add_layout(self._build_buttons(), stretch=0)
+        self.add_widget(self._build_stream(), stretch=100)
 
     def update_stream(self, category: str, activities: list) -> None:
         """Update the activity stream with new activities.
@@ -129,10 +208,10 @@ class AYActivityStream(AYContainer):
 if __name__ == "__main__":
     import json
 
-    from ayon_ui_qt.tester import test, Style
+    from ayon_ui_qt.tester import Style, test
     from ayon_ui_qt.utils import preprocess_payload
 
-    def _build() -> QtWidgets.QWidget:
+    def _build() -> QWidget:
         data_file = os.path.join(
             os.path.dirname(__file__),
             "ayon_ui_qt",

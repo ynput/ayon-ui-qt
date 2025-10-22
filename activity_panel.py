@@ -66,7 +66,7 @@ class ActivityPanel(AYContainer):
         self._build()
 
         # signals
-        self.details.signals.view_changed.connect(
+        self.stream.signals.view_changed.connect(
             lambda x: self.update_stream(x, self._activities)
         )
 
