@@ -11,7 +11,8 @@
             "states": [
                 "hover",
                 "pressed",
-                "disabled"
+                "disabled",
+                "checked"
             ],
             "default-variant": "surface",
             "variants": {
@@ -39,6 +40,9 @@
                     "disabled": {
                         "background-color": "--md-sys-color-surface-container-highest-dark",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "filled": {
@@ -55,6 +59,9 @@
                     "disabled": {
                         "background-color": "--md-sys-color-primary-dark",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "nav": {
@@ -71,6 +78,9 @@
                     "disabled": {
                         "background-color": "transparent",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "danger": {
@@ -87,6 +97,9 @@
                     "disabled": {
                         "background-color": "--md-sys-color-error-container-dark",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "tertiary": {
@@ -103,6 +116,9 @@
                     "disabled": {
                         "background-color": "--md-sys-color-primary-dark",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "text": {
@@ -121,6 +137,9 @@
                         "opacity": 0.5
                     }
                 },
+                "checked": {
+                    "background-color": "--md-sys-color-primary-container-dark"
+                },
                 "tonal": {
                     "background-color": "--md-sys-color-secondary-container-dark",
                     "color": "--md-sys-color-on-secondary-container-dark",
@@ -135,6 +154,9 @@
                     "disabled": {
                         "background-color": "--md-sys-color-secondary-container-dark",
                         "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 }
             }
@@ -199,7 +221,7 @@
                     "background-color": "--md-sys-color-surface-container-low-dark",
                     "slider-color": "--md-sys-color-surface-container-highest-dark",
                     "slider-hover-color": "--md-sys-color-primary-dark",
-                    "border-width":10,
+                    "border-width": 10,
                     "border-radius": 8,
                     "width": 16,
                     "min-length": 32

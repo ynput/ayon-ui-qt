@@ -357,8 +357,12 @@ class ButtonDrawer:
             wstate = "disabled"
         elif state & QStyle.StateFlag.State_Sunken:
             wstate = "pressed"
-        elif state & QStyle.StateFlag.State_MouseOver:
+        elif state & QStyle.StateFlag.State_MouseOver and not (
+            state & QStyle.StateFlag.State_On
+        ):
             wstate = "hover"
+        elif state & QStyle.StateFlag.State_On:
+            wstate = "checked"
 
         style = self.model.get_style("QPushButton", variant, wstate)
 

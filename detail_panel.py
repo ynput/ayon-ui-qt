@@ -1,10 +1,11 @@
 import os
 from typing import Optional
 
-from qtpy import QtCore, QtWidgets
+from qtpy.QtWidgets import QButtonGroup, QWidget
+from qtpy.QtCore import QObject, Signal  # type: ignore
 
 from ayon_ui_qt.components.buttons import AYButton
-from ayon_ui_qt.components.container import AYContainer, AYFrame
+from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.entity_path import AYEntityPath
 from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
@@ -15,9 +16,9 @@ from ayon_ui_qt.components.layouts import (
 )
 
 
-class DetailSignals(QtCore.QObject):
+class DetailSignals(QObject):
     # Node signals
-    view_changed = QtCore.Signal(str)  # type: ignore # category
+    view_changed = Signal(str)  # type: ignore # category
 
 
 class AYDetailPanel(AYContainer):
@@ -25,7 +26,7 @@ class AYDetailPanel(AYContainer):
 
     def __init__(
         self,
-        parent: Optional[QtWidgets.QWidget] = None,
+        parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(
             layout=AYContainer.Layout.VBox,
@@ -69,10 +70,33 @@ class AYDetailPanel(AYContainer):
         return AYHBoxLayout()
 
     def _build_streams(self):
-        self.feed_all = AYButton(icon="forum", variant="surface")
-        self.feed_com = AYButton(icon="chat", variant="surface")
-        self.feed_pub = AYButton(icon="layers", variant="surface")
-        self.feed_chk = AYButton(icon="checklist", variant="surface")
+        self.feed_all = AYButton(
+            icon="forum",
+            variant="surface",
+            checkable=True,
+            tooltip="All activity",
+        )
+        self.feed_com = AYButton(
+            icon="chat", variant="surface", checkable=True, tooltip="Comments"
+        )
+        self.feed_pub = AYButton(
+            icon="layers",
+            variant="surface",
+            checkable=True,
+            tooltip="Published versions",
+        )
+        self.feed_chk = AYButton(
+            icon="checklist",
+            variant="surface",
+            checkable=True,
+            tooltip="Checklists",
+        )
+        self.attrs = AYButton(
+            "Details",
+            parent=self,
+            variant="surface",
+            checkable=True,
+        )
 
         self.feed_all.clicked.connect(
             lambda: self.signals.view_changed.emit("all")
@@ -86,6 +110,17 @@ class AYDetailPanel(AYContainer):
         self.feed_chk.clicked.connect(
             lambda: self.signals.view_changed.emit("checklist")
         )
+        self.attrs.clicked.connect(
+            lambda: self.signals.view_changed.emit("view_attributes")
+        )
+
+        self.button_grp = QButtonGroup(self)
+        self.button_grp.setExclusive(True)
+        self.button_grp.addButton(self.feed_all)
+        self.button_grp.addButton(self.feed_com)
+        self.button_grp.addButton(self.feed_pub)
+        self.button_grp.addButton(self.feed_chk)
+        self.button_grp.addButton(self.attrs)
 
         feed_lyt = AYHBoxLayout(None)
         feed_lyt.addWidget(self.feed_all)
@@ -93,22 +128,8 @@ class AYDetailPanel(AYContainer):
         feed_lyt.addWidget(self.feed_pub)
         feed_lyt.addWidget(self.feed_chk)
         feed_lyt.addStretch()
+        feed_lyt.addWidget(self.attrs)
         return feed_lyt
-
-    def _build_attrs(self):
-        self.attrs = AYButton("Details", parent=self, variant="surface")
-        self.attrs.clicked.connect(
-            lambda: self.signals.view_changed.emit("view_attributes")
-        )
-
-        lyt = AYHBoxLayout()
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
-        lyt.addWidget(self.attrs)
-        return lyt
 
     def _build(self):
         self.entity_path = AYEntityPath(self)
@@ -118,16 +139,14 @@ class AYDetailPanel(AYContainer):
         self.webactions = self._build_webactions()
         self.priority = self._build_priority()
         self.streams = self._build_streams()
-        self.attrs = self._build_attrs()
 
-        grid_lyt = AYGridLayout()
+        grid_lyt = AYGridLayout(spacing=0, margin=0)
         grid_lyt.addLayout(self.thumbnail, 0, 0)
         grid_lyt.addLayout(self.status, 1, 0)
         grid_lyt.addLayout(self.assignee, 1, 1)
         grid_lyt.addLayout(self.webactions, 2, 0)
         grid_lyt.addLayout(self.priority, 2, 1)
         grid_lyt.addLayout(self.streams, 3, 0)
-        grid_lyt.addLayout(self.attrs, 3, 1)
 
         self.addWidget(self.entity_path)
         self.addLayout(grid_lyt)

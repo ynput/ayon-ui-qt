@@ -30,6 +30,7 @@ class AYButton(QtWidgets.QPushButton):
         variant: ButtonVariant = "surface",
         icon: str | None = None,
         icon_size: int = 24,
+        checkable=False,
         tooltip: str = "",
         **kwargs,
     ):
@@ -40,6 +41,7 @@ class AYButton(QtWidgets.QPushButton):
         self._tooltip = tooltip
 
         super().__init__(*args, **kwargs)
+        self.setCheckable(checkable)
 
         if self._icon:
             self.set_icon(self._icon)
