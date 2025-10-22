@@ -879,6 +879,11 @@ class ComboBoxDrawer:
                 QStyle.ComplexControl.CC_ComboBox,
                 "QComboBox",
             ): self.draw_box,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_FrameFocusRect,
+                "QFrame",
+            ): do_nothing,
         }
 
     def register_sizers(self):
@@ -953,11 +958,17 @@ class ComboBoxDrawer:
 
         style = self.model.get_style("QComboBox")
 
+        longuest_text = ""
+        if isinstance(widget, QComboBox):
+            for i in range(widget.count()):
+                longuest_text = max(
+                    longuest_text,
+                    widget.itemData(i, Qt.ItemDataRole.DisplayRole),
+                )
+
         text_width = cb_height = 0
-        if option.currentText:
-            text_rect: QRect = option.fontMetrics.boundingRect(
-                option.currentText
-            )
+        if longuest_text:
+            text_rect: QRect = option.fontMetrics.boundingRect(longuest_text)
             text_width = text_rect.width() + style["text-padding"][0] * 2
             cb_height = text_rect.height() + style["text-padding"][1] * 2
 
@@ -975,9 +986,8 @@ class ComboBoxDrawer:
 
         final_size = QSize(
             text_width + icon_width,
-            cb_height,
+            min(getattr(widget, "_height", cb_height), cb_height),
         )
-        print(f"final_size = {final_size}")
         return final_size
 
 
@@ -1282,14 +1292,12 @@ class AYONStyle(QCommonStyle):
     ) -> None:
         """Draw primitive elements."""
 
+        k = enum_to_str(QStyle.PrimitiveElement, element, self.widget_key(w))
         try:
-            draw_prim = self.drawers[
-                enum_to_str(
-                    QStyle.PrimitiveElement, element, self.widget_key(w)
-                )
-            ]
+            draw_prim = self.drawers[k]
         except KeyError:
             # Fall back to parent implementation
+            # print(f"nothing for {k}")
             super().drawPrimitive(element, option, painter, w)
             return
 

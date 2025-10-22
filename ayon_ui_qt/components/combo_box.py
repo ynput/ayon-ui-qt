@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Literal, get_args
 from dataclasses import dataclass
-from typing import List, Optional, overload
+from typing import List, Literal, Optional, get_args, overload
 
 try:
-    from qtmaterialsymbols import get_icon # type: ignore
+    from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 from qtpy import QtCore, QtWidgets
 from qtpy.QtGui import (
-    QColor,
     QBrush,
+    QColor,
     QPalette,
+    QStandardItemModel,
 )
 
 # Configure logging
@@ -102,6 +102,7 @@ class AYComboBox(QtWidgets.QComboBox):
     ) -> None:
         super().__init__(parent, **kwargs)
         self.setMouseTracking(True)
+        self.setMaximumHeight(height)
 
         # Initialize properties
         self._size: str = size
@@ -128,7 +129,11 @@ class AYComboBox(QtWidgets.QComboBox):
         self._item_list.append(it)
         self.update_items()
 
-    def update_items(self):
+    def update_items(self, item_list: list[dict] | None = None):
+        if item_list:
+            self.setModel(QStandardItemModel())
+            self._item_list = [Item(**s) for s in item_list]
+
         bg_color = self.palette().color(
             QPalette.ColorGroup.Active, QPalette.ColorRole.Window
         )
@@ -180,7 +185,8 @@ class AYComboBox(QtWidgets.QComboBox):
 if __name__ == "__main__":
     """Run the StatusSelect test interface or print status info."""
     import os
-    from ..tester import test, Style
+
+    from ..tester import Style, test
     from .container import AYContainer
 
     def build():

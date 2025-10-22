@@ -89,6 +89,9 @@ class ActivityPanel(AYContainer):
         self.editor.signals.comment_submitted.connect(
             self.signals.comment_submitted.emit
         )
+        self.details.signals.status_changed.connect(
+            self.signals.status_changed.emit
+        )
 
     def update_stream(
         self, category: str, activities: Optional[list] = None
@@ -118,6 +121,7 @@ class ActivityPanel(AYContainer):
         """Handle project change event."""
         self._project = data
         self.stream.on_project_changed(data)
+        self.details.on_project_change(data)
 
 
 #  TEST =======================================================================
@@ -158,6 +162,9 @@ if __name__ == "__main__":
         w.on_activities_changed(activity_data)
         w.signals.comment_submitted.connect(
             lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")  # noqa: T201
+        )
+        w.signals.status_changed.connect(
+            lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
         )
 
         return w

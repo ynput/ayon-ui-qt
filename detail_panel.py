@@ -9,12 +9,29 @@ from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.entity_path import AYEntityPath
 from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.combo_box import AYComboBox
 from ayon_ui_qt.components.layouts import (
     AYGridLayout,
     AYHBoxLayout,
     AYVBoxLayout,
 )
 from qtpy.QtWidgets import QWidget
+from qtpy.QtCore import QObject, Signal  # type: ignore
+
+MISSING_STATUSES = [
+    {
+        "name": "No Project",
+        "original_name": "No Project",
+        "shortName": "NPR",
+        "state": "no_project",
+        "icon": "question_mark",
+        "color": "#B2442D",
+    },
+]
+
+
+class DetailPanelSignals(QObject):
+    status_changed = Signal(str)
 
 
 class AYDetailPanel(AYContainer):
@@ -43,6 +60,8 @@ class AYDetailPanel(AYContainer):
         streams: Layout for feed stream buttons.
     """
 
+    signals = DetailPanelSignals()
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -57,6 +76,7 @@ class AYDetailPanel(AYContainer):
             variant="low",
             parent=parent,
         )
+        self._project = {}  # project data (anatomy, users, ect)
         self._build()
 
     def _build_thumbnail(self) -> AYHBoxLayout:
@@ -73,10 +93,10 @@ class AYDetailPanel(AYContainer):
         self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
         self.task_info = AYLabel("Task - Render")
 
-        thumb_lyt = AYHBoxLayout()
+        thumb_lyt = AYHBoxLayout(margin=0)
         thumb_lyt.addWidget(self.entity_thumbnail)
-        thumb_info_lyt = AYVBoxLayout(margin=0)
-        name_tag_lyt = AYHBoxLayout(margin=0)
+        thumb_info_lyt = AYVBoxLayout()
+        name_tag_lyt = AYHBoxLayout()
         name_tag_lyt.addWidget(self.entity_name)
         name_tag_lyt.addWidget(self.entity_tag)
         thumb_info_lyt.addLayout(name_tag_lyt)
@@ -85,14 +105,33 @@ class AYDetailPanel(AYContainer):
         thumb_lyt.addStretch()
         return thumb_lyt
 
+    def _get_statuses(self) -> list[dict[str, str]]:
+        statuses = self._project.get("anatomy", {}).get(
+            "statuses", MISSING_STATUSES
+        )
+        items = [
+            {
+                "text": s["name"],
+                "short_text": s["shortName"],
+                "icon": s["icon"],
+                "color": s["color"],
+            }
+            for s in statuses
+        ]
+        return items
+
     def _build_status(self) -> AYHBoxLayout:
         """Build the status section layout.
 
         Returns:
             AYHBoxLayout: An empty horizontal layout for status.
         """
-        # TODO(plp): implement me !
-        return AYHBoxLayout()
+        items = self._get_statuses()
+        self.status = AYComboBox(items=items, inverted=True, height=30)
+        lyt = AYHBoxLayout(margin=0, spacing=0)
+        lyt.addWidget(self.status)
+        lyt.addStretch()
+        return lyt
 
     def _build_assignee(self) -> AYHBoxLayout:
         """Build the assignee section layout.
@@ -101,7 +140,7 @@ class AYDetailPanel(AYContainer):
             AYHBoxLayout: An empty horizontal layout for assignee.
         """
         # TODO(plp): implement me !
-        return AYHBoxLayout()
+        return AYHBoxLayout(margin=0)
 
     def _build_webactions(self) -> AYHBoxLayout:
         """Build the web actions section layout.
@@ -110,7 +149,7 @@ class AYDetailPanel(AYContainer):
             AYHBoxLayout: An empty horizontal layout for web actions.
         """
         # TODO(plp): implement me !
-        return AYHBoxLayout()
+        return AYHBoxLayout(margin=0)
 
     def _build_priority(self) -> AYHBoxLayout:
         """Build the priority section layout.
@@ -119,7 +158,7 @@ class AYDetailPanel(AYContainer):
             AYHBoxLayout: An empty horizontal layout for priority.
         """
         # TODO(plp): implement me !
-        return AYHBoxLayout()
+        return AYHBoxLayout(margin=0)
 
     def _build(self) -> None:
         """Build the complete detail panel layout.
@@ -129,20 +168,30 @@ class AYDetailPanel(AYContainer):
         """
         self.entity_path = AYEntityPath(self)
         self.thumbnail = self._build_thumbnail()
-        self.status = self._build_status()
+        status_lyt = self._build_status()
         self.assignee = self._build_assignee()
         self.webactions = self._build_webactions()
         self.priority = self._build_priority()
 
-        grid_lyt = AYGridLayout(spacing=0, margin=0)
+        grid_lyt = AYGridLayout(spacing=4, margin=4)
         grid_lyt.addLayout(self.thumbnail, 0, 0)
-        grid_lyt.addLayout(self.status, 1, 0)
+        grid_lyt.addLayout(status_lyt, 1, 0)
         grid_lyt.addLayout(self.assignee, 1, 1)
         grid_lyt.addLayout(self.webactions, 2, 0)
         grid_lyt.addLayout(self.priority, 2, 1)
 
         self.addWidget(self.entity_path)
         self.addLayout(grid_lyt)
+
+        self.status.currentTextChanged.connect(self.signals.status_changed)
+
+    def _update_status_items(self):
+        self.status.update_items(self._get_statuses())
+        self.status.setCurrentIndex(0)
+
+    def on_project_change(self, data: dict) -> None:
+        self._project = data
+        self._update_status_items()
 
 
 # TEST =======================================================================
@@ -153,7 +202,9 @@ if __name__ == "__main__":
 
     def _build() -> AYDetailPanel:
         w = AYDetailPanel()
-        w.signals.view_changed.connect(lambda x: print(f"view_changed: {x}"))  # noqa: T201
+        w.signals.status_changed.connect(
+            lambda x: print(f"status_changed: {x}")
+        )  # noqa: T201
         return w
 
     os.environ["QT_SCALE_FACTOR"] = "1"
