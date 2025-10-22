@@ -46,6 +46,7 @@ class AYActivityStream(AYContainer):
             **kwargs: Arbitrary keyword arguments. Supports:
                 Additional kwargs are passed to parent AYContainer.
         """
+        self._project = {}
         self._activities = activities or []
         self._category = kwargs.pop("category", "comment")
 
@@ -115,6 +116,11 @@ class AYActivityStream(AYContainer):
                     AYStatusChange(self, data=event), stretch=0
                 )
         self.scroll_ctnr.addStretch(100)
+
+    def on_project_changed(self, data):
+        """store new project data and clear the activity stream."""
+        self._project = data
+        self.update_stream(self._category, [])
 
 
 #  TEST ======================================================================

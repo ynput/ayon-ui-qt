@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from .components.comment import AYComment, AYPublish, AYStatusChange
 
@@ -5,7 +7,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def preprocess_payload(data: dict):
+def preprocess_payload(
+    data: dict,
+) -> list[AYComment | AYPublish | AYStatusChange]:
     """Preprocesses payload data to extract and parse comment activities.
 
     This function processes the input data to extract activities, specifically

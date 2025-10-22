@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import os
+from pathlib import Path
 from typing import Literal, Optional
 
 from ayon_ui_qt.components.container import AYContainer
@@ -51,6 +51,7 @@ class ActivityPanel(AYContainer):
             "all", "comment", "publish", "checklist"
         ] = "comment",
     ) -> None:
+        self._project = {}
         self._activities = activities
         self._category = category
 
@@ -113,6 +114,10 @@ class ActivityPanel(AYContainer):
         activities = preprocess_payload(data)
         self.update_stream(self._category, activities)
 
+    def on_project_changed(self, data: dict) -> None:
+        self._project = data
+        self.stream.on_project_changed(data)
+
 
 #  TEST =======================================================================
 
@@ -123,18 +128,33 @@ if __name__ == "__main__":
     from ayon_ui_qt.tester import Style, test
 
     def _build() -> QtWidgets.QWidget:
-        data_file = os.path.join(
-            os.path.dirname(__file__),
+        file_dir = Path(__file__).parent
+
+        # read project data
+        project_file = file_dir.joinpath(
+            "ayon_ui_qt",
+            "resources",
+            "fake-project-data.json",
+        )
+        with open(project_file, "r") as fr:  # noqa: PLW1514, UP015
+            project_data = json.load(fr)
+        print(f"read: {project_file}")
+
+        # read activity data
+        activities_file = file_dir.joinpath(
             "ayon_ui_qt",
             "resources",
             "GetActivities-recieved-data.json",
         )
-        with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
-            payload = json.load(fr)
+        with open(activities_file, "r") as fr:  # noqa: PLW1514, UP015
+            activity_data = json.load(fr)
+        print(f"read: {activities_file}")
 
-        data = preprocess_payload(payload)
+        # data = preprocess_payload(activity_data)
 
-        w = ActivityPanel(activities=data, category="comment")
+        w = ActivityPanel(category="comment")
+        w.on_project_changed(project_data)
+        w.on_activities_changed(activity_data)
         w.signals.comment_submitted.connect(
             lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")  # noqa: T201
         )
