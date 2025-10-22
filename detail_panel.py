@@ -1,8 +1,8 @@
-import os
-from typing import Optional
+"""Detail panel UI."""
 
-from qtpy.QtWidgets import QButtonGroup, QWidget
-from qtpy.QtCore import QObject, Signal  # type: ignore
+from __future__ import annotations
+
+import os
 
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.container import AYContainer
@@ -14,13 +14,44 @@ from ayon_ui_qt.components.layouts import (
     AYHBoxLayout,
     AYVBoxLayout,
 )
+from qtpy.QtWidgets import QWidget
 
 
 class AYDetailPanel(AYContainer):
+    """A detail panel widget displaying entity information and controls.
+
+    This panel shows entity thumbnails, metadata, status, assignees, and
+    provides buttons for viewing different feed streams and attributes.
+
+    Attributes:
+        signals: DetailSignals instance for emitting view change events.
+        entity_thumbnail: Widget displaying the entity thumbnail.
+        entity_name: Label showing the entity name.
+        entity_tag: Button displaying the entity tag.
+        task_info: Label showing task information.
+        feed_all: Button for viewing all feed items.
+        feed_com: Button for viewing comments.
+        feed_pub: Button for viewing published items.
+        feed_chk: Button for viewing checklist items.
+        attrs: Button for viewing entity attributes.
+        entity_path: Widget displaying the entity path.
+        thumbnail: Layout containing thumbnail and entity info.
+        status: Layout for status information.
+        assignee: Layout for assignee information.
+        webactions: Layout for web actions.
+        priority: Layout for priority information.
+        streams: Layout for feed stream buttons.
+    """
+
     def __init__(
         self,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
+        """Initialize the detail panel.
+
+        Args:
+            parent: Optional parent widget.
+        """
         super().__init__(
             layout=AYContainer.Layout.VBox,
             variant="low",
@@ -28,7 +59,15 @@ class AYDetailPanel(AYContainer):
         )
         self._build()
 
-    def _build_thumbnail(self):
+    def _build_thumbnail(self) -> AYHBoxLayout:
+        """Build the thumbnail section layout.
+
+        Creates a horizontal layout containing the entity thumbnail,
+        entity name, tag, and task information.
+
+        Returns:
+            AYHBoxLayout: The constructed thumbnail layout.
+        """
         self.entity_thumbnail = AYEntityThumbnail(self)
         self.entity_name = AYLabel("entity")
         self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
@@ -46,23 +85,48 @@ class AYDetailPanel(AYContainer):
         thumb_lyt.addStretch()
         return thumb_lyt
 
-    def _build_status(self):
-        # FIXME
+    def _build_status(self) -> AYHBoxLayout:
+        """Build the status section layout.
+
+        Returns:
+            AYHBoxLayout: An empty horizontal layout for status.
+        """
+        # TODO(plp): implement me !
         return AYHBoxLayout()
 
-    def _build_assignee(self):
-        # FIXME
+    def _build_assignee(self) -> AYHBoxLayout:
+        """Build the assignee section layout.
+
+        Returns:
+            AYHBoxLayout: An empty horizontal layout for assignee.
+        """
+        # TODO(plp): implement me !
         return AYHBoxLayout()
 
-    def _build_webactions(self):
-        # FIXME
+    def _build_webactions(self) -> AYHBoxLayout:
+        """Build the web actions section layout.
+
+        Returns:
+            AYHBoxLayout: An empty horizontal layout for web actions.
+        """
+        # TODO(plp): implement me !
         return AYHBoxLayout()
 
-    def _build_priority(self):
-        # FIXME
+    def _build_priority(self) -> AYHBoxLayout:
+        """Build the priority section layout.
+
+        Returns:
+            AYHBoxLayout: An empty horizontal layout for priority.
+        """
+        # TODO(plp): implement me !
         return AYHBoxLayout()
 
-    def _build(self):
+    def _build(self) -> None:
+        """Build the complete detail panel layout.
+
+        Constructs all sub-sections (thumbnail, status, assignee, etc.)
+        and arranges them in a grid layout within the main container.
+        """
         self.entity_path = AYEntityPath(self)
         self.thumbnail = self._build_thumbnail()
         self.status = self._build_status()
@@ -87,9 +151,9 @@ class AYDetailPanel(AYContainer):
 if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
-    def _build():
+    def _build() -> AYDetailPanel:
         w = AYDetailPanel()
-        w.signals.view_changed.connect(lambda x: print(f"view_changed: {x}"))
+        w.signals.view_changed.connect(lambda x: print(f"view_changed: {x}"))  # noqa: T201
         return w
 
     os.environ["QT_SCALE_FACTOR"] = "1"

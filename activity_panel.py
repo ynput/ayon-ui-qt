@@ -115,6 +115,7 @@ class ActivityPanel(AYContainer):
         self.update_stream(self._category, activities)
 
     def on_project_changed(self, data: dict) -> None:
+        """Handle project change event."""
         self._project = data
         self.stream.on_project_changed(data)
 
@@ -138,7 +139,7 @@ if __name__ == "__main__":
         )
         with open(project_file, "r") as fr:  # noqa: PLW1514, UP015
             project_data = json.load(fr)
-        print(f"[test]  read: {project_file}")
+        print(f"[test]  read: {project_file}")  # noqa: T201
 
         # read activity data
         activities_file = file_dir.joinpath(
@@ -148,7 +149,7 @@ if __name__ == "__main__":
         )
         with open(activities_file, "r") as fr:  # noqa: PLW1514, UP015
             activity_data = json.load(fr)
-        print(f"[test]  read: {activities_file}")
+        print(f"[test]  read: {activities_file}")  # noqa: T201
 
         # data = preprocess_payload(activity_data)
 
