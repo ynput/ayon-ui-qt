@@ -138,7 +138,7 @@ if __name__ == "__main__":
         )
         with open(project_file, "r") as fr:  # noqa: PLW1514, UP015
             project_data = json.load(fr)
-        print(f"read: {project_file}")
+        print(f"[test]  read: {project_file}")
 
         # read activity data
         activities_file = file_dir.joinpath(
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         )
         with open(activities_file, "r") as fr:  # noqa: PLW1514, UP015
             activity_data = json.load(fr)
-        print(f"read: {activities_file}")
+        print(f"[test]  read: {activities_file}")
 
         # data = preprocess_payload(activity_data)
 
