@@ -196,6 +196,7 @@ if __name__ == "__main__":
             layout_spacing=6,
             layout_margin=10,
         )
+        w.setMinimumWidth(250)
         inv = QtWidgets.QCheckBox("inverted", parent=w)
         w.addWidget(inv)
         cb = AYComboBox(items=ALL_STATUSES)

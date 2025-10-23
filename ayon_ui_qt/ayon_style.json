@@ -210,7 +210,8 @@
                     ],
                     "focus-outline-width": 2,
                     "background-color": "--md-sys-color-surface-container-highest-dark",
-                    "color": "--md-sys-color-on-surface-dark"
+                    "color": "--md-sys-color-on-surface-dark",
+                    "menu-background-color": "--md-sys-color-surface-container-low-dark"
                 }
             }
         },
@@ -423,6 +424,11 @@
         "qt-active-button-text": "--md-sys-color-on-surface-dark",
         "qt-active-placeholder-text": "--md-ref-palette-neutral-variant50",
         "qt-active-highlight": "--md-sys-color-primary-dark",
-        "qt-active-highlight-text": "--md-sys-color-on-primary-dark"
+        "qt-active-highlight-text": "--md-sys-color-on-primary-dark",
+        "qt-active-light": "--md-sys-color-surface-container-highest-dark",
+        "qt-active-midlight": "--md-sys-color-surface-container-high-dark",
+        "qt-active-dark": "--md-sys-color-surface-container-dark",
+        "qt-active-mid": "--md-sys-color-surface-container-low-dark",
+        "qt-active-shadow": "--md-sys-color-surface-container-lowest-dark"
     }
 }

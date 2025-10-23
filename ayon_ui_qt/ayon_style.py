@@ -137,6 +137,11 @@ class StyleData:
             QPalette.ColorRole.PlaceholderText: "qt-active-placeholder-text",
             QPalette.ColorRole.Highlight: "qt-active-highlight",
             QPalette.ColorRole.HighlightedText: "qt-active-highlight-text",
+            QPalette.ColorRole.Light: "qt-active-light",
+            QPalette.ColorRole.Midlight: "qt-active-midlight",
+            QPalette.ColorRole.Dark: "qt-active-dark",
+            QPalette.ColorRole.Mid: "qt-active-mid",
+            QPalette.ColorRole.Shadow: "qt-active-shadow",
         }
         p = QPalette()
         for role, color_name in bp.items():
@@ -803,9 +808,10 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
         option: QtWidgets.QStyleOptionViewItem,
         index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
     ) -> None:
+        saved_palette = QPalette(option.palette)
         # change colors for highlight
         highlight_color = option.palette.color(
-            QPalette.ColorGroup.Active, QPalette.ColorRole.Light
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
         )
 
         if option.state & QStyle.StateFlag.State_MouseOver:
@@ -835,6 +841,7 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
                 )
 
         super().paint(painter, option, index)
+        option.palette = saved_palette
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index
@@ -879,6 +886,11 @@ class ComboBoxDrawer:
                 QStyle.ComplexControl.CC_ComboBox,
                 "QComboBox",
             ): self.draw_box,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelItemViewItem,
+                "QFrame",
+            ): self.draw_panel_item_view_item,
             enum_to_str(
                 QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_FrameFocusRect,
@@ -945,6 +957,15 @@ class ComboBoxDrawer:
         else:
             # editable combobox - IMPLEMENT ME
             pass
+
+    def draw_panel_item_view_item(
+        self, option: QStyleOption, painter: QPainter, w: QWidget
+    ):
+        stl = self.model.get_style("QComboBox")
+        option.backgroundBrush.setColor(QColor(stl["menu-background-color"]))
+        super(AYONStyle, w.style()).drawPrimitive(  # type: ignore
+            QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, w
+        )
 
     def combobox_size(
         self,
@@ -1235,6 +1256,8 @@ class AYONStyle(QCommonStyle):
                 widget.setSizeAdjustPolicy(
                     QComboBox.SizeAdjustPolicy.AdjustToContents
                 )
+        elif isinstance(widget, QPalette):
+            print("YES")
 
         elif isinstance(widget, QApplication):
             super().polish(widget)
@@ -1297,7 +1320,7 @@ class AYONStyle(QCommonStyle):
             draw_prim = self.drawers[k]
         except KeyError:
             # Fall back to parent implementation
-            # print(f"nothing for {k}")
+            # print(f"no match for {k}")
             super().drawPrimitive(element, option, painter, w)
             return
 
