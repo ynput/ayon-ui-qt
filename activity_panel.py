@@ -114,14 +114,13 @@ class ActivityPanel(AYContainer):
         if self._activities:
             self.stream.update_stream(category, self._activities)
 
-    def on_activities_changed(self, data: dict) -> None:
+    def on_activities_changed(self, data: list) -> None:
         """Handle activities data change event.
 
         Args:
             data: Dictionary containing the new activities payload.
         """
-        activities = preprocess_payload(data)
-        self.update_stream(self._category, activities)
+        self.update_stream(self._category, data)
 
     def on_project_changed(self, data: dict) -> None:
         """Handle project change event."""
@@ -155,11 +154,12 @@ if __name__ == "__main__":
         activities_file = file_dir.joinpath(
             "ayon_ui_qt",
             "resources",
-            "GetActivities-recieved-data.json",
+            "sample_activities.json",
         )
         with open(activities_file, "r") as fr:  # noqa: PLW1514, UP015
             activity_data = json.load(fr)
         print(f"[test]  read: {activities_file}")  # noqa: T201
+        activity_data = preprocess_payload(activity_data, project_data)
 
         # create ui
         w = ActivityPanel(category="comment")

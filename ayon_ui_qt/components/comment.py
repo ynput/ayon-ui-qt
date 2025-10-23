@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 import json
 
@@ -12,53 +10,15 @@ from .label import AYLabel
 from .layouts import AYVBoxLayout
 from .user_image import AYUserImage
 from .combo_box import ALL_STATUSES
-
-
-def short_date(date_str: str) -> str:
-    if date_str:
-        try:
-            # Parse the ISO string
-            dt = datetime.fromisoformat(date_str)
-            return dt.strftime("%b %d, %I:%M %p")
-        except ValueError:
-            # Handle invalid date format
-            return date_str
-    else:
-        return "No date available"
+from ..data_models import (
+    StatusChangeModel,
+    StatusUiModel,
+    VersionPublishModel,
+    CommentModel,
+)
 
 
 # STATUS ---------------------------------------------------------------------
-
-
-@dataclass
-class StatusChangeModel:
-    user_full_name: str = ""
-    user_name: str = ""
-    user_src: str = ""
-    product: str = ""
-    version: str = ""
-    old_status: str = ""
-    new_status: str = ""
-    date: str = ""
-
-    def __post_init__(self):
-        self._short_date = short_date(self.date)
-
-    @property
-    def type(self):
-        return "status"
-
-    @property
-    def short_date(self):
-        return self._short_date
-
-
-@dataclass
-class StatusModel:
-    text: str = ""
-    short_text: str = ""
-    icon: str = ""
-    color: str = ""
 
 
 class AYStatusChange(AYFrame):
@@ -71,7 +31,7 @@ class AYStatusChange(AYFrame):
     ):
         self._data = data or StatusChangeModel()
         self.statuses = {
-            kw["text"]: StatusModel(**kw)
+            kw["text"]: StatusUiModel(**kw)
             for kw in status_definitions or ALL_STATUSES
         }
         super().__init__(*args, variant="low", margin=0, **kwargs)
@@ -79,7 +39,7 @@ class AYStatusChange(AYFrame):
 
     @property
     def unknown_status(self):
-        return StatusModel(
+        return StatusUiModel(
             "Unknown Status", "UKN", "shield_question", "#d05050"
         )
 
@@ -172,30 +132,9 @@ class AYStatusChange(AYFrame):
 # PUBLISH ---------------------------------------------------------------------
 
 
-@dataclass
-class PublishedModel:
-    user_full_name: str = ""
-    user_name: str = ""
-    user_src: str = ""
-    version: str = ""
-    product: str = ""
-    date: str = ""
-
-    def __post_init__(self):
-        self._short_date = short_date(self.date)
-
-    @property
-    def type(self):
-        return "publish"
-
-    @property
-    def short_date(self):
-        return self._short_date
-
-
 class AYPublish(AYFrame):
-    def __init__(self, *args, data: PublishedModel | None = None, **kwargs):
-        self._data = data or PublishedModel()
+    def __init__(self, *args, data: VersionPublishModel | None = None, **kwargs):
+        self._data = data or VersionPublishModel()
         super().__init__(*args, variant="low", margin=0, **kwargs)
         self._build()
 
@@ -263,7 +202,7 @@ class AYPublish(AYFrame):
         context = activity_data.get("context")
         origin = activity_data.get("origin")
 
-        return PublishedModel(
+        return VersionPublishModel(
             user_full_name=full_name,
             user_name=full_name.split()[0],
             user_src="",
@@ -274,26 +213,6 @@ class AYPublish(AYFrame):
 
 
 # COMMENT ---------------------------------------------------------------------
-
-
-@dataclass
-class CommentModel:
-    user_full_name: str = ""
-    user_name: str = ""
-    user_src: str = ""
-    comment: str = ""
-    comment_date: str = ""
-
-    def __post_init__(self):
-        self._short_date = short_date(self.comment_date)
-
-    @property
-    def type(self):
-        return "comment"
-
-    @property
-    def short_date(self):
-        return self._short_date
 
 
 class AYCommentField(QTextEdit):

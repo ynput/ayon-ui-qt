@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import json
+from .data_models import CommentModel, VersionPublishModel, StatusChangeModel
 from .components.comment import AYComment, AYPublish, AYStatusChange
 
 logging.basicConfig(level=logging.INFO)
@@ -8,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def preprocess_payload(
-    data: dict,
-) -> list[AYComment | AYPublish | AYStatusChange]:
+    activity_data: dict, project_data: dict
+) -> list[CommentModel | VersionPublishModel | StatusChangeModel]:
     """Preprocesses payload data to extract and parse comment activities.
 
     This function processes the input data to extract activities, specifically
@@ -26,22 +28,60 @@ def preprocess_payload(
             or if there's an error during processing.
     """
     try:
-        activities: list = data["data"]["project"]["activities"]["edges"]
+        activities: list[dict] = activity_data["payload"]["data"]["project"][
+            "activities"
+        ]
     except KeyError as err:
         logger.error(f"Could not extract activities: {err}")
         return []
 
+    users: list[dict] = project_data.get("users", [])
+    users = {d["short_name"]: d for d in users}
+
     ui_data = []
+    nothing = "not available"
     for act in activities:
-        node = act.get("node")
-        if node:
-            activity_type = node.get("activityType", "")
-            if activity_type == "comment":
-                ui_data.append(AYComment.parse(node))
-            elif activity_type == "version.publish":
-                ui_data.append(AYPublish.parse(node))
-            elif activity_type == "status.change":
-                ui_data.append(AYStatusChange.parse(node))
+        activity_data = act.get("activityData", {})
+        if isinstance(activity_data, str):
+            act["activityData"] = json.loads(activity_data)
+
+        activity_type = act.get("activityType", "")
+
+        user_name = act.get("author", {}).get("name", nothing)
+        user_full_name = users.get(user_name, {}).get("full_name", user_name)
+        date = act.get("updatedAt", nothing)
+
+        if activity_type == "comment":
+            ui_data.append(
+                CommentModel(
+                    user_full_name=user_full_name,
+                    user_name=user_name,
+                    comment=act.get("body", nothing),
+                    comment_date=date,
+                )
+            )
+        elif activity_type == "version.publish":
+            ui_data.append(
+                VersionPublishModel(
+                    user_full_name=user_full_name,
+                    user_name=user_name,
+                    version=act.get("origin", {}).get("name", nothing),
+                    product=act.get("context", {}).get("productName", nothing),
+                    date=date,
+                )
+            )
+        elif activity_type == "status.change":
+            ui_data.append(
+                StatusChangeModel(
+                    user_full_name=user_full_name,
+                    user_name=user_name,
+                    product=nothing,
+                    version=nothing,
+                    old_status=act.get("activityData", {}).get("oldValue", nothing),
+                    new_status=act.get("activityData", {}).get("newValue", nothing),
+                    date=date,
+                )
+            )
 
     return ui_data
 

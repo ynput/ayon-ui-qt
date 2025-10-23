@@ -2,6 +2,12 @@
     "project_name": "Fake Project",
     "users": [
         {
+            "full_name": "Admin",
+            "short_name": "admin",
+            "id": "admin@fake.com",
+            "image_path": ""
+        },
+        {
             "full_name": "Bob Morane",
             "short_name": "Bob",
             "id": "bob.morane@fake.com",

@@ -186,11 +186,11 @@ class AYActivityStream(AYContainer):
                 continue
             if event.type == "comment":
                 self.scroll_ctnr.add_widget(AYComment(self, data=event))
-            elif event.type == "publish":
+            elif event.type == "version.publish":
                 self.scroll_ctnr.add_widget(
                     AYPublish(self, data=event), stretch=0
                 )
-            elif event.type == "status":
+            elif event.type == "status.change":
                 self.scroll_ctnr.add_widget(
                     AYStatusChange(self, data=event), stretch=0
                 )
@@ -216,7 +216,7 @@ if __name__ == "__main__":
             os.path.dirname(__file__),
             "ayon_ui_qt",
             "resources",
-            "GetActivities-recieved-data.json",
+            "sample_activities.json",
         )
         with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
             payload = json.load(fr)
