@@ -92,6 +92,9 @@ class ActivityPanel(AYContainer):
         self.details.signals.status_changed.connect(
             self.signals.status_changed.emit
         )
+        self.details.signals.priority_changed.connect(
+            self.signals.priority_changed.emit
+        )
 
     def update_stream(
         self, category: str, activities: Optional[list] = None
@@ -165,6 +168,9 @@ if __name__ == "__main__":
         )
         w.signals.status_changed.connect(
             lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
+        )
+        w.signals.priority_changed.connect(
+            lambda x: print(f"ActivityPanel.signals.priority_changed: {x!r}")  # noqa: T201
         )
 
         return w

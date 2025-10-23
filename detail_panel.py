@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import os
 
+from qtpy.QtCore import QObject, Qt, Signal  # type: ignore
+from qtpy.QtWidgets import QWidget
+
 from ayon_ui_qt.components.buttons import AYButton
+from ayon_ui_qt.components.combo_box import AYComboBox
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.entity_path import AYEntityPath
 from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
-from ayon_ui_qt.components.combo_box import AYComboBox
 from ayon_ui_qt.components.layouts import (
     AYGridLayout,
     AYHBoxLayout,
     AYVBoxLayout,
 )
-from qtpy.QtWidgets import QWidget
-from qtpy.QtCore import QObject, Signal  # type: ignore
 
 MISSING_STATUSES = [
     {
@@ -25,13 +26,41 @@ MISSING_STATUSES = [
         "shortName": "NPR",
         "state": "no_project",
         "icon": "question_mark",
-        "color": "#B2442D",
+        "color": "#9B7C76",
+    },
+]
+
+PRIORITIES = [
+    {
+        "text": "Urgent",
+        "short_text": "Urgent",
+        "icon": "keyboard_double_arrow_up",
+        "color": "#ff8585",
+    },
+    {
+        "text": "High",
+        "short_text": "High",
+        "icon": "keyboard_arrow_up",
+        "color": "#ffad66",
+    },
+    {
+        "text": "Normal",
+        "short_text": "Normal",
+        "icon": "check_indeterminate_small",
+        "color": "#9ac0e7",
+    },
+    {
+        "text": "Low",
+        "short_text": "Low",
+        "icon": "keyboard_arrow_down",
+        "color": "#9fa7b1",
     },
 ]
 
 
 class DetailPanelSignals(QObject):
     status_changed = Signal(str)
+    priority_changed = Signal(str)
 
 
 class AYDetailPanel(AYContainer):
@@ -106,6 +135,7 @@ class AYDetailPanel(AYContainer):
         return thumb_lyt
 
     def _get_statuses(self) -> list[dict[str, str]]:
+        """Get status items based on project anatomy data."""
         statuses = self._project.get("anatomy", {}).get(
             "statuses", MISSING_STATUSES
         )
@@ -120,18 +150,18 @@ class AYDetailPanel(AYContainer):
         ]
         return items
 
-    def _build_status(self) -> AYHBoxLayout:
+    def _get_priorities(self) -> list[dict[str, str]]:
+        """Get priority items based on front-end data."""
+        return PRIORITIES
+
+    def _build_status(self) -> AYComboBox:
         """Build the status section layout.
 
         Returns:
-            AYHBoxLayout: An empty horizontal layout for status.
+            AYComboBox: A configured combo box.
         """
         items = self._get_statuses()
-        self.status = AYComboBox(items=items, inverted=True, height=30)
-        lyt = AYHBoxLayout(margin=0, spacing=0)
-        lyt.addWidget(self.status)
-        lyt.addStretch()
-        return lyt
+        return AYComboBox(items=items, inverted=True, height=30)
 
     def _build_assignee(self) -> AYHBoxLayout:
         """Build the assignee section layout.
@@ -151,14 +181,14 @@ class AYDetailPanel(AYContainer):
         # TODO(plp): implement me !
         return AYHBoxLayout(margin=0)
 
-    def _build_priority(self) -> AYHBoxLayout:
+    def _build_priority(self) -> AYComboBox:
         """Build the priority section layout.
 
         Returns:
-            AYHBoxLayout: An empty horizontal layout for priority.
+            AYComboBox: A combo box widget for selecting priority.
         """
-        # TODO(plp): implement me !
-        return AYHBoxLayout(margin=0)
+        priorities = self._get_priorities()
+        return AYComboBox(items=priorities, height=30)
 
     def _build(self) -> None:
         """Build the complete detail panel layout.
@@ -168,22 +198,32 @@ class AYDetailPanel(AYContainer):
         """
         self.entity_path = AYEntityPath(self)
         self.thumbnail = self._build_thumbnail()
-        status_lyt = self._build_status()
+        self.status = self._build_status()
         self.assignee = self._build_assignee()
         self.webactions = self._build_webactions()
         self.priority = self._build_priority()
 
         grid_lyt = AYGridLayout(spacing=4, margin=4)
         grid_lyt.addLayout(self.thumbnail, 0, 0)
-        grid_lyt.addLayout(status_lyt, 1, 0)
+        grid_lyt.addWidget(
+            self.status, 1, 0, alignment=Qt.AlignmentFlag.AlignLeft
+        )
         grid_lyt.addLayout(self.assignee, 1, 1)
         grid_lyt.addLayout(self.webactions, 2, 0)
-        grid_lyt.addLayout(self.priority, 2, 1)
+        grid_lyt.addWidget(
+            self.priority, 2, 1, alignment=Qt.AlignmentFlag.AlignRight
+        )
 
         self.addWidget(self.entity_path)
         self.addLayout(grid_lyt)
 
-        self.status.currentTextChanged.connect(self.signals.status_changed)
+        # connect signals
+        self.status.currentTextChanged.connect(
+            self.signals.status_changed.emit
+        )
+        self.priority.currentTextChanged.connect(
+            self.signals.priority_changed.emit
+        )
 
     def _update_status_items(self):
         self.status.update_items(self._get_statuses())
