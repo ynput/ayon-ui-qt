@@ -53,12 +53,7 @@ def style_widget_and_siblings(widget: QWidget) -> None:
                     _collect_widgets(item_widget, seen)
 
     # Determine root widgets: siblings if parent exists, otherwise just widget
-    parent = widget.parent()
-    root_widgets = (
-        [child for child in parent.children() if isinstance(child, QWidget)]
-        if parent
-        else [widget]
-    )
+    root_widgets = [widget]
 
     # Collect all widgets recursively
     seen_widgets: set[int] = set()
