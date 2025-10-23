@@ -226,12 +226,27 @@ class AYDetailPanel(AYContainer):
         )
 
     def _update_status_items(self):
+        self.status.blockSignals(True)
         self.status.update_items(self._get_statuses())
         self.status.setCurrentIndex(0)
+        self.status.blockSignals(False)
 
     def on_project_change(self, data: dict) -> None:
+        """Handle project change event sent by the controller"""
         self._project = data
         self._update_status_items()
+
+    def on_status_changed(self, new_status: str):
+        """Handle status change event sent by the controller"""
+        self.status.blockSignals(True)
+        self.status.setCurrentText(new_status)
+        self.status.blockSignals(False)
+
+    def on_priority_changed(self, new_status: str):
+        """Handle priority change event sent by the controller"""
+        self.priority.blockSignals(True)
+        self.priority.setCurrentText(new_status)
+        self.priority.blockSignals(False)
 
 
 # TEST =======================================================================

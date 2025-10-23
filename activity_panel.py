@@ -77,14 +77,17 @@ class ActivityPanel(AYContainer):
         # add header
         self.details = AYDetailPanel(self)
         self.addWidget(self.details, stretch=0)
-        # add tab layout with hidden tabs
+
+        # add scrolling layout displaying activities
         self.stream = AYActivityStream(
             self, activities=self._activities, category=self._category
         )
         self.addWidget(self.stream, stretch=10)
+
         # add comment editor
         self.editor = AYTextBox(num_lines=3)
         self.addWidget(self.editor, stretch=0)
+
         # connect signals
         self.editor.signals.comment_submitted.connect(
             self.signals.comment_submitted.emit
@@ -158,11 +161,14 @@ if __name__ == "__main__":
             activity_data = json.load(fr)
         print(f"[test]  read: {activities_file}")  # noqa: T201
 
-        # data = preprocess_payload(activity_data)
-
+        # create ui
         w = ActivityPanel(category="comment")
+
+        # send data
         w.on_project_changed(project_data)
         w.on_activities_changed(activity_data)
+
+        # setup signals
         w.signals.comment_submitted.connect(
             lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")  # noqa: T201
         )
@@ -172,6 +178,12 @@ if __name__ == "__main__":
         w.signals.priority_changed.connect(
             lambda x: print(f"ActivityPanel.signals.priority_changed: {x!r}")  # noqa: T201
         )
+        w.signals.status_changed.connect(w.details.on_status_changed)
+        w.signals.priority_changed.connect(w.details.on_priority_changed)
+
+        # test signals
+        w.signals.priority_changed.emit("Normal")
+        w.signals.status_changed.emit("In progress")
 
         return w
 
