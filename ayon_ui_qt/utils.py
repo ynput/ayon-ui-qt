@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import json
 from .data_models import CommentModel, VersionPublishModel, StatusChangeModel
-from .components.comment import AYComment, AYPublish, AYStatusChange
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,15 +34,15 @@ def preprocess_payload(
         logger.error(f"Could not extract activities: {err}")
         return []
 
-    users: list[dict] = project_data.get("users", [])
-    users = {d["short_name"]: d for d in users}
+    users = {d["short_name"]: d for d in project_data.get("users", [])}
 
     ui_data = []
     nothing = "not available"
     for act in activities:
-        activity_data = act.get("activityData", {})
-        if isinstance(activity_data, str):
-            act["activityData"] = json.loads(activity_data)
+        act_data = act.get("activityData", {})
+        if isinstance(act_data, str):
+            act_data = json.loads(act_data)
+            act["activityData"] = act_data
 
         activity_type = act.get("activityType", "")
 
@@ -65,20 +64,25 @@ def preprocess_payload(
                 VersionPublishModel(
                     user_full_name=user_full_name,
                     user_name=user_name,
-                    version=act.get("origin", {}).get("name", nothing),
-                    product=act.get("context", {}).get("productName", nothing),
+                    version=str(
+                        act_data.get("origin", {}).get("name", nothing)
+                    ),
+                    product=str(
+                        act_data.get("context", {}).get("productName", nothing)
+                    ),
                     date=date,
                 )
             )
         elif activity_type == "status.change":
+            print(act.get("activityData", {}).get("oldValue", nothing))
             ui_data.append(
                 StatusChangeModel(
                     user_full_name=user_full_name,
                     user_name=user_name,
                     product=nothing,
                     version=nothing,
-                    old_status=act.get("activityData", {}).get("oldValue", nothing),
-                    new_status=act.get("activityData", {}).get("newValue", nothing),
+                    old_status=str(act_data.get("oldValue", nothing)),
+                    new_status=str(act_data.get("newValue", nothing)),
                     date=date,
                 )
             )

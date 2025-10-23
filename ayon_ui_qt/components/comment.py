@@ -50,7 +50,8 @@ class AYStatusChange(AYFrame):
     def _build_top_bar(self):
         small_icon_size = 14
         self.str_1 = AYLabel(
-            f"{self._data.user_full_name} - {self._data.product} / {self._data.version} -",
+            f"{self._data.user_full_name} - {self._data.product} / "
+            f"{self._data.version} - ",
             dim=True,
             rel_text_size=-2,
         )
@@ -133,7 +134,9 @@ class AYStatusChange(AYFrame):
 
 
 class AYPublish(AYFrame):
-    def __init__(self, *args, data: VersionPublishModel | None = None, **kwargs):
+    def __init__(
+        self, *args, data: VersionPublishModel | None = None, **kwargs
+    ):
         self._data = data or VersionPublishModel()
         super().__init__(*args, variant="low", margin=0, **kwargs)
         self._build()
