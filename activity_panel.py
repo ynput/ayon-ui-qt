@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
 
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.text_box import AYTextBox
@@ -47,13 +47,11 @@ class ActivityPanel(AYContainer):
         self,
         parent: Optional[QtWidgets.QWidget] = None,
         activities: Optional[list] = None,
-        category: Literal[
-            "all", "comment", "publish", "checklist"
-        ] = "comment",
+        category: AYActivityStream.Categories = "all",
     ) -> None:
         self._project = {}
         self._activities = activities
-        self._category = category
+        self._category: AYActivityStream.Categories = category
 
         super().__init__(
             layout=AYContainer.Layout.VBox,
@@ -100,7 +98,9 @@ class ActivityPanel(AYContainer):
         )
 
     def update_stream(
-        self, category: str, activities: Optional[list] = None
+        self,
+        category: AYActivityStream.Categories,
+        activities: Optional[list] = None,
     ) -> None:
         """Update the activity stream with new category or activities.
 
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         activity_data = preprocess_payload(activity_data, project_data)
 
         # create ui
-        w = ActivityPanel(category="comment")
+        w = ActivityPanel(category="all")
 
         # send data
         w.on_project_changed(project_data)

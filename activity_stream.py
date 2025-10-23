@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Literal
+from typing import Literal, get_args
 
 from qtpy.QtCore import QObject, Signal  # type: ignore
 from qtpy.QtWidgets import QButtonGroup, QScrollArea, QWidget
@@ -37,13 +37,12 @@ class AYActivityStream(AYContainer):
     """
 
     signals = ActivityStreamSignals()
+    Categories = Literal["all", "comment", "version.publish", "checklist"]
 
     def __init__(
         self,
         *args,  # noqa: ANN002
-        category: Literal[
-            "all", "comment", "publish", "checklist"
-        ] = "comment",
+        category: Categories = get_args(Categories)[0],
         activities: list | None = None,
         **kwargs,  # noqa: ANN003
     ):
@@ -105,13 +104,13 @@ class AYActivityStream(AYContainer):
             lambda: self.signals.view_changed.emit("comment")
         )
         self.feed_pub.clicked.connect(
-            lambda: self.signals.view_changed.emit("publish")
+            lambda: self.signals.view_changed.emit("version.publish")
         )
         self.feed_chk.clicked.connect(
             lambda: self.signals.view_changed.emit("checklist")
         )
         self.feed_det.clicked.connect(
-            lambda: self.signals.view_changed.emit("view_attributes")
+            lambda: self.signals.view_changed.emit("details")
         )
 
         self.button_grp = QButtonGroup(self)
@@ -132,7 +131,7 @@ class AYActivityStream(AYContainer):
 
         self.feed_all.setChecked(self._category == "all")
         self.feed_com.setChecked(self._category == "comment")
-        self.feed_pub.setChecked(self._category == "publish")
+        self.feed_pub.setChecked(self._category == "version.publish")
         self.feed_det.setChecked(self._category == "details")
 
         return feed_lyt
@@ -219,9 +218,18 @@ if __name__ == "__main__":
             "sample_activities.json",
         )
         with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
-            payload = json.load(fr)
+            activity_data = json.load(fr)
 
-        data = preprocess_payload(payload)
+        data_file = os.path.join(
+            os.path.dirname(__file__),
+            "ayon_ui_qt",
+            "resources",
+            "fake-project-data.json",
+        )
+        with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
+            project_data = json.load(fr)
+
+        data = preprocess_payload(activity_data, project_data)
 
         return AYActivityStream(activities=data)
 
