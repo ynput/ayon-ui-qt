@@ -65,5 +65,6 @@ def style_widget_and_siblings(widget: QWidget) -> None:
     style = get_ayon_style()
     print(f"styling {len(widgets_to_style)} widgets")
     for w in widgets_to_style:
+        w.style().unpolish(w)
         w.setStyleSheet("")
         w.setStyle(style)
