@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -12,7 +12,7 @@ def short_date(date_str: str) -> str:
             # Handle invalid date format
             return date_str
     else:
-        return "No date available"
+        return "Not available"
 
 
 @dataclass
@@ -23,7 +23,7 @@ class StatusUiModel:
     color: str = ""
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class StatusChangeModel:
     user_full_name: str = ""
     user_name: str = ""
@@ -33,20 +33,14 @@ class StatusChangeModel:
     old_status: str = ""
     new_status: str = ""
     date: str = ""
+    short_date: str = field(init=False, hash=False)
+    type: str = field(init=False, default="status.change", hash=False)
 
     def __post_init__(self):
-        self._short_date = short_date(self.date)
-
-    @property
-    def type(self):
-        return "status.change"
-
-    @property
-    def short_date(self):
-        return self._short_date
+        self.short_date = short_date(self.date)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class VersionPublishModel:
     user_full_name: str = ""
     user_name: str = ""
@@ -54,34 +48,32 @@ class VersionPublishModel:
     version: str = ""
     product: str = ""
     date: str = ""
+    short_date: str = field(init=False, hash=False)
+    type: str = field(init=False, default="version.publish", hash=False)
 
     def __post_init__(self):
-        self._short_date = short_date(self.date)
-
-    @property
-    def type(self):
-        return "version.publish"
-
-    @property
-    def short_date(self):
-        return self._short_date
+        self.short_date = short_date(self.date)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class CommentModel:
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
     comment: str = ""
     comment_date: str = ""
+    short_date: str = field(init=False, hash=False)
+    type: str = field(init=False, default="comment", hash=False)
 
     def __post_init__(self):
-        self._short_date = short_date(self.comment_date)
+        self.short_date = short_date(self.comment_date)
 
-    @property
-    def type(self):
-        return "comment"
 
-    @property
-    def short_date(self):
-        return self._short_date
+if __name__ == "__main__":
+    # test objects are hashable
+    c = CommentModel()
+    print(f"c ={c}  hash(c) = {hash(c)}")
+    v = VersionPublishModel()
+    print(f"v ={v}  hash(v) = {hash(v)}")
+    s = StatusChangeModel()
+    print(f"s ={s}  hash(s) = {hash(s)}")

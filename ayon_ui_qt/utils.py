@@ -37,7 +37,7 @@ def preprocess_payload(
     users = {d["short_name"]: d for d in project_data.get("users", [])}
 
     ui_data = []
-    nothing = "not available"
+    nothing = "Not available"
     for act in activities:
         act_data = act.get("activityData", {})
         if isinstance(act_data, str):
