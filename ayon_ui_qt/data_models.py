@@ -23,6 +23,23 @@ class StatusUiModel:
     color: str = ""
 
 
+@dataclass
+class TaskInfoModel:
+    entity_name: str = ""
+    entity_path: str = ""
+    task_name: str = ""
+    tags: list[str] = field(default_factory=list)
+    assigned_user: str = ""
+    priority: str = ""
+
+
+@dataclass
+class VersionInfoModel:
+    version: str = ""
+    status: str = ""
+    thumbnail: str = ""
+
+
 @dataclass(unsafe_hash=True)
 class StatusChangeModel:
     user_full_name: str = ""
