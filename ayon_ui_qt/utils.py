@@ -27,9 +27,7 @@ def preprocess_payload(
             or if there's an error during processing.
     """
     try:
-        activities: list[dict] = activity_data["payload"]["data"]["project"][
-            "activities"
-        ]
+        activities: list[dict] = activity_data["project"]["activities"]
     except KeyError as err:
         logger.error(f"Could not extract activities: {err}")
         return []
