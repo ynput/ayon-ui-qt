@@ -74,7 +74,7 @@ def style_widget_and_siblings(widget: QWidget) -> None:
         print("[ayon style]  Resetting app stylesheet...")
         app.setStyleSheet("")
 
-    widget.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, False)
+    widget.setAttribute(Qt.WidgetAttribute.WA_WindowPropagation, False)
 
     # Apply style to all collected widgets
     style = get_ayon_style()
