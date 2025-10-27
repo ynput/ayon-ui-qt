@@ -913,8 +913,11 @@ class ComboBoxDrawer:
         p: QPainter,
         w: QComboBox | None = None,
     ):
+        if not isinstance(w, QComboBox):
+            return
+
         # print(f"SUB_CTL: {opt.activeSubControls}")
-        if not opt.editable:
+        if not w.isEditable():
             bg_color = opt.palette.color(
                 QPalette.ColorGroup.Active, QPalette.ColorRole.Base
             )
