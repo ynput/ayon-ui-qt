@@ -14,24 +14,34 @@ class Style(Enum):
     Widget = 2
 
 
+AWFUL_CSS = """
+QWidget {
+    background-color: #441e1e;
+    color: #F4F5F5;
+    margin: 0px;
+    padding: 0px;
+    border: 0px;
+}
+QLabel {
+    color: #F4F5F5;
+}
+QPushButton {
+    border-color: #acf;
+    border-width: 2px;
+    border-style: solid;
+}
+"""
+
+
 def test(test_widget, style: Style = Style.Widget):
     """Main function to run the Qt test."""
     app = QtWidgets.QApplication(sys.argv)
+    qcs = QtWidgets.QCommonStyle()
+    app.setStyle(qcs)
 
     if style == Style.CSS:
         # Set a dark theme for the application
-        ss = """
-            QWidget {
-                background-color: #1e1e1e;
-                color: #F4F5F5;
-                margin: 0px;
-                padding: 0px;
-                border: 0px;
-            }
-            QLabel {
-                color: #F4F5F5;
-            }
-        """
+        ss = AWFUL_CSS
 
         fpath = Path(__file__).parent.joinpath(
             "old", "output", "complete_styles.qss"
@@ -48,6 +58,8 @@ def test(test_widget, style: Style = Style.Widget):
     widget = test_widget()
 
     if style == Style.Widget:
+        # add an awfull app css first to make sure it is overriden !
+        app.setStyleSheet(AWFUL_CSS)
         # no app-level style
         style_widget_and_siblings(widget)
 
