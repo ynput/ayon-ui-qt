@@ -1078,6 +1078,9 @@ class ScrollBarDrawer:
         if not w:
             raise ValueError
 
+        if not isinstance(w.style(), AYONStyle):
+            raise ValueError
+
         sup = super(AYONStyle, w.style())  # type: ignore
         try:
             als = self._cache["add_line_size"]
