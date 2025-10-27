@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from qtpy.QtWidgets import QWidget
+import copy
+
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QWidget, QApplication, QCommonStyle
 
 from .ayon_style import AYONStyle
 
@@ -61,10 +64,22 @@ def style_widget_and_siblings(widget: QWidget) -> None:
     for w in root_widgets:
         _collect_widgets(w, seen_widgets)
 
+    qss = None
+    app = QApplication.instance()
+    if app and isinstance(app, QApplication):
+        qss = copy.copy(app.property("styleSheet"))
+
+    if qss and isinstance(app, QApplication):
+        app.setStyleSheet("")
+
+    widget.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, False)
+
     # Apply style to all collected widgets
     style = get_ayon_style()
     print(f"styling {len(widgets_to_style)} widgets")
     for w in widgets_to_style:
         w.style().unpolish(w)
-        w.setStyleSheet("")
         w.setStyle(style)
+
+    if qss and isinstance(app, QApplication):
+        app.setStyleSheet(qss)
