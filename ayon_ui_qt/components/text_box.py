@@ -56,7 +56,7 @@ class AYTextEditor(QTextEdit):
             current_size = cursor.charFormat().fontPointSize()
             base_size = self.font().pointSize()
 
-            print(f"current_size = {current_size}   base_size = {base_size}")
+            # print(f"current_size = {current_size}   base_size = {base_size}")
 
             # Toggle header formatting
             if current_size > base_size:  # Already a header
