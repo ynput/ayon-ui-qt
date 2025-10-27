@@ -68,18 +68,21 @@ def style_widget_and_siblings(widget: QWidget) -> None:
     app = QApplication.instance()
     if app and isinstance(app, QApplication):
         qss = copy.copy(app.property("styleSheet"))
+        print(f"[ayon style]  App QSS contains {len(qss.splitlines())} lines.")
 
     if qss and isinstance(app, QApplication):
+        print("[ayon style]  Resetting app stylesheet...")
         app.setStyleSheet("")
 
     widget.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, False)
 
     # Apply style to all collected widgets
     style = get_ayon_style()
-    print(f"styling {len(widgets_to_style)} widgets")
+    print(f"[ayon style]  styling {len(widgets_to_style)} widgets")
     for w in widgets_to_style:
         w.style().unpolish(w)
         w.setStyle(style)
 
     if qss and isinstance(app, QApplication):
+        print("[ayon style]  Restoring app stylesheet...")
         app.setStyleSheet(qss)
