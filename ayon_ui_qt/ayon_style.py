@@ -451,7 +451,7 @@ class ButtonDrawer:
         )
 
         # Draw icon if present
-        if not option.icon.isNull():  # type: ignore
+        if option.icon:  # type: ignore
             icon_rect = QRect(content_rect)
             if option.text:  # type: ignore
                 # Icon + text: place icon on the left
