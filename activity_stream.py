@@ -9,6 +9,7 @@ from typing import Literal, get_args
 from qtpy.QtCore import QObject, Signal  # type: ignore
 from qtpy.QtWidgets import QButtonGroup, QScrollArea, QWidget
 
+from ayon_ui_qt.data_models import CommentModel
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
@@ -21,6 +22,8 @@ logger = logging.getLogger("activity stream")
 class ActivityStreamSignals(QObject):
     # Node signals
     view_changed = Signal(str)  # type: ignore # category
+    comment_deleted = Signal(object)
+    comment_edited = Signal(object)
 
 
 class AYActivityStream(AYContainer):
@@ -42,7 +45,7 @@ class AYActivityStream(AYContainer):
     def __init__(
         self,
         *args,  # noqa: ANN002
-        category: Categories = get_args(Categories)[0],
+        category: Categories = "all",
         activities: list | None = None,
         **kwargs,  # noqa: ANN003
     ):
@@ -184,7 +187,15 @@ class AYActivityStream(AYContainer):
             if category not in {"all", event.type}:
                 continue
             if event.type == "comment":
-                self.scroll_ctnr.add_widget(AYComment(self, data=event))
+                comment = AYComment(self, data=event)
+                self.scroll_ctnr.add_widget(comment)
+                # connect signals
+                comment.comment_deleted.connect(
+                    self._on_comment_deleted
+                )
+                comment.comment_edited.connect(
+                    self.signals.comment_edited.emit
+                )
             elif event.type == "version.publish":
                 self.scroll_ctnr.add_widget(
                     AYPublish(self, data=event), stretch=0
@@ -194,6 +205,23 @@ class AYActivityStream(AYContainer):
                     AYStatusChange(self, data=event), stretch=0
                 )
         self.scroll_ctnr.addStretch(100)
+        self._activities = activities
+
+    def _on_comment_deleted(self, data: CommentModel):
+        """Delete widget, delete comment from activities and emit signal."""
+        for i in range(self.scroll_ctnr._layout.count()):
+            item = self.scroll_ctnr._layout.itemAt(i)
+            if not item:
+                continue
+            w = item.widget()
+            if not isinstance(w, AYComment):
+                continue
+            if data == w._data:
+                w.setParent(None)
+                w.deleteLater()
+                self._activities.remove(data)
+                break
+        self.signals.comment_deleted.emit(data)
 
     def on_project_changed(self, data):
         """store new project data and clear the activity stream."""

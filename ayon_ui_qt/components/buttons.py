@@ -19,6 +19,7 @@ ButtonVariant = Literal[
     "tertiary",
     "text",
     "nav",
+    "nav-small",
     "danger",
 ]
 
@@ -30,13 +31,14 @@ class AYButton(QtWidgets.QPushButton):
         variant: ButtonVariant = "surface",
         icon: str | None = None,
         icon_size: int = 24,
+        icon_color: str = "#ffffff",
         checkable=False,
         tooltip: str = "",
         **kwargs,
     ):
         self._icon = icon
         self._variant = variant
-        self._icon_color = QtGui.QColor(255, 255, 255)
+        self._icon_color = QtGui.QColor(icon_color)
         self._icon_size = icon_size
         self._tooltip = tooltip
 

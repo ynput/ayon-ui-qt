@@ -430,7 +430,7 @@ class ButtonDrawer:
         style = self.get_button_style(widget, option.state)  # type: ignore
 
         # Set up text color
-        text_color = style["color"]
+        text_color = QColor(style["color"])
         if not (option.state & QStyle.StateFlag.State_Enabled):  # type: ignore
             # Apply some opacity to disabled text
             text_color.setAlpha(int(255 * 0.5))
@@ -452,6 +452,7 @@ class ButtonDrawer:
 
         # Draw icon if present
         if option.icon:  # type: ignore
+            icon_color = QColor(getattr(widget, "_icon_color", text_color))
             icon_rect = QRect(content_rect)
             if option.text:  # type: ignore
                 # Icon + text: place icon on the left
@@ -473,7 +474,7 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                option.icon = get_icon(widget._icon, color=text_color)
+                option.icon = get_icon(widget._icon, color=icon_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
@@ -503,7 +504,7 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                option.icon = get_icon(widget._icon, color=text_color)
+                option.icon = get_icon(widget._icon, color=icon_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
@@ -631,11 +632,10 @@ class ButtonDrawer:
             style = self.model.get_style(
                 "QPushButton", self.get_button_variant(widget)
             )
-            if widget and hasattr(widget, "has_icon"):
-                has_icon = self.get_button_has_icon(widget)
+            if option.icon:
                 padding = (
                     style["icon-padding"]
-                    if has_icon and not widget.text()  # type: ignore
+                    if not widget.text()  # type: ignore
                     else style["text-padding"]
                 )
             else:

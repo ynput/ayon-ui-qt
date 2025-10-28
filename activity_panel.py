@@ -23,8 +23,8 @@ class ActivityPanelSignals(QtCore.QObject):
 
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
-    comment_edited = QtCore.Signal(int, str)  # type: ignore  # noqa: PGH003
-    comment_deleted = QtCore.Signal(int, str)  # type: ignore  # noqa: PGH003
+    comment_edited = QtCore.Signal(object)  # type: ignore  # noqa: PGH003
+    comment_deleted = QtCore.Signal(object)  # type: ignore  # noqa: PGH003
     priority_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
     assignee_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
     status_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
@@ -95,6 +95,12 @@ class ActivityPanel(AYContainer):
         )
         self.details.signals.priority_changed.connect(
             self.signals.priority_changed.emit
+        )
+        self.stream.signals.comment_deleted.connect(
+            self.signals.comment_deleted.emit
+        )
+        self.stream.signals.comment_edited.connect(
+            self.signals.comment_edited.emit
         )
 
     def update_stream(
@@ -180,6 +186,12 @@ if __name__ == "__main__":
         )
         w.signals.status_changed.connect(w.details.on_status_changed)
         w.signals.priority_changed.connect(w.details.on_priority_changed)
+        w.signals.comment_deleted.connect(
+            lambda x: print(f"comment_deleted: {x}")
+        )
+        w.signals.comment_edited.connect(
+            lambda x: print(f"comment_edited: {x}")
+        )
 
         # test signals
         w.signals.priority_changed.emit("Normal")
