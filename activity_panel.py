@@ -9,7 +9,8 @@ from typing import Optional
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.text_box import AYTextBox
 from ayon_ui_qt.utils import preprocess_payload
-from qtpy import QtCore, QtWidgets
+from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy.QtWidgets import QWidget
 
 from activity_stream import AYActivityStream
 from detail_panel import AYDetailPanel
@@ -18,16 +19,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity panel")
 
 
-class ActivityPanelSignals(QtCore.QObject):
+class ActivityPanelSignals(QObject):
     """All signals emitted by the activity panel."""
 
     # Signal emitted when comment button is clicked, passes markdown content
-    comment_submitted = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
-    comment_edited = QtCore.Signal(object)  # type: ignore  # noqa: PGH003
-    comment_deleted = QtCore.Signal(object)  # type: ignore  # noqa: PGH003
-    priority_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
-    assignee_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
-    status_changed = QtCore.Signal(str)  # type: ignore  # noqa: PGH003
+    ui_comment_submitted = Signal(str)  # type: ignore  # noqa: PGH003
+    ui_comment_edited = Signal(object)  # type: ignore  # noqa: PGH003
+    ui_comment_deleted = Signal(object)  # type: ignore  # noqa: PGH003
+    ui_priority_changed = Signal(str)  # type: ignore  # noqa: PGH003
+    ui_assignee_changed = Signal(str)  # type: ignore  # noqa: PGH003
+    ui_status_changed = Signal(str)  # type: ignore  # noqa: PGH003
 
 
 class ActivityPanel(AYContainer):
@@ -45,7 +46,7 @@ class ActivityPanel(AYContainer):
 
     def __init__(  # noqa: D107
         self,
-        parent: Optional[QtWidgets.QWidget] = None,
+        parent: Optional[QWidget] = None,
         activities: Optional[list] = None,
         category: AYActivityStream.Categories = "all",
     ) -> None:
@@ -88,19 +89,19 @@ class ActivityPanel(AYContainer):
 
         # connect signals
         self.editor.signals.comment_submitted.connect(
-            self.signals.comment_submitted.emit
+            self.signals.ui_comment_submitted.emit
         )
         self.details.signals.status_changed.connect(
-            self.signals.status_changed.emit
+            self.signals.ui_status_changed.emit
         )
         self.details.signals.priority_changed.connect(
-            self.signals.priority_changed.emit
+            self.signals.ui_priority_changed.emit
         )
         self.stream.signals.comment_deleted.connect(
-            self.signals.comment_deleted.emit
+            self.signals.ui_comment_deleted.emit
         )
         self.stream.signals.comment_edited.connect(
-            self.signals.comment_edited.emit
+            self.signals.ui_comment_edited.emit
         )
 
     def update_stream(
@@ -120,7 +121,8 @@ class ActivityPanel(AYContainer):
         if self._activities:
             self.stream.update_stream(category, self._activities)
 
-    def on_activities_changed(self, data: list) -> None:
+    @Slot(object)
+    def on_ctlr_activities_changed(self, data: list) -> None:
         """Handle activities data change event.
 
         Args:
@@ -128,7 +130,8 @@ class ActivityPanel(AYContainer):
         """
         self.update_stream(self._category, data)
 
-    def on_project_changed(self, data: dict) -> None:
+    @Slot(object)
+    def on_ctlr_project_changed(self, data: dict) -> None:
         """Handle project change event."""
         self._project = data
         self.stream.on_project_changed(data)
@@ -143,7 +146,7 @@ if __name__ == "__main__":
 
     from ayon_ui_qt.tester import Style, test
 
-    def _build() -> QtWidgets.QWidget:
+    def _build() -> QWidget:
         file_dir = Path(__file__).parent
 
         # read project data
@@ -171,31 +174,31 @@ if __name__ == "__main__":
         w = ActivityPanel(category="all")
 
         # send data
-        w.on_project_changed(project_data)
-        w.on_activities_changed(activity_data)
+        w.on_ctlr_project_changed(project_data)
+        w.on_ctlr_activities_changed(activity_data)
 
         # setup signals
-        w.signals.comment_submitted.connect(
+        w.signals.ui_comment_submitted.connect(
             lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")  # noqa: T201
         )
-        w.signals.status_changed.connect(
+        w.signals.ui_status_changed.connect(
             lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
         )
-        w.signals.priority_changed.connect(
+        w.signals.ui_priority_changed.connect(
             lambda x: print(f"ActivityPanel.signals.priority_changed: {x!r}")  # noqa: T201
         )
-        w.signals.status_changed.connect(w.details.on_status_changed)
-        w.signals.priority_changed.connect(w.details.on_priority_changed)
-        w.signals.comment_deleted.connect(
+        w.signals.ui_status_changed.connect(w.details.on_status_changed)
+        w.signals.ui_priority_changed.connect(w.details.on_priority_changed)
+        w.signals.ui_comment_deleted.connect(
             lambda x: print(f"comment_deleted: {x}")
         )
-        w.signals.comment_edited.connect(
+        w.signals.ui_comment_edited.connect(
             lambda x: print(f"comment_edited: {x}")
         )
 
         # test signals
-        w.signals.priority_changed.emit("Normal")
-        w.signals.status_changed.emit("In progress")
+        w.signals.ui_priority_changed.emit("Normal")
+        w.signals.ui_status_changed.emit("In progress")
 
         return w
 
