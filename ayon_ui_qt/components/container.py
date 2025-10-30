@@ -73,7 +73,11 @@ class AYContainer(AYFrame):
 
     def __getattr__(self, name: str) -> Any:
         """allow to call layout methods"""
-        return getattr(self._layout, name)
+        try:
+            return getattr(self._layout, name)
+        except AttributeError:
+            err = f"'{type(self).__name__}' object has no attribute '{name}'"
+            raise AttributeError(err)
 
 
 if __name__ == "__main__":
