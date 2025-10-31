@@ -7,12 +7,17 @@ from typing import Optional
 
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.text_box import AYTextBox
+from ayon_ui_qt.data_models import (
+    ActivityData,
+    CommentModel,
+    ProjectData,
+    VersionData,
+)
 from ayon_ui_qt.utils import (
     get_test_activity_data,
     get_test_project_data,
     get_test_version_data,
 )
-from ayon_ui_qt.data_models import ActivityData, ProjectData, VersionData
 from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
@@ -27,12 +32,11 @@ class ActivityPanelSignals(QObject):
     """All signals emitted by the activity panel."""
 
     # Signal emitted when comment button is clicked, passes markdown content
-    ui_comment_submitted = Signal(str)  # type: ignore  # noqa: PGH003
-    ui_comment_edited = Signal(object)  # type: ignore  # noqa: PGH003
-    ui_comment_deleted = Signal(object)  # type: ignore  # noqa: PGH003
-    ui_priority_changed = Signal(str)  # type: ignore  # noqa: PGH003
-    ui_assignee_changed = Signal(str)  # type: ignore  # noqa: PGH003
-    ui_status_changed = Signal(str)  # type: ignore  # noqa: PGH003
+    ui_comment_submitted = Signal(str)  # type: ignore
+    ui_comment_edited = Signal(CommentModel)  # type: ignore
+    ui_comment_deleted = Signal(CommentModel)  # type: ignore
+    ui_assignee_changed = Signal(str)  # type: ignore
+    ui_status_changed = Signal(str)  # type: ignore
 
 
 class ActivityPanel(AYContainer):
@@ -98,7 +102,7 @@ class ActivityPanel(AYContainer):
             self.signals.ui_comment_edited.emit
         )
 
-    @Slot(object)
+    @Slot(ActivityData)
     def on_ctlr_activities_changed(self, data: ActivityData) -> None:
         """Handle activities data change event.
 
@@ -107,15 +111,15 @@ class ActivityPanel(AYContainer):
         """
         self.stream.update_stream(self._category, data)
 
-    @Slot(object)
+    @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData) -> None:
         """Handle project change event."""
         self._project = data
         self.stream.on_project_changed(data)
         self.details.on_ctlr_project_changed(data)
 
-    @Slot(object)
-    def on_ctlr_version_data_changed(self, data: VersionData) -> None:
+    @Slot(VersionData)
+    def on_ctlr_version_changed(self, data: VersionData) -> None:
         """Handle project change event."""
         self._version_data = data
         self.stream.on_version_data_changed(data)
@@ -138,7 +142,7 @@ if __name__ == "__main__":
 
         # send data
         w.on_ctlr_project_changed(project_data)
-        w.on_ctlr_version_data_changed(version_data)
+        w.on_ctlr_version_changed(version_data)
         w.on_ctlr_activities_changed(activity_data)
 
         # setup signals
@@ -148,18 +152,14 @@ if __name__ == "__main__":
         w.signals.ui_status_changed.connect(
             lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
         )
-        w.signals.ui_priority_changed.connect(
-            lambda x: print(f"ActivityPanel.signals.priority_changed: {x!r}")  # noqa: T201
-        )
         w.signals.ui_comment_deleted.connect(
-            lambda x: print(f"comment_deleted: {x}")
+            lambda x: print(f"comment_deleted: {x}")  # noqa: T201
         )
         w.signals.ui_comment_edited.connect(
-            lambda x: print(f"comment_edited: {x}")
+            lambda x: print(f"comment_edited: {x}")  # noqa: T201
         )
 
         # test signals
-        w.signals.ui_priority_changed.emit("Normal")
         w.signals.ui_status_changed.emit("In progress")
 
         return w

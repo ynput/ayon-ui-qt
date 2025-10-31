@@ -248,19 +248,19 @@ class AYDetailPanel(AYContainer):
             self._version_data.product_name or "Not available"
         )
 
-    @Slot(object)
+    @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData) -> None:
         """Project was updated by the controler."""
         self._project = data
         self._update_status_items()
 
-    @Slot(object)
+    @Slot(str)
     def on_ctlr_status_changed(self, new_status: str):
         """Status was updated by the controler."""
         self._version_data.status = new_status
         self._update_status()
 
-    @Slot(object)
+    @Slot(VersionData)
     def on_ctlr_version_data_changed(self, data: VersionData):
         """version data was updated by the controler."""
         self._version_data = data

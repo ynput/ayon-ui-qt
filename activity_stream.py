@@ -5,14 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
-from qtpy.QtWidgets import (
-    QButtonGroup,
-    QFormLayout,
-    QScrollArea,
-    QWidget,
-)
-
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
@@ -31,15 +23,24 @@ from ayon_ui_qt.utils import (
     get_test_project_data,
     get_test_version_data,
 )
+from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy.QtWidgets import (
+    QButtonGroup,
+    QFormLayout,
+    QScrollArea,
+    QWidget,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
 
 
 class ActivityStreamSignals(QObject):
+    """Signals for the activity stream widget."""
+
     # Node signals
-    comment_deleted = Signal(object)
-    comment_edited = Signal(object)
+    comment_deleted = Signal(CommentModel)
+    comment_edited = Signal(CommentModel)
 
 
 class AYActivityStream(AYContainer):
@@ -88,7 +89,7 @@ class AYActivityStream(AYContainer):
         self._build()
         self.update_stream(self._category, self._activities)
 
-    def _build_buttons(self):
+    def _build_buttons(self) -> AYHBoxLayout:
         self.feed_all = AYButton(
             icon="forum",
             variant="surface",
@@ -180,7 +181,7 @@ class AYActivityStream(AYContainer):
         self.add_layout(self._build_buttons(), stretch=0)
         self.add_widget(self._build_stream(), stretch=100)
 
-    def _clear_stream(self):
+    def _clear_stream(self) -> None:
         self.update_stream(self._category, ActivityData())
 
     def update_stream(self, category: str, activities: ActivityData) -> None:
@@ -209,7 +210,7 @@ class AYActivityStream(AYContainer):
             self.scroll_ctnr.add_layout(form)
             return
 
-        for event in activities.activity_list or []:
+        for event in activities.activity_list:
             if category not in {"all", event.type}:
                 continue
             if isinstance(event, CommentModel):
@@ -231,12 +232,12 @@ class AYActivityStream(AYContainer):
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
 
-    @Slot(object)
-    def _on_view_changed(self, category: Categories):
+    @Slot(str)
+    def _on_view_changed(self, category: Categories) -> None:
         self.update_stream(category, self._activities)
 
-    @Slot(object)
-    def _on_comment_deleted(self, data: CommentModel):
+    @Slot(CommentModel)
+    def _on_comment_deleted(self, data: CommentModel) -> None:
         """Delete widget, delete comment from activities and emit signal."""
         for i in range(self.scroll_ctnr._layout.count()):
             item = self.scroll_ctnr._layout.itemAt(i)
@@ -252,14 +253,15 @@ class AYActivityStream(AYContainer):
                 break
         self.signals.comment_deleted.emit(data)
 
-    @Slot(object)
-    def on_project_changed(self, data):
-        """store new project data and clear the activity stream."""
+    @Slot(ProjectData)
+    def on_project_changed(self, data: ProjectData) -> None:
+        """Store new project data and clear the activity stream."""
         self._project = data
         self._clear_stream()
 
-    @Slot(object)
-    def on_version_data_changed(self, data: VersionData):
+    @Slot(VersionData)
+    def on_version_data_changed(self, data: VersionData) -> None:
+        """Store new version data and clear the activity stream."""
         # display attributes
         self._version = data
         self._clear_stream()
@@ -283,10 +285,10 @@ if __name__ == "__main__":
         w.update_stream("all", data)
 
         w.signals.comment_deleted.connect(
-            lambda x: print(f"comment_deleted: {x}")
+            lambda x: print(f"comment_deleted: {x}")  # noqa: T201
         )
         w.signals.comment_edited.connect(
-            lambda x: print(f"comment_edited: {x}")
+            lambda x: print(f"comment_edited: {x}")  # noqa: T201
         )
 
         return w
