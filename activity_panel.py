@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Optional
 
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.text_box import AYTextBox
-from ayon_ui_qt.utils import preprocess_payload
+from ayon_ui_qt.utils import (
+    get_test_activity_data,
+    get_test_project_data,
+    get_test_version_data,
+)
+from ayon_ui_qt.data_models import ActivityData, ProjectData, VersionData
 from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
@@ -47,11 +51,11 @@ class ActivityPanel(AYContainer):
     def __init__(  # noqa: D107
         self,
         parent: Optional[QWidget] = None,
-        activities: Optional[list] = None,
+        activities: ActivityData | None = None,
         category: AYActivityStream.Categories = "all",
     ) -> None:
-        self._project = {}
-        self._activities = activities
+        self._project = ProjectData.not_set()
+        self._activities = activities or ActivityData()
         self._category: AYActivityStream.Categories = category
 
         super().__init__(
@@ -64,12 +68,7 @@ class ActivityPanel(AYContainer):
 
         self._build()
 
-        # signals
-        self.stream.signals.view_changed.connect(
-            lambda x: self.update_stream(x, self._activities)
-        )
-
-        self.update_stream(self._category, self._activities)
+        self.stream.update_stream(self._category, self._activities)
 
     def _build(self) -> None:
         """Build and configure the panel's UI components."""
@@ -79,7 +78,7 @@ class ActivityPanel(AYContainer):
 
         # add scrolling layout displaying activities
         self.stream = AYActivityStream(
-            self, activities=self._activities, category=self._category
+            self, category=self._category
         )
         self.addWidget(self.stream, stretch=10)
 
@@ -122,59 +121,46 @@ class ActivityPanel(AYContainer):
             self.stream.update_stream(category, self._activities)
 
     @Slot(object)
-    def on_ctlr_activities_changed(self, data: list) -> None:
+    def on_ctlr_activities_changed(self, data: ActivityData) -> None:
         """Handle activities data change event.
 
         Args:
             data: Dictionary containing the new activities payload.
         """
-        self.update_stream(self._category, data)
+        self.stream.update_stream(self._category, data)
 
     @Slot(object)
-    def on_ctlr_project_changed(self, data: dict) -> None:
+    def on_ctlr_project_changed(self, data: ProjectData) -> None:
         """Handle project change event."""
         self._project = data
         self.stream.on_project_changed(data)
-        self.details.on_project_change(data)
+        self.details.on_ctlr_project_changed(data)
+
+    @Slot(object)
+    def on_ctlr_version_data_changed(self, data: VersionData) -> None:
+        """Handle project change event."""
+        self._version_data = data
+        self.stream.on_version_data_changed(data)
+        self.details.on_ctlr_version_data_changed(data)
 
 
 #  TEST =======================================================================
 
 
 if __name__ == "__main__":
-    import json
-
     from ayon_ui_qt.tester import Style, test
 
     def _build() -> QWidget:
-        file_dir = Path(__file__).parent
-
-        # read project data
-        project_file = file_dir.joinpath(
-            "ayon_ui_qt",
-            "resources",
-            "fake-project-data.json",
-        )
-        with open(project_file, "r") as fr:  # noqa: PLW1514, UP015
-            project_data = json.load(fr)
-        print(f"[test]  read: {project_file}")  # noqa: T201
-
-        # read activity data
-        activities_file = file_dir.joinpath(
-            "ayon_ui_qt",
-            "resources",
-            "sample_activities.json",
-        )
-        with open(activities_file, "r") as fr:  # noqa: PLW1514, UP015
-            activity_data = json.load(fr)
-        print(f"[test]  read: {activities_file}")  # noqa: T201
-        activity_data = preprocess_payload(activity_data, project_data)
+        project_data = get_test_project_data()
+        version_data = get_test_version_data()
+        activity_data = get_test_activity_data()
 
         # create ui
         w = ActivityPanel(category="all")
 
         # send data
         w.on_ctlr_project_changed(project_data)
+        w.on_ctlr_version_data_changed(version_data)
         w.on_ctlr_activities_changed(activity_data)
 
         # setup signals
@@ -187,8 +173,6 @@ if __name__ == "__main__":
         w.signals.ui_priority_changed.connect(
             lambda x: print(f"ActivityPanel.signals.priority_changed: {x!r}")  # noqa: T201
         )
-        w.signals.ui_status_changed.connect(w.details.on_status_changed)
-        w.signals.ui_priority_changed.connect(w.details.on_priority_changed)
         w.signals.ui_comment_deleted.connect(
             lambda x: print(f"comment_deleted: {x}")
         )

@@ -18,6 +18,8 @@ from ayon_ui_qt.components.layouts import (
     AYHBoxLayout,
     AYVBoxLayout,
 )
+from ayon_ui_qt.data_models import ProjectData, VersionData
+from ayon_ui_qt.utils import get_test_project_data, get_test_version_data
 
 MISSING_STATUSES = [
     {
@@ -105,7 +107,8 @@ class AYDetailPanel(AYContainer):
             variant="low",
             parent=parent,
         )
-        self._project = {}  # project data (anatomy, users, ect)
+        self._project: ProjectData = ProjectData.not_set()
+        self._version_data: VersionData = VersionData.not_set()
         self._build()
 
     def _build_thumbnail(self) -> AYHBoxLayout:
@@ -136,9 +139,7 @@ class AYDetailPanel(AYContainer):
 
     def _get_statuses(self) -> list[dict[str, str]]:
         """Get status items based on project anatomy data."""
-        statuses = self._project.get("anatomy", {}).get(
-            "statuses", MISSING_STATUSES
-        )
+        statuses = self._project.anatomy.get("statuses", MISSING_STATUSES)
         items = [
             {
                 "text": s["name"],
@@ -229,24 +230,27 @@ class AYDetailPanel(AYContainer):
         self.status.blockSignals(True)
         self.status.update_items(self._get_statuses())
         self.status.setCurrentIndex(0)
-        self.status.blockSignals(False)
 
-    def on_project_change(self, data: dict) -> None:
-        """Handle project change event sent by the controller"""
+    @Slot(object)
+    def on_ctlr_project_changed(self, data: ProjectData) -> None:
+        """Project was updated by the controler."""
         self._project = data
         self._update_status_items()
 
-    def on_status_changed(self, new_status: str):
-        """Handle status change event sent by the controller"""
-        self.status.blockSignals(True)
-        self.status.setCurrentText(new_status)
-        self.status.blockSignals(False)
+    @Slot(object)
+    def on_ctlr_status_changed(self, new_status: str):
+        """Status was updated by the controler."""
+        self._version_data.status = new_status
+        self._update_status()
 
-    def on_priority_changed(self, new_status: str):
-        """Handle priority change event sent by the controller"""
-        self.priority.blockSignals(True)
-        self.priority.setCurrentText(new_status)
-        self.priority.blockSignals(False)
+    @Slot(object)
+    def on_ctlr_version_data_changed(self, data: VersionData):
+        """version data was updated by the controler."""
+        self._version_data = data
+        self._update_status()
+        # self._update_priority()
+        self._update_entity_path()
+        self._update_entity_name()
 
 
 # TEST =======================================================================
@@ -256,11 +260,17 @@ if __name__ == "__main__":
     from ayon_ui_qt.tester import test
 
     def _build() -> AYDetailPanel:
+        version_data = get_test_version_data()
+        project_data = get_test_project_data()
+
         w = AYDetailPanel()
+
+        w.on_ctlr_project_changed(project_data)
+        w.on_ctlr_version_data_changed(version_data)
+
         w.signals.status_changed.connect(
             lambda x: print(f"status_changed: {x}")
         )  # noqa: T201
         return w
 
-    os.environ["QT_SCALE_FACTOR"] = "1"
     test(_build)

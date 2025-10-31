@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, List
 
 
 def short_date(date_str: str) -> str:
@@ -84,6 +87,92 @@ class CommentModel:
 
     def __post_init__(self):
         self.short_date = short_date(self.comment_date)
+
+
+# -----------------------------------------------------------------------------
+# copies of ayon-review-desktop for local testing
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class ActivityData:
+    """Simple dataclass to cache representation data."""
+
+    representation_id: str = ""
+    hash: int = field(init=False)
+    activity_list: list[
+        CommentModel | VersionPublishModel | StatusChangeModel
+    ] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Compute the hash of the activity list."""
+        self.hash = hash(tuple(self.activity_list))
+
+
+@dataclass
+class User:
+    """Data model for user"""
+
+    name: str
+    short_name: str
+    full_name: str
+    email: str
+    avatar_url: str
+
+
+@dataclass
+class Team:
+    name: str
+    members: List[str]
+
+
+@dataclass
+class ProjectData:
+    """Model to pass project data - anatomy, users, teams"""
+
+    project_name: str
+    users: List[User]
+    teams: List[Team]
+    anatomy: dict[str, Any]
+
+    @staticmethod
+    def not_set():
+        ns = "PROJECT NOT SET"
+        return ProjectData(project_name=ns, users=[], teams=[], anatomy={})
+
+
+@dataclass
+class VersionData:
+    """Model to pass enhanced version data"""
+
+    id: str
+    name: str
+    author: str
+    tags: list[str]
+    status: str
+    product_name: str
+    task_name: str
+    priority: str
+    folder_path: str
+    assignees: list[str]
+    attrib: dict[str, str]
+
+    @staticmethod
+    def not_set():
+        ns = "VERSION NOT SET"
+        return VersionData(
+            id=ns,
+            name=ns,
+            author=ns,
+            tags=[],
+            status=ns,
+            product_name=ns,
+            task_name=ns,
+            priority=ns,
+            folder_path=ns,
+            assignees=[],
+            attrib={},
+        )
 
 
 if __name__ == "__main__":

@@ -13,7 +13,20 @@ from ayon_ui_qt.data_models import CommentModel
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
-from ayon_ui_qt.utils import clear_layout, preprocess_payload
+from ayon_ui_qt.data_models import (
+    ActivityData,
+    CommentModel,
+    ProjectData,
+    StatusChangeModel,
+    VersionData,
+    VersionPublishModel,
+)
+from ayon_ui_qt.utils import (
+    clear_layout,
+    get_test_activity_data,
+    get_test_project_data,
+    get_test_version_data,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
@@ -46,7 +59,6 @@ class AYActivityStream(AYContainer):
         self,
         *args,  # noqa: ANN002
         category: Categories = "all",
-        activities: list | None = None,
         **kwargs,  # noqa: ANN003
     ):
         """Initialize the activity stream widget.
@@ -58,8 +70,9 @@ class AYActivityStream(AYContainer):
             **kwargs: Arbitrary keyword arguments. Supports:
                 Additional kwargs are passed to parent AYContainer.
         """
-        self._project = {}
-        self._activities = activities or []
+        self._project = ProjectData.not_set()
+        self._version = VersionData.not_set()
+        self._activities = ActivityData()
         self._category = category
 
         super().__init__(
@@ -70,6 +83,7 @@ class AYActivityStream(AYContainer):
         )
 
         self._build()
+        self.update_stream(self._category, self._activities)
 
     def _build_buttons(self):
         self.feed_all = AYButton(
@@ -169,7 +183,10 @@ class AYActivityStream(AYContainer):
         self.add_layout(self._build_buttons(), stretch=0)
         self.add_widget(self._build_stream(), stretch=100)
 
-    def update_stream(self, category: str, activities: list) -> None:
+    def _clear_stream(self):
+        self.update_stream(self._category, ActivityData())
+
+    def update_stream(self, category: str, activities: ActivityData) -> None:
         """Update the activity stream with new activities.
 
         Clears the current stream and populates it with activities matching
@@ -183,30 +200,41 @@ class AYActivityStream(AYContainer):
         """
         self._category = category
         clear_layout(self.scroll_ctnr)
-        for event in activities or []:
+
+        if category == "details":
+            form = QFormLayout(horizontalSpacing=64, verticalSpacing=8)
+            form.addRow(AYLabel("Attributes", dim=True))
+            for attr, val in self._version.attrib.items():
+                form.addRow(
+                    AYLabel(attr, dim=True, rel_text_size=-1),
+                    AYLabel(str(val) if val else "", rel_text_size=-1),
+                )
+            self.scroll_ctnr.add_layout(form)
+            return
+
+        for event in activities.activity_list or []:
             if category not in {"all", event.type}:
                 continue
-            if event.type == "comment":
+            if isinstance(event, CommentModel):
                 comment = AYComment(self, data=event)
                 self.scroll_ctnr.add_widget(comment)
                 # connect signals
-                comment.comment_deleted.connect(
-                    self._on_comment_deleted
-                )
+                comment.comment_deleted.connect(self._on_comment_deleted)
                 comment.comment_edited.connect(
                     self.signals.comment_edited.emit
                 )
-            elif event.type == "version.publish":
+            elif isinstance(event, VersionPublishModel):
                 self.scroll_ctnr.add_widget(
                     AYPublish(self, data=event), stretch=0
                 )
-            elif event.type == "status.change":
+            elif isinstance(event, StatusChangeModel):
                 self.scroll_ctnr.add_widget(
                     AYStatusChange(self, data=event), stretch=0
                 )
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
 
+    @Slot(object)
     def _on_comment_deleted(self, data: CommentModel):
         """Delete widget, delete comment from activities and emit signal."""
         for i in range(self.scroll_ctnr._layout.count()):
@@ -219,46 +247,47 @@ class AYActivityStream(AYContainer):
             if data == w._data:
                 w.setParent(None)
                 w.deleteLater()
-                self._activities.remove(data)
+                self._activities.activity_list.remove(data)
                 break
         self.signals.comment_deleted.emit(data)
 
+    @Slot(object)
     def on_project_changed(self, data):
         """store new project data and clear the activity stream."""
         self._project = data
-        self.update_stream(self._category, [])
+        self._clear_stream()
+
+    @Slot(object)
+    def on_version_data_changed(self, data: VersionData):
+        # display attributes
+        self._version = data
+        self._clear_stream()
 
 
 #  TEST ======================================================================
 
 
 if __name__ == "__main__":
-    import json
-
     from ayon_ui_qt.tester import Style, test
-    from ayon_ui_qt.utils import preprocess_payload
 
     def _build() -> QWidget:
-        data_file = os.path.join(
-            os.path.dirname(__file__),
-            "ayon_ui_qt",
-            "resources",
-            "sample_activities.json",
+        project_data = get_test_project_data()
+        version_data = get_test_version_data()
+        data = get_test_activity_data()
+
+        w = AYActivityStream()
+
+        w.on_project_changed(project_data)
+        w.on_version_data_changed(version_data)
+        w.update_stream("all", data)
+
+        w.signals.comment_deleted.connect(
+            lambda x: print(f"comment_deleted: {x}")
         )
-        with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
-            activity_data = json.load(fr)
-
-        data_file = os.path.join(
-            os.path.dirname(__file__),
-            "ayon_ui_qt",
-            "resources",
-            "fake-project-data.json",
+        w.signals.comment_edited.connect(
+            lambda x: print(f"comment_edited: {x}")
         )
-        with open(data_file, "r") as fr:  # noqa: PLW1514, UP015
-            project_data = json.load(fr)
 
-        data = preprocess_payload(activity_data, project_data)
-
-        return AYActivityStream(activities=data)
+        return w
 
     test(_build, style=Style.Widget)

@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import logging
 import json
-from .data_models import CommentModel, VersionPublishModel, StatusChangeModel
+from pathlib import Path
+from .data_models import (
+    CommentModel,
+    VersionPublishModel,
+    StatusChangeModel,
+    ProjectData,
+    User,
+    Team,
+    VersionData,
+    ActivityData,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def preprocess_payload(
+def process_activity_data(
     activity_data: dict, project_data: dict
 ) -> list[CommentModel | VersionPublishModel | StatusChangeModel]:
     """Preprocesses payload data to extract and parse comment activities.
@@ -125,3 +135,94 @@ def clear_layout(layout):
             clear_layout(sub_layout)
             # Delete the layout
             sub_layout.deleteLater()
+
+
+def read_json_file(fpath):
+    import json
+
+    with open(fpath, "r") as fr:  # noqa: PLW1514, UP015
+        data = json.load(fr)
+    return data
+
+
+def process_test_project_data(project_data: dict) -> ProjectData:
+    # convert users
+    for user in list(project_data["users"]):
+        um = User(**user)
+        project_data["users"].remove(user)
+        project_data["users"].append(um)
+    # convert teams
+    for team in list(project_data["teams"]):
+        tm = Team(**team)
+        project_data["teams"].remove(team)
+        project_data["teams"].append(tm)
+    data_model = ProjectData(**project_data)
+    return data_model
+
+
+def get_test_project_data() -> ProjectData:
+    # read project data
+    file_dir = Path(__file__).parent
+    project_file = file_dir / "resources" / "sample_project_data.json"
+    project_data = read_json_file(project_file)
+    print(f"[test]  read: {project_file}")  # noqa: T201
+    return process_test_project_data(project_data)
+
+
+def process_test_version_data(version_data: dict) -> VersionData:
+    vd = VersionData(**version_data)
+    return vd
+
+
+def get_test_version_data() -> VersionData:
+    file_dir = Path(__file__).parent
+    version_data_file = file_dir / "resources" / "sample_version_data.json"
+    version_data = read_json_file(version_data_file)
+    print(f"[test]  read: {version_data_file}")  # noqa: T201
+    return process_test_version_data(version_data)
+
+
+def process_test_activity_data(activity_data) -> ActivityData:
+    # convert activities
+    for act in list(activity_data["activity_list"]):
+        act.pop("short_date")
+        atype = act.pop("type")
+        # print(f">> {atype}:  {act}")
+        am = None
+        if atype == "comment":
+            am = CommentModel(**act)
+        elif atype == "version.publish":
+            am = VersionPublishModel(**act)
+        elif atype == "status.change":
+            am = StatusChangeModel(**act)
+        else:
+            err = f"Unknown type: {atype!r}"
+            raise ValueError(err)
+        activity_data["activity_list"].remove(act)
+        activity_data["activity_list"].append(am)
+    # print(json.dumps(activity_data, indent=4, default=str))
+    activity_data.pop("hash")
+    ad = ActivityData(**activity_data)
+    return ad
+
+
+def get_test_activity_data() -> ActivityData:
+    file_dir = Path(__file__).parent
+    activity_file = file_dir / "resources" / "sample_activities.json"
+    activity_data = read_json_file(activity_file)
+    print(f"[test]  read: {activity_file}")  # noqa: T201
+    return process_test_activity_data(activity_data)
+
+
+if __name__ == "__main__":
+    pd = get_test_project_data()
+    print(f"pd.project_name = {pd.project_name}")
+    print(f"pd.users = {pd.users}")
+    print(f"pd.teams = {pd.teams}")
+    # print(f"pd.anatomy = {pd.anatomy}")
+    print()
+    vd = get_test_version_data()
+    print(f"{vd}")
+    print()
+    ad = get_test_activity_data()
+    print(f"{ad}")

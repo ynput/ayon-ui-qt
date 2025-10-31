@@ -1,150 +1,55 @@
 {
-    "project": {
-        "activities": [
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"author\":\"admin\",\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}],\"watcher\":\"admin\"}",
-                "createdAt": "2025-04-29T12:22:09.644450+00:00",
-                "updatedAt": "2025-04-29T12:22:09.644450+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "",
-                "activityType": "watch",
-                "activityId": "9278266424f411f0964b9a743ee613a3"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"author\":\"admin\",\"context\":{\"folderId\":\"698caf20ac0b11efbf2a95506def575f\",\"folderLabel\":\"shot02\",\"folderName\":\"shot02\",\"folderPath\":\"shot02\",\"productId\":\"50e8b896ac0c11ef94eed88083815492\",\"productName\":\"renderAe_animationMain\",\"productType\":\"render\",\"taskId\":\"7463f3e0ac0b11efbf2a95506def575f\",\"taskLabel\":\"ae_animation\",\"taskName\":\"ae_animation\",\"taskType\":\"Animation\"},\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}]}",
-                "createdAt": "2025-04-29T12:22:09.652070+00:00",
-                "updatedAt": "2025-04-29T12:22:09.652070+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Published [v157](version:926103d724f411f0a914d88083815492)",
-                "activityType": "version.publish",
-                "activityId": "9279b1dc24f411f0964b9a743ee613a3"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"author\":\"admin\",\"files\":[{\"author\":\"admin\",\"created_at\":\"2025-04-29T12:22:10.997594+00:00\",\"filename\":\"ad_shot02_renderAe_animationMain_v157_h264.mp4\",\"id\":\"933f47f824f411f0964b9a743ee613a3\",\"mime\":\"video/mp4\",\"size\":112991,\"updated_at\":\"2025-04-29T12:22:10.997594+00:00\"}],\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}],\"reviewableLabel\":\"h264\"}",
-                "createdAt": "2025-04-29T12:22:11.001598+00:00",
-                "updatedAt": "2025-04-29T12:22:11.001598+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Uploaded a reviewable 'h264'",
-                "activityType": "reviewable",
-                "activityId": "9347df6224f411f0964b9a743ee613a3"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"author\":\"admin\",\"newValue\":\"In progress\",\"oldValue\":\"Not ready\",\"origin\":{\"id\":\"7463f3e0ac0b11efbf2a95506def575f\",\"label\":\"ae_animation\",\"name\":\"ae_animation\",\"subtype\":\"Animation\",\"type\":\"task\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"}]}",
-                "createdAt": "2025-05-07T11:23:50.916096+00:00",
-                "updatedAt": "2025-05-07T11:23:50.916096+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "[ae_animation](task:7463f3e0ac0b11efbf2a95506def575f) status changed from Not ready to In progress",
-                "activityType": "status.change",
-                "activityId": "c06012842b3511f084f33255557c5ec4"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"assignee\":\"admin\",\"author\":\"admin\",\"origin\":{\"id\":\"7463f3e0ac0b11efbf2a95506def575f\",\"label\":\"ae_animation\",\"name\":\"ae_animation\",\"subtype\":\"Animation\",\"type\":\"task\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"}]}",
-                "createdAt": "2025-06-30T15:11:45.685484+00:00",
-                "updatedAt": "2025-06-30T15:11:45.685484+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Added [Admin](user:admin) to [ae_animation](task:7463f3e0ac0b11efbf2a95506def575f)",
-                "activityType": "assignee.add",
-                "activityId": "897c1c9055c411f0b2022e117d884ba1"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"annotations\":[],\"author\":\"admin\",\"category\":null,\"files\":[],\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}]}",
-                "createdAt": "2025-10-21T16:46:07.049661+00:00",
-                "updatedAt": "2025-10-21T16:46:07.049661+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Test comment for renderAe_animationMain v157",
-                "activityType": "comment",
-                "activityId": "7089c160ae9d11f08d736f3ad3751fb9"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"annotations\":[],\"author\":\"admin\",\"category\":null,\"files\":[],\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}]}",
-                "createdAt": "2025-10-24T15:24:40.208873+00:00",
-                "updatedAt": "2025-10-24T15:24:40.208873+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Another test comment",
-                "activityType": "comment",
-                "activityId": "8f073f80b0ed11f0ad8e7379208abebf"
-            },
-            {
-                "entityId": "926103d724f411f0a914d88083815492",
-                "entityType": "version",
-                "activityData": "{\"annotations\":[],\"author\":\"admin\",\"category\":null,\"files\":[],\"origin\":{\"id\":\"926103d724f411f0a914d88083815492\",\"name\":\"v157\",\"type\":\"version\"},\"parents\":[{\"id\":\"698caf20ac0b11efbf2a95506def575f\",\"label\":\"shot02\",\"name\":\"shot02\",\"subtype\":\"Shot\",\"type\":\"folder\"},{\"id\":\"50e8b896ac0c11ef94eed88083815492\",\"name\":\"renderAe_animationMain\",\"subtype\":\"render\",\"type\":\"product\"}]}",
-                "createdAt": "2025-10-24T15:25:08.655953+00:00",
-                "updatedAt": "2025-10-24T15:25:08.655953+00:00",
-                "author": {
-                    "attrib": {
-                        "fullName": "Admin",
-                        "email": "admin@ynput.io",
-                        "avatarUrl": ""
-                    },
-                    "name": "admin"
-                },
-                "body": "Test [Admin](user:admin)",
-                "activityType": "comment",
-                "activityId": "9ffb2720b0ed11f0ad8e7379208abebf"
-            }
-        ]
+  "representation_id": "926be96d24f411f0b073d88083815492",
+  "hash": -4299293521714368751,
+  "activity_list": [
+    {
+      "user_full_name": "Admin",
+      "user_name": "admin",
+      "user_src": "",
+      "version": "v157",
+      "product": "renderAe_animationMain",
+      "date": "2025-04-29T12:22:09.652070+00:00",
+      "short_date": "Apr 29, 12:22 PM",
+      "type": "version.publish"
+    },
+    {
+      "user_full_name": "Admin",
+      "user_name": "admin",
+      "user_src": "",
+      "product": "Not available",
+      "version": "Not available",
+      "old_status": "Not ready",
+      "new_status": "In progress",
+      "date": "2025-05-07T11:23:50.916096+00:00",
+      "short_date": "May 07, 11:23 AM",
+      "type": "status.change"
+    },
+    {
+      "user_full_name": "Admin",
+      "user_name": "admin",
+      "user_src": "",
+      "comment": "Test comment for renderAe_animationMain v157",
+      "comment_date": "2025-10-21T16:46:07.049661+00:00",
+      "short_date": "Oct 21, 04:46 PM",
+      "type": "comment"
+    },
+    {
+      "user_full_name": "Admin",
+      "user_name": "admin",
+      "user_src": "",
+      "comment": "Another test comment",
+      "comment_date": "2025-10-24T15:24:40.208873+00:00",
+      "short_date": "Oct 24, 03:24 PM",
+      "type": "comment"
+    },
+    {
+      "user_full_name": "Admin",
+      "user_name": "admin",
+      "user_src": "",
+      "comment": "Test [Admin](user:admin)",
+      "comment_date": "2025-10-24T15:25:08.655953+00:00",
+      "short_date": "Oct 24, 03:25 PM",
+      "type": "comment"
     }
+  ]
 }
