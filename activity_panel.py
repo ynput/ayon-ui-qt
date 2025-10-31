@@ -77,9 +77,7 @@ class ActivityPanel(AYContainer):
         self.addWidget(self.details, stretch=0)
 
         # add scrolling layout displaying activities
-        self.stream = AYActivityStream(
-            self, category=self._category
-        )
+        self.stream = AYActivityStream(self, category=self._category)
         self.addWidget(self.stream, stretch=10)
 
         # add comment editor
@@ -93,32 +91,12 @@ class ActivityPanel(AYContainer):
         self.details.signals.status_changed.connect(
             self.signals.ui_status_changed.emit
         )
-        self.details.signals.priority_changed.connect(
-            self.signals.ui_priority_changed.emit
-        )
         self.stream.signals.comment_deleted.connect(
             self.signals.ui_comment_deleted.emit
         )
         self.stream.signals.comment_edited.connect(
             self.signals.ui_comment_edited.emit
         )
-
-    def update_stream(
-        self,
-        category: AYActivityStream.Categories,
-        activities: Optional[list] = None,
-    ) -> None:
-        """Update the activity stream with new category or activities.
-
-        Args:
-            category: The category to filter activities by.
-            activities: Optional list of activities to display.
-        """
-        self._category = category
-        if activities and activities != self._activities:
-            self._activities = activities
-        if self._activities:
-            self.stream.update_stream(category, self._activities)
 
     @Slot(object)
     def on_ctlr_activities_changed(self, data: ActivityData) -> None:

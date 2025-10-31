@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import Literal, get_args
+from typing import Literal
 
-from qtpy.QtCore import QObject, Signal  # type: ignore
-from qtpy.QtWidgets import QButtonGroup, QScrollArea, QWidget
+from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy.QtWidgets import (
+    QButtonGroup,
+    QFormLayout,
+    QScrollArea,
+    QWidget,
+)
 
-from ayon_ui_qt.data_models import CommentModel
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
+from ayon_ui_qt.components.label import AYLabel
 from ayon_ui_qt.data_models import (
     ActivityData,
     CommentModel,
@@ -34,7 +38,6 @@ logger = logging.getLogger("activity stream")
 
 class ActivityStreamSignals(QObject):
     # Node signals
-    view_changed = Signal(str)  # type: ignore # category
     comment_deleted = Signal(object)
     comment_edited = Signal(object)
 
@@ -114,21 +117,15 @@ class AYActivityStream(AYContainer):
             checkable=True,
         )
 
-        self.feed_all.clicked.connect(
-            lambda: self.signals.view_changed.emit("all")
-        )
-        self.feed_com.clicked.connect(
-            lambda: self.signals.view_changed.emit("comment")
-        )
+        self.feed_all.clicked.connect(lambda: self._on_view_changed("all"))
+        self.feed_com.clicked.connect(lambda: self._on_view_changed("comment"))
         self.feed_pub.clicked.connect(
-            lambda: self.signals.view_changed.emit("version.publish")
+            lambda: self._on_view_changed("version.publish")
         )
         self.feed_chk.clicked.connect(
-            lambda: self.signals.view_changed.emit("checklist")
+            lambda: self._on_view_changed("checklist")
         )
-        self.feed_det.clicked.connect(
-            lambda: self.signals.view_changed.emit("details")
-        )
+        self.feed_det.clicked.connect(lambda: self._on_view_changed("details"))
 
         self.button_grp = QButtonGroup(self)
         self.button_grp.setExclusive(True)
@@ -233,6 +230,10 @@ class AYActivityStream(AYContainer):
                 )
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
+
+    @Slot(object)
+    def _on_view_changed(self, category: Categories):
+        self.update_stream(category, self._activities)
 
     @Slot(object)
     def _on_comment_deleted(self, data: CommentModel):

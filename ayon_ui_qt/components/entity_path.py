@@ -1,8 +1,10 @@
 from typing import Optional
+from os.path import normpath
 
 from qtpy import QtCore, QtWidgets
 
 from .layouts import AYHBoxLayout
+from ..utils import clear_layout
 
 
 class AYEntityPathSegment(QtWidgets.QLabel):
@@ -25,9 +27,9 @@ class AYEntityPath(QtWidgets.QWidget):
         self._path = ""
         self._path_segments = []
         self._entity_id = None
+        self.setLayout(AYHBoxLayout(self))
 
         self.entity_path = "Project/assets/characters/robot/Render"
-        self._build()
 
     @property
     def entity_path(self):
@@ -35,23 +37,19 @@ class AYEntityPath(QtWidgets.QWidget):
 
     @entity_path.setter
     def entity_path(self, value):
-        self._path_segments = value.split("/")
+        self._path_segments = normpath(value).split("/")
         self._path = value
+        self._build()
 
     def _build(self):
-        lyt = AYHBoxLayout(self)
-        self._head = AYEntityPathSegment(self._path_segments[0], parent=self)
-        self._mid = AYEntityPathSegment("...", parent=self, variant="mid")
-        self._tail = AYEntityPathSegment(
-            self._path_segments[-1], parent=self, variant="tail"
-        )
-        lyt.addWidget(self._head)
-        lyt.addWidget(AYEntityPathSegment("/", parent=self))
-        lyt.addWidget(self._mid)
-        lyt.addWidget(AYEntityPathSegment("/", parent=self))
-        lyt.addWidget(self._tail)
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 0, QtWidgets.QSizePolicy.Policy.MinimumExpanding
-            )
-        )
+        lyt = self.layout()
+        if not lyt:
+            return
+
+        clear_layout(lyt)
+        for p in self._path_segments:
+            w = AYEntityPathSegment(p, parent=self)
+            lyt.addWidget(w)
+            if p != self._path_segments[-1]:
+                lyt.addWidget(AYEntityPathSegment("/", parent=self))
+        lyt.addStretch(100)

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
 
-from qtpy.QtCore import QObject, Qt, Signal  # type: ignore
+from qtpy.QtCore import QObject, Qt, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
 from ayon_ui_qt.components.buttons import AYButton
@@ -60,9 +59,22 @@ PRIORITIES = [
 ]
 
 
+def block_signals(attr: str):
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            obj: QObject = getattr(self, attr)
+            obj.blockSignals(True)
+            result = func(self, *args, **kwargs)
+            obj.blockSignals(False)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
 class DetailPanelSignals(QObject):
     status_changed = Signal(str)
-    priority_changed = Signal(str)
 
 
 class AYDetailPanel(AYContainer):
@@ -120,7 +132,7 @@ class AYDetailPanel(AYContainer):
         Returns:
             AYHBoxLayout: The constructed thumbnail layout.
         """
-        self.entity_thumbnail = AYEntityThumbnail(self)
+        self.entity_thumbnail = AYEntityThumbnail(parent=self)
         self.entity_name = AYLabel("entity")
         self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
         self.task_info = AYLabel("Task - Render")
@@ -152,7 +164,7 @@ class AYDetailPanel(AYContainer):
         return items
 
     def _get_priorities(self) -> list[dict[str, str]]:
-        """Get priority items based on front-end data."""
+        """Get priority items. These seem to be constants."""
         return PRIORITIES
 
     def _build_status(self) -> AYComboBox:
@@ -182,15 +194,6 @@ class AYDetailPanel(AYContainer):
         # TODO(plp): implement me !
         return AYHBoxLayout(margin=0)
 
-    def _build_priority(self) -> AYComboBox:
-        """Build the priority section layout.
-
-        Returns:
-            AYComboBox: A combo box widget for selecting priority.
-        """
-        priorities = self._get_priorities()
-        return AYComboBox(items=priorities, height=30)
-
     def _build(self) -> None:
         """Build the complete detail panel layout.
 
@@ -202,7 +205,6 @@ class AYDetailPanel(AYContainer):
         self.status = self._build_status()
         self.assignee = self._build_assignee()
         self.webactions = self._build_webactions()
-        self.priority = self._build_priority()
 
         grid_lyt = AYGridLayout(spacing=4, margin=4)
         grid_lyt.addLayout(self.thumbnail, 0, 0)
@@ -211,9 +213,6 @@ class AYDetailPanel(AYContainer):
         )
         grid_lyt.addLayout(self.assignee, 1, 1)
         grid_lyt.addLayout(self.webactions, 2, 0)
-        grid_lyt.addWidget(
-            self.priority, 2, 1, alignment=Qt.AlignmentFlag.AlignRight
-        )
 
         self.addWidget(self.entity_path)
         self.addLayout(grid_lyt)
@@ -222,14 +221,32 @@ class AYDetailPanel(AYContainer):
         self.status.currentTextChanged.connect(
             self.signals.status_changed.emit
         )
-        self.priority.currentTextChanged.connect(
-            self.signals.priority_changed.emit
-        )
 
+    @block_signals("status")
     def _update_status_items(self):
-        self.status.blockSignals(True)
         self.status.update_items(self._get_statuses())
         self.status.setCurrentIndex(0)
+
+    @block_signals("status")
+    def _update_status(self):
+        current_status = self._version_data.status
+        print(f"current_status = {current_status}")
+        if current_status:
+            self.status.setCurrentText(current_status)
+
+    @block_signals("entity_path")
+    def _update_entity_path(self):
+        path = "%s/%s/%s" % (
+            self._project.project_name,
+            self._version_data.folder_path,
+            self._version_data.task_name,
+        )
+        self.entity_path.entity_path = path
+
+    def _update_entity_name(self):
+        self.entity_name.setText(
+            self._version_data.product_name or "Not available"
+        )
 
     @Slot(object)
     def on_ctlr_project_changed(self, data: ProjectData) -> None:
