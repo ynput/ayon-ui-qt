@@ -284,10 +284,13 @@ class AYComment(AYFrame):
     def _build_editor_toolbar(self):
         lyt = AYHBoxLayout()
         self.reaction = AYButton(
-            variant="nav-small", icon="add_reaction", icon_color="#888"
+            variant="nav-small",
+            icon="add_reaction",
+            icon_color="#888",
+            parent=self,
         )
-        self.cancel_edit = AYButton("Cancel", variant="nav")
-        self.save_edit = AYButton("Save", variant="filled")
+        self.cancel_edit = AYButton("Cancel", variant="nav", parent=self)
+        self.save_edit = AYButton("Save", variant="filled", parent=self)
         lyt.addWidget(self.reaction)
         lyt.addStretch(10)
         lyt.addWidget(self.cancel_edit)
@@ -304,9 +307,15 @@ class AYComment(AYFrame):
             layout=AYContainer.Layout.HBox, parent=self.top_line
         )
         bsize = 22
-        self.del_button = AYButton(variant="nav-small", icon="delete")
+        self.del_button = AYButton(
+            variant="nav-small", icon="delete", parent=self
+        )
         self.del_button.setFixedSize(bsize, bsize)
-        self.edit_button = AYButton(variant="nav-small", icon="edit_square")
+        self.edit_button = AYButton(
+            variant="nav-small",
+            icon="edit_square",
+            parent=self,
+        )
         self.edit_button.setFixedSize(bsize, bsize)
         self.edit_frame.add_widget(self.del_button)
         self.edit_frame.add_widget(self.edit_button)
