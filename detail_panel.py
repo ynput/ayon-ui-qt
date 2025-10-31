@@ -133,7 +133,7 @@ class AYDetailPanel(AYContainer):
             AYHBoxLayout: The constructed thumbnail layout.
         """
         self.entity_thumbnail = AYEntityThumbnail(parent=self)
-        self.entity_name = AYLabel("entity")
+        self.product_name = AYLabel("product name")
         self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
         self.task_info = AYLabel("Task - Render")
 
@@ -141,7 +141,7 @@ class AYDetailPanel(AYContainer):
         thumb_lyt.addWidget(self.entity_thumbnail)
         thumb_info_lyt = AYVBoxLayout()
         name_tag_lyt = AYHBoxLayout()
-        name_tag_lyt.addWidget(self.entity_name)
+        name_tag_lyt.addWidget(self.product_name)
         name_tag_lyt.addWidget(self.entity_tag)
         thumb_info_lyt.addLayout(name_tag_lyt)
         thumb_info_lyt.addWidget(self.task_info)
@@ -243,8 +243,8 @@ class AYDetailPanel(AYContainer):
         )
         self.entity_path.entity_path = path
 
-    def _update_entity_name(self):
-        self.entity_name.setText(
+    def _update_product_name(self):
+        self.product_name.setText(
             self._version_data.product_name or "Not available"
         )
 
@@ -267,7 +267,7 @@ class AYDetailPanel(AYContainer):
         self._update_status()
         # self._update_priority()
         self._update_entity_path()
-        self._update_entity_name()
+        self._update_product_name()
 
 
 # TEST =======================================================================
