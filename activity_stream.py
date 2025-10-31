@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
+from ayon_ui_qt import style_widget_and_siblings
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
@@ -231,6 +232,8 @@ class AYActivityStream(AYContainer):
                 )
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
+        # TODO(plp): the reaction button was looking wrong but it's overkill.
+        style_widget_and_siblings(self)
 
     @Slot(str)
     def _on_view_changed(self, category: Categories) -> None:
