@@ -148,7 +148,13 @@ class ProjectData:
     @staticmethod
     def not_set():
         ns = "PROJECT NOT SET"
-        return ProjectData(project_name=ns, users=[], teams=[], anatomy={})
+        return ProjectData(
+            project_name=ns,
+            users=[],
+            teams=[],
+            anatomy={},
+            activity_categories=[]
+        )
 
 
 @dataclass
