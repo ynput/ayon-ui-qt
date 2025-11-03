@@ -127,6 +127,14 @@ class Team:
 
 
 @dataclass
+class ActivityCategory:
+    """Model for powerpack `activity_categories` settings"""
+    name: str
+    color: str
+    access: dict[str, Any]
+
+
+@dataclass
 class ProjectData:
     """Model to pass project data - anatomy, users, teams"""
 
@@ -134,6 +142,8 @@ class ProjectData:
     users: List[User]
     teams: List[Team]
     anatomy: dict[str, Any]
+    activity_categories: List[ActivityCategory]
+
 
     @staticmethod
     def not_set():
