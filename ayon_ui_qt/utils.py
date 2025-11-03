@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def process_activity_data(
-    activity_data: dict, project_data: dict
+    activity_data: dict, project_data: ProjectData
 ) -> list[CommentModel | VersionPublishModel | StatusChangeModel]:
     """Preprocesses payload data to extract and parse comment activities.
 
@@ -28,13 +28,14 @@ def process_activity_data(
     AYComment class and returns a list of parsed comment objects.
 
     Args:
-        data (dict): The input data containing project activities in a specific
-            structure. Expected to have a nested structure with
-            'data' -> 'project' -> 'activities' -> 'edges'.
+        activity_data (dict): The input data containing project activities in
+            a specific structure. Expected to have a nested structure with
+            'project' -> 'activities'.
+        project_data (ProjectData)
 
     Returns:
-        list: A list of parsed comment objects. Returns an empty list if no activities are found
-            or if there's an error during processing.
+        list: A list of parsed comment objects. Returns an empty list if
+            no activities are found or if there's an error during processing.
     """
     try:
         activities: list[dict] = activity_data["project"]["activities"]
@@ -42,7 +43,7 @@ def process_activity_data(
         logger.error(f"Could not extract activities: {err}")
         return []
 
-    users = {d["short_name"]: d for d in project_data.get("users", [])}
+    users = {d.short_name: d for d in project_data.users}
 
     ui_data = []
     nothing = "Not available"
@@ -55,7 +56,11 @@ def process_activity_data(
         activity_type = act.get("activityType", "")
 
         user_name = act.get("author", {}).get("name", nothing)
-        user_full_name = users.get(user_name, {}).get("full_name", user_name)
+        user_full_name = user_name
+        user = users.get(user_name)
+        if user:
+            user_full_name = user.full_name
+
         date = act.get("updatedAt", nothing)
 
         if activity_type == "comment":
