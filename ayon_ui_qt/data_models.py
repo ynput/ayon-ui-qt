@@ -127,7 +127,7 @@ class Team:
 
 
 @dataclass
-class ActivityCategory:
+class CommentCategory:
     """Model for powerpack `activity_categories` settings"""
     name: str
     color: str
@@ -142,7 +142,7 @@ class ProjectData:
     users: List[User]
     teams: List[Team]
     anatomy: dict[str, Any]
-    activity_categories: List[ActivityCategory]
+    comment_category : List[CommentCategory]
 
 
     @staticmethod
@@ -153,7 +153,7 @@ class ProjectData:
             users=[],
             teams=[],
             anatomy={},
-            activity_categories=[]
+            comment_category=[]
         )
 
 
