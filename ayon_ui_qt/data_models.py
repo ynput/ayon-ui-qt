@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 
 
 def short_date(date_str: str) -> str:
@@ -143,6 +143,7 @@ class ProjectData:
     teams: List[Team]
     anatomy: dict[str, Any]
     comment_category : List[CommentCategory]
+    current_user: Optional[User]
 
 
     @staticmethod
@@ -153,7 +154,8 @@ class ProjectData:
             users=[],
             teams=[],
             anatomy={},
-            comment_category=[]
+            comment_category=[],
+            current_user=None
         )
 
 
