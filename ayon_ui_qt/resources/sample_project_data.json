@@ -580,5 +580,12 @@
             "color": "#ffffff",
             "access": {}
         }
-    ]
+    ],
+    "current_user": {
+        "name": "petr.kalis_ynput.io",
+        "short_name": "petr.kalis_ynput.io",
+        "full_name": "Petr Kalis",
+        "email": "petr.kalis@ynput.io",
+        "avatar_url": null
+    }
 }

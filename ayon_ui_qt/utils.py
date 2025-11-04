@@ -167,6 +167,8 @@ def process_test_project_data(project_data: dict) -> ProjectData:
         cc = CommentCategory(**comcat)
         project_data["comment_category"].remove(comcat)
         project_data["comment_category"].append(cc)
+    # convert current_user
+    project_data["current_user"] = User(**project_data["current_user"])
     data_model = ProjectData(**project_data)
     return data_model
 

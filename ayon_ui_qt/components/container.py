@@ -73,6 +73,13 @@ class AYContainer(AYFrame):
         else:
             raise ValueError(f"Unknown Layout type : {self._layout}")
 
+    def insert_widget(self, index: int, w: QWidget, stretch: int = 0):
+        if isinstance(self._layout, (AYHBoxLayout, AYVBoxLayout)):
+            if isinstance(w, QWidget):
+                self._layout.insertWidget(index, w, stretch=stretch)
+        elif isinstance(self._layout, AYGridLayout):
+            raise ValueError(f"Not supported by QGridLayout : {self._layout}")
+
     def count(self) -> int:
         return self._layout.count()
 

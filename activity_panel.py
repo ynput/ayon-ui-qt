@@ -109,6 +109,9 @@ class ActivityPanel(AYContainer):
         self.editor.signals.comment_submitted.connect(
             self.signals.ui_comment_submitted.emit
         )
+        self.editor.signals.comment_submitted.connect(
+            self.stream.on_comment_submitted
+        )
         self.details.signals.version_status_changed.connect(
             self.signals.ui_version_status_changed.emit
         )

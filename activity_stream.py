@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Literal
+import datetime
 
 from ayon_ui_qt import style_widget_and_siblings
 from ayon_ui_qt.components.buttons import AYButton
@@ -32,8 +33,13 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
+
+
+def time_stamp():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 class ActivityStreamSignals(QObject):
@@ -234,6 +240,20 @@ class AYActivityStream(AYContainer):
         self._activities = activities
         # TODO(plp): the reaction button was looking wrong but it's overkill.
         style_widget_and_siblings(self)
+
+    def on_comment_submitted(self, markdown, category)->None:
+        m = CommentModel(
+            user_full_name=self._project.current_user.full_name,
+            user_name=self._project.current_user.name,
+            user_src="",
+            comment=markdown,
+            category=category,
+            comment_date=time_stamp()
+        )
+        idx = self.scroll_ctnr.count() - 1
+        w = AYComment(self, data=m)
+        self.scroll_ctnr.insert_widget(idx, w)
+        self._activities.activity_list.append(m)
 
     @Slot(str)
     def _on_view_changed(self, category: Categories) -> None:

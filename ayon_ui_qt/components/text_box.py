@@ -249,6 +249,7 @@ class AYTextBox(AYFrame):
         """Handle comment button click and emit signal with markdown content."""
         markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
         self.signals.comment_submitted.emit(markdown_content, self.category)
+        self.edit_field.clear()
 
     def _on_category_changed(self, category: str) -> None:
         self.category = category
