@@ -18,7 +18,7 @@ from ayon_ui_qt.utils import (
     get_test_project_data,
     get_test_version_data,
 )
-from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy.QtCore import QObject, Signal, Slot, QTimer  # type: ignore
 from qtpy.QtWidgets import QWidget
 
 from activity_stream import AYActivityStream
@@ -36,7 +36,11 @@ class ActivityPanelSignals(QObject):
     ui_comment_edited = Signal(CommentModel)  # type: ignore
     ui_comment_deleted = Signal(CommentModel)  # type: ignore
     ui_assignee_changed = Signal(str)  # type: ignore
-    ui_status_changed = Signal(str)  # type: ignore
+    ui_version_status_changed = Signal(str)  # type: ignore
+
+    # Auto-refresh related signals
+    ui_activity_refresh_requested = Signal()  # type: ignore
+    ui_refresh_paused = Signal(bool)  # type: ignore
 
 
 class ActivityPanel(AYContainer):
@@ -63,6 +67,12 @@ class ActivityPanel(AYContainer):
         self._activities = activities or ActivityData()
         self._category: AYActivityStream.Categories = category
 
+        # Initialize auto-refresh attributes
+        self._refresh_timer: QTimer | None = None
+        self._is_refreshing: bool = False
+        self._pause_refresh: bool = False
+        self.log = logger  # Use the module logger
+
         super().__init__(
             layout=AYContainer.Layout.VBox,
             variant="low",
@@ -74,6 +84,12 @@ class ActivityPanel(AYContainer):
         self._build()
 
         self.stream.update_stream(self._category, self._activities)
+        # Set up auto-refresh by default
+        self.setup_auto_refresh()
+
+    def __del__(self) -> None:
+        """Clean up resources when panel is destroyed."""
+        self._cleanup_refresh_timer()
 
     def _build(self) -> None:
         """Build and configure the panel's UI components."""
@@ -93,8 +109,8 @@ class ActivityPanel(AYContainer):
         self.editor.signals.comment_submitted.connect(
             self.signals.ui_comment_submitted.emit
         )
-        self.details.signals.status_changed.connect(
-            self.signals.ui_status_changed.emit
+        self.details.signals.version_status_changed.connect(
+            self.signals.ui_version_status_changed.emit
         )
         self.stream.signals.comment_deleted.connect(
             self.signals.ui_comment_deleted.emit
@@ -102,6 +118,69 @@ class ActivityPanel(AYContainer):
         self.stream.signals.comment_edited.connect(
             self.signals.ui_comment_edited.emit
         )
+
+        # Connect detail panel refresh signal if it exists
+        if hasattr(self.details, "signals") and hasattr(
+            self.details.signals, "refresh_requested"
+        ):
+            self.details.signals.refresh_requested.connect(
+                self.signals.ui_activity_refresh_requested.emit
+            )
+
+    def _check_and_refresh(self) -> None:
+        """Check if activities have changed and refresh if needed.
+
+        Compares the current activities hash with the last known hash to
+        determine if a refresh is necessary. Skips refresh if already
+        refreshing, paused, or the activity widget is not visible.
+        """
+        try:
+            self._is_refreshing = True
+            self.log.debug(
+                "ActivityPanel: Emitting ui_activity_refresh_requested signal"
+            )
+            # Request activities via signal
+            self.signals.ui_activity_refresh_requested.emit()
+
+        except RuntimeError:
+            self.log.exception("Error during auto-refresh")
+
+        finally:
+            self._is_refreshing = False
+
+    def setup_auto_refresh(self, interval: int = 2000) -> None:
+        """Set up automatic refresh for the activity stream.
+
+        Args:
+            interval: Refresh interval in milliseconds.
+        """
+        if self._refresh_timer is not None:
+            return
+        self._refresh_timer = QTimer()
+        self._refresh_timer.timeout.connect(self._check_and_refresh)
+        self._refresh_timer.start(interval)
+
+    def _cleanup_refresh_timer(self) -> None:
+        """Clean up the refresh timer."""
+        if self._refresh_timer is not None:
+            try:
+                self._refresh_timer.stop()
+            except RuntimeError:
+                pass
+            else:
+                self._refresh_timer.deleteLater()
+            self._refresh_timer = None
+
+    @Slot(bool)
+    def on_ctlr_playback_state_changed(self, is_playing: bool) -> None:
+        """Handle playback state changes from controller."""
+        self.log.debug(
+            "ActivityPanel: Playback state changed to: %s", is_playing
+        )
+        if is_playing:
+            self._cleanup_refresh_timer()
+        else:
+            self.setup_auto_refresh()
 
     @Slot(ActivityData)
     def on_ctlr_activities_changed(self, data: ActivityData) -> None:
@@ -121,11 +200,19 @@ class ActivityPanel(AYContainer):
         self.editor.on_ctlr_project_changed(data)
 
     @Slot(VersionData)
-    def on_ctlr_version_changed(self, data: VersionData) -> None:
-        """Handle project change event."""
+    def on_ctlr_version_data_changed(self, data: VersionData) -> None:
+        """Handle version data change event."""
         self._version_data = data
         self.stream.on_version_data_changed(data)
         self.details.on_ctlr_version_data_changed(data)
+
+    @Slot(VersionData)
+    def on_ctlr_version_status_changed(self, status: str) -> None:
+        """Handle version status change event."""
+        if not self._version_data:
+            return
+        self._version_data.status = status
+        self.details.on_ctlr_version_status_changed(status)
 
 
 #  TEST =======================================================================
@@ -144,7 +231,7 @@ if __name__ == "__main__":
 
         # send data
         w.on_ctlr_project_changed(project_data)
-        w.on_ctlr_version_changed(version_data)
+        w.on_ctlr_version_data_changed(version_data)
         w.on_ctlr_activities_changed(activity_data)
 
         # setup signals
@@ -153,8 +240,10 @@ if __name__ == "__main__":
                 f"ActivityPanel.signals.comment_submitted: [{cat}] {md!r}"
             )  # noqa: T201
         )
-        w.signals.ui_status_changed.connect(
-            lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
+        w.signals.ui_version_status_changed.connect(
+            lambda stat: print(
+                f"ActivityPanel.signals.status_changed: {stat!r}"
+            )  # noqa: T201
         )
         w.signals.ui_comment_deleted.connect(
             lambda x: print(f"comment_deleted: {x}")  # noqa: T201
@@ -162,9 +251,15 @@ if __name__ == "__main__":
         w.signals.ui_comment_edited.connect(
             lambda x: print(f"comment_edited: {x}")  # noqa: T201
         )
+        w.signals.ui_activity_refresh_requested.connect(
+            lambda: print("ActivityPanel: refresh_requested")  # noqa: T201
+        )
+        w.signals.ui_refresh_paused.connect(
+            lambda paused: print(f"ActivityPanel: refresh_paused={paused}")  # noqa: T201
+        )
 
         # test signals
-        w.signals.ui_status_changed.emit("In progress")
+        w.signals.ui_version_status_changed.emit("In progress")
 
         return w
 

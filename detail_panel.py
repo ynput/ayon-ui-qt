@@ -74,7 +74,7 @@ def block_signals(attr: str):
 
 
 class DetailPanelSignals(QObject):
-    status_changed = Signal(str)
+    version_status_changed = Signal(str)
 
 
 class AYDetailPanel(AYContainer):
@@ -219,7 +219,7 @@ class AYDetailPanel(AYContainer):
 
         # connect signals
         self.status.currentTextChanged.connect(
-            self.signals.status_changed.emit
+            self.signals.version_status_changed.emit
         )
 
     @block_signals("status")
@@ -255,7 +255,7 @@ class AYDetailPanel(AYContainer):
         self._update_status_items()
 
     @Slot(str)
-    def on_ctlr_status_changed(self, new_status: str):
+    def on_ctlr_version_status_changed(self, new_status: str):
         """Status was updated by the controler."""
         self._version_data.status = new_status
         self._update_status()
@@ -285,7 +285,7 @@ if __name__ == "__main__":
         w.on_ctlr_project_changed(project_data)
         w.on_ctlr_version_data_changed(version_data)
 
-        w.signals.status_changed.connect(
+        w.signals.version_status_changed.connect(
             lambda x: print(f"status_changed: {x}")
         )  # noqa: T201
         return w
