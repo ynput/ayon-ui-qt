@@ -991,19 +991,17 @@ class ComboBoxDrawer:
 
         style = self.model.get_style("QComboBox")
 
-        longuest_text = ""
+        text_width = cb_height = 0
         if isinstance(widget, QComboBox):
             for i in range(widget.count()):
-                longuest_text = max(
-                    longuest_text,
-                    widget.itemData(i, Qt.ItemDataRole.DisplayRole),
+                t_rect = option.fontMetrics.boundingRect(
+                    widget.itemData(i, Qt.ItemDataRole.DisplayRole)
                 )
+                text_width = max(text_width, t_rect.width())
+                cb_height = max(cb_height, t_rect.height())
 
-        text_width = cb_height = 0
-        if longuest_text:
-            text_rect: QRect = option.fontMetrics.boundingRect(longuest_text)
-            text_width = text_rect.width() + style["text-padding"][0] * 2
-            cb_height = text_rect.height() + style["text-padding"][1] * 2
+        text_width += style["text-padding"][0] * 2
+        cb_height += style["text-padding"][1] * 2
 
         icon_width = 0
         if option.currentIcon:
