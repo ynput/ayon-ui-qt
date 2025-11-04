@@ -10,6 +10,7 @@ from .data_models import (
     ProjectData,
     User,
     Team,
+    CommentCategory,
     VersionData,
     ActivityData,
 )
@@ -161,6 +162,11 @@ def process_test_project_data(project_data: dict) -> ProjectData:
         tm = Team(**team)
         project_data["teams"].remove(team)
         project_data["teams"].append(tm)
+    # convert comment categories
+    for comcat in list(project_data["comment_category"]):
+        cc = CommentCategory(**comcat)
+        project_data["comment_category"].remove(comcat)
+        project_data["comment_category"].append(cc)
     data_model = ProjectData(**project_data)
     return data_model
 
