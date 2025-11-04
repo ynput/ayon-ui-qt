@@ -97,41 +97,6 @@ class AYStatusChange(AYFrame):
         lyt = AYVBoxLayout(self, margin=0, spacing=0)
         lyt.addWidget(self._build_top_bar(), stretch=0)
 
-    @staticmethod
-    def parse(data: dict):
-        """Take a comment payload, and return a CommentModel dataclass.
-
-        Args:
-            data (dict): JSON payload from the activity stream.
-
-        Returns:
-            CommentModel: Contains all required comment data.
-        """
-        full_name = (
-            data.get("author", {}).get("attrib", {}).get("fullName", "Someone")
-        )
-
-        activity_data = data.get("activityData", {})
-        if isinstance(activity_data, str):
-            activity_data = json.loads(activity_data)
-        # print(f"STATUS CHANGE: {json.dumps(activity_data, indent=4)}")
-        parents = activity_data.get("parents")
-        product = [p for p in parents if p["type"] == "product"][0].get(
-            "name", "UnknownProduct"
-        )
-        version = activity_data.get("origin", {}).get("name", "v???")
-
-        return StatusChangeModel(
-            user_full_name=full_name,
-            user_name=full_name.split()[0],
-            user_src="",
-            product=product,
-            version=version,
-            old_status=activity_data.get("oldValue", "oldValue"),
-            new_status=activity_data.get("newValue", "newValue"),
-            date=data.get("updatedAt", "UnknownDate"),
-        )
-
 
 # PUBLISH ---------------------------------------------------------------------
 
@@ -187,35 +152,6 @@ class AYPublish(AYFrame):
             )
             self.user_name.setText(self._data.user_name)
             self.date.setText(self._data.short_date)
-
-    @staticmethod
-    def parse(data: dict):
-        """Take a comment payload, and return a CommentModel dataclass.
-
-        Args:
-            data (dict): JSON payload from the activity stream.
-
-        Returns:
-            CommentModel: Contains all required comment data.
-        """
-        full_name = (
-            data.get("author", {}).get("attrib", {}).get("fullName", "Someone")
-        )
-
-        activity_data = data.get("activityData", {})
-        if isinstance(activity_data, str):
-            activity_data = json.loads(activity_data)
-        context = activity_data.get("context")
-        origin = activity_data.get("origin")
-
-        return VersionPublishModel(
-            user_full_name=full_name,
-            user_name=full_name.split()[0],
-            user_src="",
-            version=origin.get("name", "no version"),
-            product=context.get("productName", "no product name"),
-            date=data.get("updatedAt", "not available"),
-        )
 
 
 # COMMENT ---------------------------------------------------------------------
@@ -409,27 +345,6 @@ class AYComment(AYFrame):
             )
             self.user_name.setText(self._data.user_name)
             self.date.setText(self._data.short_date)
-
-    @staticmethod
-    def parse(data: dict):
-        """Take a comment payload, and return a CommentModel dataclass.
-
-        Args:
-            data (dict): JSON payload from the activity stream.
-
-        Returns:
-            CommentModel: Contains all required comment data.
-        """
-        full_name = (
-            data.get("author", {}).get("attrib", {}).get("fullName", "Someone")
-        )
-        return CommentModel(
-            user_full_name=full_name,
-            user_name=full_name.split()[0],
-            user_src="",
-            comment=data.get("body", ""),
-            comment_date=data.get("updatedAt", "not available"),
-        )
 
 
 if __name__ == "__main__":
