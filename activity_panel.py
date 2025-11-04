@@ -79,15 +79,15 @@ class ActivityPanel(AYContainer):
         """Build and configure the panel's UI components."""
         # add header
         self.details = AYDetailPanel(self)
-        self.addWidget(self.details, stretch=0)
+        self.add_widget(self.details, stretch=0)
 
         # add scrolling layout displaying activities
         self.stream = AYActivityStream(self, category=self._category)
-        self.addWidget(self.stream, stretch=10)
+        self.add_widget(self.stream, stretch=10)
 
         # add comment editor
         self.editor = AYTextBox(num_lines=4, show_categories=True)
-        self.addWidget(self.editor, stretch=0)
+        self.add_widget(self.editor, stretch=0)
 
         # connect signals
         self.editor.signals.comment_submitted.connect(

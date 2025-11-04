@@ -214,8 +214,8 @@ class AYDetailPanel(AYContainer):
         grid_lyt.addLayout(self.assignee, 1, 1)
         grid_lyt.addLayout(self.webactions, 2, 0)
 
-        self.addWidget(self.entity_path)
-        self.addLayout(grid_lyt)
+        self.add_widget(self.entity_path)
+        self.add_layout(grid_lyt)
 
         # connect signals
         self.status.currentTextChanged.connect(

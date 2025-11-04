@@ -275,10 +275,10 @@ class AYComment(AYFrame):
             variant="low",
             layout_spacing=8,
         )
-        cntr.addWidget(self.user_icon)
-        cntr.addWidget(self.user_name)
+        cntr.add_widget(self.user_icon)
+        cntr.add_widget(self.user_name)
         cntr.addStretch()
-        cntr.addWidget(self.date)
+        cntr.add_widget(self.date)
         return cntr
 
     def _build_editor_toolbar(self):
