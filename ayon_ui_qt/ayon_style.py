@@ -4,6 +4,7 @@ import copy
 import json
 from functools import partial
 from pathlib import Path
+import logging
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -21,6 +22,8 @@ from qtpy.QtWidgets import (
     QStyleOptionButton,
     QStyleOptionComboBox,
     QStyleOptionComplex,
+    QStyleOptionFrame,
+    QToolTip,
     QWidget,
 )
 
@@ -30,6 +33,12 @@ except ImportError:
     from .vendor.qtmaterialsymbols import get_icon
 
 from .components.combo_box import Item
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s]:   %(funcName)16s:  %(message)s",
+)
+log = logging.getLogger("Ayon Style")
 
 
 def _all_enums(t):
@@ -1208,6 +1217,133 @@ class LabelDrawer:
 # ----------------------------------------------------------------------------
 
 
+class TooltipDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    @property
+    def base_class(self):
+        return {"QToolTip": QToolTip}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ShapedFrame,
+                "QToolTip",
+            ): self.draw_control,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelTipLabel,
+                "QToolTip",
+            ): partial(
+                self.draw_primitive, QStyle.PrimitiveElement.PE_PanelTipLabel
+            ),
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_Frame,
+                "QToolTip",
+            ): partial(self.draw_primitive, QStyle.PrimitiveElement.PE_Frame),
+        }
+
+    def register_sizers(self):
+        return {
+            enum_to_str(
+                QStyle.SubElement,
+                QStyle.SubElement.SE_ShapedFrameContents,
+                "QToolTip",
+            ): self.get_rect,
+            enum_to_str(
+                QStyle.SubElement,
+                QStyle.SubElement.SE_FrameLayoutItem,
+                "QToolTip",
+            ): self.get_rect,
+        }
+
+    def draw_control(
+        self,
+        option: QStyleOptionFrame,
+        painter: QPainter,
+        widget: QWidget,
+    ):
+        option.frameShadow = QFrame.Shadow.Plain
+        option.frameShape = QFrame.Shape.StyledPanel
+        super(AYONStyle, self.style_inst).drawControl(
+            QStyle.ControlElement.CE_ShapedFrame, option, painter, widget
+        )
+
+    def draw_primitive(
+        self,
+        prim: QStyle.PrimitiveElement,
+        option: QStyleOption,
+        painter: QPainter,
+        w: QWidget,
+    ) -> None:
+        if prim == QStyle.PrimitiveElement.PE_Frame:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            style = self.model.get_style("QToolTip")
+            pen = QPen(style["border-color"])
+            pen.setWidth(style["border-width"])
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(pen)
+            radius = int(style["border-radius"])
+            painter.drawRoundedRect(
+                option.rect,
+                radius,
+                radius,
+            )
+            painter.restore()
+
+        elif prim == QStyle.PrimitiveElement.PE_PanelTipLabel:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            style = self.model.get_style("QToolTip")
+            brush = QBrush(style["background-color"])
+            painter.setBrush(brush)
+            painter.setPen(Qt.PenStyle.NoPen)
+            radius = int(style["border-radius"])
+            painter.drawRoundedRect(
+                option.rect,
+                radius,
+                radius,
+            )
+            painter.restore()
+
+    def get_rect(
+        self,
+        element: QStyle.SubElement,
+        option: QStyleOption,
+        widget: QWidget,
+    ) -> QRect:
+        tt_style = self.model.get_style("QToolTip")
+        tt_pad_x, tt_pad_y = tt_style["padding"]
+
+        if element == QStyle.SubElement.SE_ShapedFrameContents:
+            if isinstance(option, QStyleOptionFrame):
+                option.features = QStyleOptionFrame.FrameFeature.Rounded
+                option.frameShape = QFrame.Shape.StyledPanel
+                widget.setContentsMargins(
+                    tt_pad_x, tt_pad_y, tt_pad_x, tt_pad_y
+                )
+
+        elif element == QStyle.SubElement.SE_FrameLayoutItem:
+            if isinstance(option, QStyleOptionFrame):
+                option.features = QStyleOptionFrame.FrameFeature.Rounded
+                option.frameShape = QFrame.Shape.StyledPanel
+                widget.setContentsMargins(
+                    tt_pad_x, tt_pad_y, tt_pad_x, tt_pad_y
+                )
+
+        return super(AYONStyle, self.style_inst).subElementRect(
+            element, option, widget
+        )
+
+
+# ----------------------------------------------------------------------------
+
+
 class AYONStyle(QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
@@ -1222,6 +1358,7 @@ class AYONStyle(QCommonStyle):
         self.metrics = {}
         self.base_classes = {}
         self.drawer_objs = [
+            TooltipDrawer(self),
             LabelDrawer(self),  # first because QLabel inherits from QFrame.
             ButtonDrawer(self),
             CheckboxDrawer(self),
@@ -1242,6 +1379,18 @@ class AYONStyle(QCommonStyle):
         if w:
             for name, wtype in self.base_classes.items():
                 if issubclass(type(w), wtype):
+                    if w.objectName() == "qtooltip_label":
+                        return "QToolTip"
+                    if isinstance(w, QLabel):
+                        p = w.parent()
+                        # NOTE: Qt does not use QToolTip but a QLabel (a private
+                        # QLabelTip class) !!
+                        # if the parent is a widget and it doesn't have a
+                        # layout, it could be a tooltip.
+                        # Sometimes, objectName() == "qtooltip_label" but the
+                        # object name is set when the rect requests are made.
+                        if p and isinstance(p, QWidget) and not p.layout():
+                            return "QToolTip"
                     return name
         return ""
 
@@ -1262,6 +1411,16 @@ class AYONStyle(QCommonStyle):
                 widget.setSizeAdjustPolicy(
                     QComboBox.SizeAdjustPolicy.AdjustToContents
                 )
+            elif isinstance(widget, QLabel):
+                # rounded corner no background.
+                widget.setAttribute(
+                    Qt.WidgetAttribute.WA_TranslucentBackground, True
+                )
+                widget.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+                widget.setWindowFlag(
+                    Qt.WindowType.NoDropShadowWindowHint, True
+                )
+
         elif isinstance(widget, QPalette):
             print("YES")
 
@@ -1278,11 +1437,13 @@ class AYONStyle(QCommonStyle):
         w: QWidget | None = None,
     ) -> None:
         """Draw control elements (buttons, labels, etc.)."""
+        key = enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
+
+        if isinstance(w, QLabel):
+            log.debug("%s %s", type(w), key)
 
         try:
-            draw_ce_calls = self.drawers[
-                enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
-            ]
+            draw_ce_calls = self.drawers[key]
         except KeyError:
             # no custom drawer fallback
             super().drawControl(element, option, painter, w)
@@ -1321,9 +1482,12 @@ class AYONStyle(QCommonStyle):
     ) -> None:
         """Draw primitive elements."""
 
-        k = enum_to_str(QStyle.PrimitiveElement, element, self.widget_key(w))
+        key = enum_to_str(QStyle.PrimitiveElement, element, self.widget_key(w))
+        if isinstance(w, QLabel):
+            log.debug("%s %s", w, key)
+
         try:
-            draw_prim = self.drawers[k]
+            draw_prim = self.drawers[key]
         except KeyError:
             # Fall back to parent implementation
             # print(f"no match for {k}")
@@ -1339,13 +1503,13 @@ class AYONStyle(QCommonStyle):
         widget: QWidget | None = None,
     ) -> QRect:
         """Calculate rectangles for sub-elements."""
+        key = enum_to_str(QStyle.SubElement, element, self.widget_key(widget))
+
+        if isinstance(widget, QLabel):
+            log.debug("%s %s", type(widget).__name__, key)
 
         try:
-            sizer = self.sizers[
-                enum_to_str(
-                    QStyle.SubElement, element, self.widget_key(widget)
-                )
-            ]
+            sizer = self.sizers[key]
         except KeyError:
             # Fall back to parent implementation
             return super().subElementRect(element, option, widget)
@@ -1359,10 +1523,13 @@ class AYONStyle(QCommonStyle):
         sc: QStyle.SubControl,
         w: QWidget | None = None,
     ) -> QRect:
+        key = enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
+
+        if isinstance(w, QLabel):
+            log.debug("%s %s", type(w).__name__, key)
+
         try:
-            sizer = self.sizers[
-                enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
-            ]
+            sizer = self.sizers[key]
         except KeyError:
             # Fall back to parent implementation
             return super().subControlRect(cc, opt, sc, w)
@@ -1380,13 +1547,13 @@ class AYONStyle(QCommonStyle):
     ) -> int:
         """Return pixel measurements for various style metrics."""
         # print(f"PM: {metric}")
+        key = enum_to_str(QStyle.PixelMetric, metric, self.widget_key(widget))
+
+        if isinstance(widget, QLabel):
+            log.debug("%s %s", type(widget), key)
 
         try:
-            metric_func = self.metrics[
-                enum_to_str(
-                    QStyle.PixelMetric, metric, self.widget_key(widget)
-                )
-            ]
+            metric_func = self.metrics[key]
         except KeyError:
             # Fall back to parent implementation
             return super().pixelMetric(metric, opt, widget)
@@ -1421,13 +1588,15 @@ class AYONStyle(QCommonStyle):
     ) -> QtCore.QSize:
         """Calculate minimum size requirements for widgets based on their content."""
         # print(f"CT: {contents_type}")
+        key = enum_to_str(
+            QStyle.ContentsType, contents_type, self.widget_key(widget)
+        )
+
+        if isinstance(widget, QLabel):
+            log.debug("%s", widget)
 
         try:
-            sizer = self.sizers[
-                enum_to_str(
-                    QStyle.ContentsType, contents_type, self.widget_key(widget)
-                )
-            ]
+            sizer = self.sizers[key]
         except KeyError:
             if option:
                 return super().sizeFromContents(
@@ -1532,7 +1701,9 @@ if __name__ == "__main__":
 
         l1 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):
-            b = AYButton(f"{var} button", variant=var)
+            b = AYButton(
+                f"{var} button", variant=var, tooltip=f"using variant {var}..."
+            )
             l1.addWidget(b)
         container_1.add_layout(l1)
 
@@ -1562,7 +1733,9 @@ if __name__ == "__main__":
             layout_margin=10,
             layout_spacing=10,
         )
-        container_3.add_widget(QtWidgets.QCheckBox("CheckBox"))
+        cb = QtWidgets.QCheckBox("CheckBox")
+        cb.setToolTip(("A typical switch..."))
+        container_3.add_widget(cb)
         te = AYTextBox()
         te.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"

@@ -270,6 +270,19 @@
                 }
             }
         },
+        "QToolTip": {
+            "states": {},
+            "default-variant": "",
+            "variants": {
+                "": {
+                    "padding": [8, 8],
+                    "border-radius": 4,
+                    "border-width": 1,
+                    "border-color": "--md-sys-color-outline-dark",
+                    "background-color": "--md-sys-color-background-lowest-dark"
+                }
+            }
+        },
         "QLabel": {
             "default-variant": "",
             "variants": {

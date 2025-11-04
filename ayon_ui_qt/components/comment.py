@@ -287,6 +287,7 @@ class AYComment(AYFrame):
             variant="nav-small",
             icon="add_reaction",
             icon_color="#888",
+            tooltip="Not Implemented Yet !",
             parent=self,
         )
         self.cancel_edit = AYButton("Cancel", variant="nav", parent=self)
