@@ -105,7 +105,12 @@ class AYLabel(QtWidgets.QLabel):
             self.initPainter(p)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            b = QBrush(QColor(self._icon_color))
+            b = QBrush(
+                QColor(
+                    self._icon_color
+                    or self.palette().color(self.foregroundRole()).name()
+                )
+            )
             p.setBrush(b)
             p.setPen(Qt.PenStyle.NoPen)
             radius = self.rect().height() / (
@@ -228,10 +233,10 @@ if __name__ == "__main__":
             rel_text_size=-2,
         )
         l7 = AYLabel(
-            "small pill",
-            icon_color="#cd8de2",
-            variant="pill",
-            tool_tip="pill variant",
+            "bad badge",
+            icon_color="",
+            variant="badge",
+            tool_tip="Badly configured badge",
             rel_text_size=-2,
         )
         w.add_widget(l1, stretch=0)
