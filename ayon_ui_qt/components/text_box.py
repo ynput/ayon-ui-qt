@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from functools import partial
 
-from qtpy import QtCore, QtWidgets
+from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy import QtWidgets
 from qtpy.QtGui import (
     QFont,
     QTextCursor,
@@ -12,6 +15,8 @@ from qtpy.QtWidgets import QSizePolicy, QTextEdit
 from .buttons import AYButton
 from .frame import AYFrame
 from .layouts import AYHBoxLayout, AYVBoxLayout
+from .combo_box import AYComboBox
+from ..data_models import CommentCategory, ProjectData
 
 
 class AYTextEditor(QTextEdit):
@@ -132,9 +137,32 @@ class AYTextEditor(QTextEdit):
         print(f"format: {format}")
 
 
-class AYTextBoxSignals(QtCore.QObject):
+def _dict_from_comment_category(
+    comment_categories: list[CommentCategory],
+) -> list[dict]:
+    if comment_categories:
+        return [
+            {
+                "text": c.name,
+                "short_text": c.name,
+                "icon": "crop_square",
+                "color": c.color,
+            }
+            for c in comment_categories
+        ]
+    return [
+        {
+            "text": "No category",
+            "short_text": "No category",
+            "icon": "crop_square",
+            "color": "#707070",
+        }
+    ]
+
+
+class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
-    comment_submitted = QtCore.Signal(str)  # type: ignore
+    comment_submitted = Signal(str, str)  # type: ignore
 
 
 class AYTextBox(AYFrame):
@@ -153,26 +181,41 @@ class AYTextBox(AYFrame):
         "fmt_checklist": "checklist",
     }
 
-    def __init__(self, num_lines=0, *args, **kwargs):
+    def __init__(
+        self,
+        *args,
+        num_lines=0,
+        show_categories=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
+
+        self.show_categories = show_categories
+        self.comment_categories: list[dict] = _dict_from_comment_category([])
+        self.category = self.comment_categories[0]["text"]
         self._build(num_lines)
 
     def _build_upper_bar(self):
         grp_spacing = 16
         lyt = AYHBoxLayout(self, spacing=0, margin=0)
+        # comment category if available
+        if self.show_categories:
+            self.com_cat = AYComboBox(
+                parent=self, items=self.comment_categories
+            )
+            self.com_cat.currentTextChanged.connect(self._on_category_changed)
+            lyt.addWidget(self.com_cat)
+        lyt.addStretch()
+        # styling buttons
         for var, icn in self.style_icons.items():
             setattr(self, var, AYButton(self, variant="nav", icon=icn))
             lyt.addWidget(getattr(self, var))
-        # separator
-        lyt.addSpacing(grp_spacing)
+        # formatting buttons
         for var, icn in self.format_icons.items():
             setattr(self, var, AYButton(self, variant="nav", icon=icn))
             lyt.addWidget(getattr(self, var))
         lyt.addSpacing(grp_spacing)
         lyt.addWidget(AYButton(self, variant="nav", icon="attach_file"))
-        lyt.addSpacerItem(
-            QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
-        )
         return lyt
 
     def _build_edit_field(self, num_lines):
@@ -202,7 +245,18 @@ class AYTextBox(AYFrame):
     def _on_comment_clicked(self) -> None:
         """Handle comment button click and emit signal with markdown content."""
         markdown_content = self.edit_field.document().toMarkdown()
-        self.signals.comment_submitted.emit(markdown_content)
+        self.signals.comment_submitted.emit(markdown_content, self.category)
+
+    def _on_category_changed(self, category: str) -> None:
+        self.category = category
+
+    @Slot(ProjectData)
+    def on_ctlr_project_changed(self, data: ProjectData):
+        self.comment_categories = _dict_from_comment_category(
+            data.comment_category
+        )
+        if self.show_categories:
+            self.com_cat.update_items(self.comment_categories)
 
     def _build(self, num_lines):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
@@ -232,7 +286,9 @@ if __name__ == "__main__":
         )
         w.addWidget(ww)
         ww.signals.comment_submitted.connect(
-            lambda x: print(f"Comment {'=' * 70}\n{x}{'=' * 78}")
+            lambda x, y: print(
+                f"Comment [{y}] {'=' * (70 - len(y) - 2)}\n{x}{'=' * 78}"
+            )
         )
         return w
 

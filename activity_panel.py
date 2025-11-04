@@ -32,7 +32,7 @@ class ActivityPanelSignals(QObject):
     """All signals emitted by the activity panel."""
 
     # Signal emitted when comment button is clicked, passes markdown content
-    ui_comment_submitted = Signal(str)  # type: ignore
+    ui_comment_submitted = Signal(str, str)  # type: ignore
     ui_comment_edited = Signal(CommentModel)  # type: ignore
     ui_comment_deleted = Signal(CommentModel)  # type: ignore
     ui_assignee_changed = Signal(str)  # type: ignore
@@ -59,6 +59,7 @@ class ActivityPanel(AYContainer):
         category: AYActivityStream.Categories = "all",
     ) -> None:
         self._project = ProjectData.not_set()
+        self._version_data: VersionData = VersionData.not_set()
         self._activities = activities or ActivityData()
         self._category: AYActivityStream.Categories = category
 
@@ -85,7 +86,7 @@ class ActivityPanel(AYContainer):
         self.addWidget(self.stream, stretch=10)
 
         # add comment editor
-        self.editor = AYTextBox(num_lines=3)
+        self.editor = AYTextBox(num_lines=4, show_categories=True)
         self.addWidget(self.editor, stretch=0)
 
         # connect signals
@@ -117,6 +118,7 @@ class ActivityPanel(AYContainer):
         self._project = data
         self.stream.on_project_changed(data)
         self.details.on_ctlr_project_changed(data)
+        self.editor.on_ctlr_project_changed(data)
 
     @Slot(VersionData)
     def on_ctlr_version_changed(self, data: VersionData) -> None:
@@ -147,7 +149,9 @@ if __name__ == "__main__":
 
         # setup signals
         w.signals.ui_comment_submitted.connect(
-            lambda x: print(f"ActivityPanel.signals.comment_submitted: {x!r}")  # noqa: T201
+            lambda md, cat: print(
+                f"ActivityPanel.signals.comment_submitted: [{cat}] {md!r}"
+            )  # noqa: T201
         )
         w.signals.ui_status_changed.connect(
             lambda x: print(f"ActivityPanel.signals.status_changed: {x!r}")  # noqa: T201
