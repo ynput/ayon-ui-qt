@@ -279,15 +279,17 @@ class AYActivityStream(AYContainer):
     @Slot(ProjectData)
     def on_project_changed(self, data: ProjectData) -> None:
         """Store new project data and clear the activity stream."""
+        if self._project and self._project.project_name != data.project_name:
+            self._clear_stream()
         self._project = data
-        self._clear_stream()
 
     @Slot(VersionData)
     def on_version_data_changed(self, data: VersionData) -> None:
         """Store new version data and clear the activity stream."""
         # display attributes
+        if self._version and self._version.id != data.id:
+            self._clear_stream()
         self._version = data
-        self._clear_stream()
 
 
 #  TEST ======================================================================
