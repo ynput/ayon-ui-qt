@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 
 from PySide6.QtCore import QEvent, Signal
-from PySide6.QtGui import QEnterEvent
+from PySide6.QtGui import QEnterEvent, QTextDocument
 from qtpy.QtWidgets import QTextEdit, QMessageBox
 
 from .buttons import AYButton
@@ -220,17 +220,19 @@ class AYPublish(AYFrame):
 
 # COMMENT ---------------------------------------------------------------------
 
+MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+
 
 class AYCommentField(QTextEdit):
     def __init__(self, *args, text="", read_only=False, num_lines=0, **kwargs):
         # remove our kwargs
         self._num_lines = num_lines
-        self._text: str = text
         self._read_only: bool = read_only
 
         super().__init__(*args, **kwargs)
+        self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
         self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
-        self.setMarkdown(self._text)
+        self.set_markdown(text)
 
         # configure
         if num_lines:
@@ -242,6 +244,12 @@ class AYCommentField(QTextEdit):
                 "Comment or mention with @user, @@version, @@@task..."
             )
         self.setReadOnly(self._read_only)
+
+    def set_markdown(self, md: str) -> None:
+        self.document().setMarkdown(md, MD_DIALECT)
+
+    def as_markdown(self) -> str:
+        return self.document().toMarkdown(MD_DIALECT)
 
 
 class AYComment(AYFrame):
@@ -256,7 +264,7 @@ class AYComment(AYFrame):
         self._build()
         # configure
         if self._data:
-            self.text_field.setMarkdown(self._data.comment)
+            self.text_field.set_markdown(self._data.comment)
             self.date.setText(self._data.short_date)
 
     def _build_top_bar(self):
@@ -355,7 +363,7 @@ class AYComment(AYFrame):
         self.text_field.setReadOnly(True)
         self.cancel_edit.setVisible(False)
         self.save_edit.setVisible(False)
-        self.text_field.setPlainText(self._data.comment)
+        self.text_field.set_markdown(self._data.comment)
         self._show_edit_buttons(True)
 
     def _save_edit(self):
@@ -363,7 +371,7 @@ class AYComment(AYFrame):
         self.cancel_edit.setVisible(False)
         self.save_edit.setVisible(False)
         self._show_edit_buttons(True)
-        self._data.comment = self.text_field.toPlainText()
+        self._data.comment = self.text_field.as_markdown()
         self.comment_edited.emit(self._data)
 
     def _confirm_delete(self):
@@ -442,7 +450,7 @@ if __name__ == "__main__":
             variant="low",
         )
 
-        w.addWidget(
+        w.add_widget(
             AYComment(
                 data=CommentModel(
                     user_src=str(av1),
@@ -451,7 +459,7 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.addWidget(
+        w.add_widget(
             AYComment(
                 data=CommentModel(
                     user_src=(str(av2)),
@@ -460,7 +468,7 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.addWidget(
+        w.add_widget(
             AYComment(
                 data=CommentModel(
                     user_full_name="Katniss Evergreen",
@@ -468,7 +476,7 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.addWidget(AYTextBox(num_lines=3))
+        w.add_widget(AYTextBox(num_lines=3))
         return w
 
     test(build, style=Style.Widget)

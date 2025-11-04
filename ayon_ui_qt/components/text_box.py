@@ -19,6 +19,9 @@ from .combo_box import AYComboBox
 from ..data_models import CommentCategory, ProjectData
 
 
+MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+
+
 class AYTextEditor(QTextEdit):
     def __init__(
         self, *args, num_lines: int = 0, read_only: bool = False, **kwargs
@@ -244,7 +247,7 @@ class AYTextBox(AYFrame):
 
     def _on_comment_clicked(self) -> None:
         """Handle comment button click and emit signal with markdown content."""
-        markdown_content = self.edit_field.document().toMarkdown()
+        markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
         self.signals.comment_submitted.emit(markdown_content, self.category)
 
     def _on_category_changed(self, category: str) -> None:
@@ -265,9 +268,7 @@ class AYTextBox(AYFrame):
         lyt.addLayout(self._build_lower_bar())
 
     def set_markdown(self, md: str):
-        self.edit_field.document().setMarkdown(
-            md, QTextDocument.MarkdownFeature.MarkdownDialectGitHub
-        )
+        self.edit_field.document().setMarkdown(md, MD_DIALECT)
 
 
 # TEST ------------------------------------------------------------------------
