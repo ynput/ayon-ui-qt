@@ -254,6 +254,7 @@ class AYActivityStream(AYContainer):
         w = AYComment(self, data=m)
         self.scroll_ctnr.insert_widget(idx, w)
         self._activities.activity_list.append(m)
+        style_widget_and_siblings(self)
 
     @Slot(str)
     def _on_view_changed(self, category: Categories) -> None:
