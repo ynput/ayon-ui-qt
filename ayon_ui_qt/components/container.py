@@ -1,7 +1,9 @@
-from enum import Enum
-from typing import Any, Literal
+from __future__ import annotations
 
-from qtpy import QtWidgets
+from enum import Enum
+from typing import Literal
+
+from qtpy.QtWidgets import QWidget, QLayout, QLayoutItem
 from qtpy.QtCore import Qt
 
 from .frame import AYFrame
@@ -43,7 +45,7 @@ class AYContainer(AYFrame):
 
     def add_widget(
         self,
-        w: QtWidgets.QWidget,
+        w: QWidget,
         stretch: int = 0,
         row: int = 0,
         column: int = 0,
@@ -58,26 +60,29 @@ class AYContainer(AYFrame):
 
     def add_layout(
         self,
-        l: QtWidgets.QLayout,
+        lyt: QLayout,
         stretch: int = 0,
         row: int = 0,
         column: int = 0,
         alignment: Qt.AlignmentFlag = 0,  # type: ignore
     ):
         if isinstance(self._layout, (AYHBoxLayout, AYVBoxLayout)):
-            self._layout.addLayout(l, stretch=stretch)
+            self._layout.addLayout(lyt, stretch=stretch)
         elif isinstance(self._layout, AYGridLayout):
-            self._layout.addLayout(l, row, column, alignment)
+            self._layout.addLayout(lyt, row, column, alignment)
         else:
             raise ValueError(f"Unknown Layout type : {self._layout}")
 
-    def __getattr__(self, name: str) -> Any:
-        """allow to call layout methods"""
-        try:
-            return getattr(self._layout, name)
-        except AttributeError:
-            err = f"'{type(self).__name__}' object has no attribute '{name}'"
-            raise AttributeError(err)
+    def count(self) -> int:
+        return self._layout.count()
+
+    def addStretch(self, stretch: int = 0) -> None:
+        if isinstance(self._layout, AYGridLayout):
+            return
+        self._layout.addStretch(stretch=stretch)
+
+    def takeAt(self, index: int) -> QLayoutItem:
+        return self._layout.takeAt(index)
 
 
 if __name__ == "__main__":
