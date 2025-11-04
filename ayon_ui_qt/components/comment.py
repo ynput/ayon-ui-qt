@@ -202,6 +202,7 @@ class AYComment(AYFrame):
         if self._data:
             self.text_field.set_markdown(self._data.comment)
             self.date.setText(self._data.short_date)
+            self.set_comment_category()
 
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
@@ -264,6 +265,8 @@ class AYComment(AYFrame):
         self.edit_button.setFixedSize(bsize, bsize)
         self.edit_frame.add_widget(self.del_button)
         self.edit_frame.add_widget(self.edit_button)
+        self.top_line.addStretch(100)
+        self.top_line.add_widget(self.edit_frame)
         self.edit_frame.setVisible(False)
         self.del_button.clicked.connect(self._confirm_delete)
         self.edit_button.clicked.connect(self._edit_comment)
@@ -278,7 +281,9 @@ class AYComment(AYFrame):
         editor_lyt = AYContainer(
             layout=AYContainer.Layout.VBox, variant="high"
         )
-        self.top_line = AYFrame(variant="high")
+        self.top_line = AYContainer(
+            layout=AYContainer.Layout.HBox, variant="high"
+        )
         self.top_line.setFixedHeight(20)
         editor_lyt.add_widget(self.top_line, stretch=0)
         editor_lyt.add_widget(self.text_field, stretch=10)
@@ -329,6 +334,17 @@ class AYComment(AYFrame):
             fr = self.edit_frame.rect()
             vr = self.text_field.visibleRegion().boundingRect()
             self.edit_frame.move((vr.width() + vr.x()) - fr.width(), 0)
+
+    def set_comment_category(self):
+        if not self._data.category:
+            return
+        cat = AYLabel(
+            self._data.category,
+            icon_color=self._data.category_color,
+            variant="badge",
+            rel_text_size=-2
+        )
+        self.top_line.insert_widget(0, cat)
 
     def enterEvent(self, event: QEnterEvent) -> None:
         self._show_edit_buttons(True)

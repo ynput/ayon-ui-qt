@@ -1,6 +1,17 @@
+from typing import Literal
+
 from qtpy import QtWidgets
 from qtpy.QtCore import QRect, QSize, Qt
-from qtpy.QtGui import QColor, QFont, QIcon, QPainter, QPaintEvent, QPalette
+from qtpy.QtGui import (
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QBrush,
+    QPen,
+)
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
@@ -9,6 +20,8 @@ except ImportError:
 
 
 class AYLabel(QtWidgets.QLabel):
+    Variant = Literal["", "badge", "pill"]
+
     def __init__(
         self,
         *args,
@@ -20,6 +33,7 @@ class AYLabel(QtWidgets.QLabel):
         rel_text_size: int = 0,
         bold: bool = False,
         tool_tip="",
+        variant="",
         **kwargs,
     ):
         self._dim = dim
@@ -29,6 +43,7 @@ class AYLabel(QtWidgets.QLabel):
         self._icon_text_spacing = icon_text_spacing
         self._rel_text_size = rel_text_size
         self._bold = bold
+        self._variant = variant
         self._text_setup_done = False
         self._style_palette = None
 
@@ -76,6 +91,39 @@ class AYLabel(QtWidgets.QLabel):
             self.setPalette(p)
         else:
             self.setPalette(self._style_palette)
+
+        if self._variant in ("badge", "pill"):
+            style = self.style()
+
+            t_rect = self.fontMetrics().boundingRect(self.text())
+            padx = int(self.fontMetrics().averageCharWidth() * 1.5)
+            pady = int(self.fontMetrics().height() * 0.25)
+            self.setFixedWidth(t_rect.width() + padx)
+            self.setFixedHeight(t_rect.height() + pady)
+
+            p = QPainter(self)
+            self.initPainter(p)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            b = QBrush(QColor(self._icon_color))
+            p.setBrush(b)
+            p.setPen(Qt.PenStyle.NoPen)
+            radius = self.rect().height() / (
+                5.0 if self._variant == "badge" else 2.0
+            )
+            p.drawRoundedRect(self.rect(), radius, radius)
+
+            style.drawItemText(
+                p,
+                self.rect(),
+                Qt.AlignmentFlag.AlignCenter,
+                self.palette(),
+                self.isEnabled(),
+                self.text(),
+                textRole=self.backgroundRole(),
+            )
+
+            return
 
         if self._text and self._icon:
 
@@ -166,10 +214,33 @@ if __name__ == "__main__":
             tool_tip="Text & icon with default color and 6px margin",
         )
         l4.setMargin(6)
+        l5 = AYLabel(
+            "Badge",
+            icon_color="#cd8de2",
+            variant="badge",
+            tool_tip="badge variant",
+        )
+        l6 = AYLabel(
+            "Badge",
+            icon_color="#cd8de2",
+            variant="badge",
+            tool_tip="badge variant",
+            rel_text_size=-2,
+        )
+        l7 = AYLabel(
+            "small pill",
+            icon_color="#cd8de2",
+            variant="pill",
+            tool_tip="pill variant",
+            rel_text_size=-2,
+        )
         w.add_widget(l1, stretch=0)
         w.add_widget(l2, stretch=0)
         w.add_widget(l3, stretch=0)
         w.add_widget(l4, stretch=0)
+        w.add_widget(l5, stretch=0)
+        w.add_widget(l6, stretch=0)
+        w.add_widget(l7, stretch=0)
         w.addStretch()
         return w
 

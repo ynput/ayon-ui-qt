@@ -82,6 +82,7 @@ class CommentModel:
     user_src: str = ""
     comment: str = ""
     category: str = ""
+    category_color: str = ""
     comment_date: str = ""
     short_date: str = field(init=False, hash=False)
     type: str = field(init=False, default="comment", hash=False)
