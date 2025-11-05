@@ -975,7 +975,7 @@ class ComboBoxDrawer:
     ):
         stl = self.model.get_style("QComboBox")
         option.backgroundBrush.setColor(QColor(stl["menu-background-color"]))
-        super(AYONStyle, w.style()).drawPrimitive(  # type: ignore
+        super(AYONStyle, self.style_inst).drawPrimitive(  # type: ignore
             QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, w
         )
 
@@ -1088,10 +1088,10 @@ class ScrollBarDrawer:
         if not w:
             raise ValueError
 
-        if not isinstance(w.style(), AYONStyle):
+        if not isinstance(self.style_inst, AYONStyle):
             raise ValueError
 
-        sup = super(AYONStyle, w.style())  # type: ignore
+        sup = super(AYONStyle, self.style_inst)  # type: ignore
         try:
             als = self._cache["add_line_size"]
         except KeyError:
