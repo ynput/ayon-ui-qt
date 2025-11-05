@@ -14,6 +14,41 @@
             "full_name": "Petr Kalis",
             "email": "petr.kalis@ynput.io",
             "avatar_url": null
+        },
+        {
+            "name": "philippe_ynput.io",
+            "short_name": "Philippe",
+            "full_name": "Philippe Leprince",
+            "email": "philippe@ynput.io",
+            "avatar_url": null
+        },
+        {
+            "name": "milan_ynput.io",
+            "short_name": "Milan",
+            "full_name": "Milan Kolar",
+            "email": "milan@ynput.io",
+            "avatar_url": null
+        },
+        {
+            "name": "sevag_ynput.io",
+            "short_name": "Sevag",
+            "full_name": "Sevag Chamelian",
+            "email": "sevag@ynput.io",
+            "avatar_url": null
+        },
+        {
+            "name": "roy_ynput.io",
+            "short_name": "Roy",
+            "full_name": "Roy Nieterau",
+            "email": "roy@ynput.io",
+            "avatar_url": null
+        },
+        {
+            "name": "libor_ynput.io",
+            "short_name": "Libor",
+            "full_name": "Libor Batek",
+            "email": "libor@ynput.io",
+            "avatar_url": null
         }
     ],
     "teams": [

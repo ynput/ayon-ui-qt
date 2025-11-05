@@ -18,7 +18,7 @@ from ayon_ui_qt.utils import (
     get_test_project_data,
     get_test_version_data,
 )
-from qtpy.QtCore import QObject, Signal, Slot, QTimer  # type: ignore
+from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
 from activity_stream import AYActivityStream
@@ -87,7 +87,9 @@ class ActivityPanel(AYContainer):
         self.add_widget(self.stream, stretch=10)
 
         # add comment editor
-        self.editor = AYTextBox(num_lines=4, show_categories=True)
+        self.editor = AYTextBox(
+            num_lines=4, show_categories=True, user_list=self._project.users
+        )
         self.add_widget(self.editor, stretch=0)
 
         # connect signals

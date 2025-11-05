@@ -12,11 +12,18 @@ from .label import AYLabel
 from .layouts import AYVBoxLayout, AYHBoxLayout
 from .user_image import AYUserImage
 from .combo_box import ALL_STATUSES
+from .comment_completion import (
+    setup_user_completer,
+    on_completer_text_changed,
+    on_completer_activated,
+    on_completer_key_press,
+)
 from ..data_models import (
     StatusChangeModel,
     StatusUiModel,
     VersionPublishModel,
     CommentModel,
+    User,
 )
 
 
@@ -159,10 +166,19 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYCommentField(QTextEdit):
-    def __init__(self, *args, text="", read_only=False, num_lines=0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        text: str = "",
+        read_only: bool = False,
+        num_lines: int = 0,
+        user_list: list[User] | None = None,
+        **kwargs,
+    ) -> None:
         # remove our kwargs
         self._num_lines = num_lines
         self._read_only: bool = read_only
+        self._user_list: list[User] = user_list or []
 
         super().__init__(*args, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
@@ -180,19 +196,48 @@ class AYCommentField(QTextEdit):
             )
         self.setReadOnly(self._read_only)
 
+        # Setup user completer
+        setup_user_completer(
+            self,
+            self._on_completer_activated,
+            self._on_text_changed,
+        )
+
     def set_markdown(self, md: str) -> None:
         self.document().setMarkdown(md, MD_DIALECT)
 
     def as_markdown(self) -> str:
         return self.document().toMarkdown(MD_DIALECT)
 
+    def _on_text_changed(self) -> None:
+        """Handle text changes to show/hide completer."""
+        on_completer_text_changed(self)
+
+    def _on_completer_activated(self, text: str) -> None:
+        """Handle completer selection."""
+        on_completer_activated(self, text)
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key press events for completer."""
+        if on_completer_key_press(self, event):
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
 
 class AYComment(AYFrame):
     comment_deleted = Signal(object)
     comment_edited = Signal(object)
 
-    def __init__(self, *args, data: CommentModel | None = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        data: CommentModel | None = None,
+        user_list: list[User] | None = None,
+        **kwargs,
+    ):
         self._data = data if data else CommentModel()
+        self._user_list: list[User] = user_list or []
 
         super().__init__(*args, variant="low", **kwargs)
 
@@ -274,7 +319,10 @@ class AYComment(AYFrame):
         lyt = AYVBoxLayout(self, margin=0, spacing=0)
         lyt.addWidget(self._build_top_bar())
         self.text_field = AYCommentField(
-            self, text=self._data.comment, read_only=True
+            self,
+            text=self._data.comment,
+            read_only=True,
+            user_list=self._user_list,
         )
 
         editor_lyt = AYContainer(

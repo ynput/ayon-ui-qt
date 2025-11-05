@@ -221,7 +221,9 @@ class AYActivityStream(AYContainer):
             if category not in {"all", event.type}:
                 continue
             if isinstance(event, CommentModel):
-                comment = AYComment(self, data=event)
+                comment = AYComment(
+                    self, data=event, user_list=self._project.users
+                )
                 self.scroll_ctnr.add_widget(comment)
                 # connect signals
                 comment.comment_deleted.connect(self._on_comment_deleted)
@@ -238,12 +240,14 @@ class AYActivityStream(AYContainer):
                 )
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
-        # TODO(plp): the reaction button was looking wrong but it's overkill.
-        style_widget_and_siblings(self)
+        style_widget_and_siblings(self, fix_app=False)
 
     def on_comment_submitted(self, markdown: str, category: str) -> None:
         keys = [c.name for c in self._project.comment_category]
         cat = self._project.comment_category[keys.index(category)]
+
+        if not self._project.current_user:
+            raise ValueError("current_user MUST be provided !")
 
         m = CommentModel(
             user_full_name=self._project.current_user.full_name,
@@ -255,10 +259,10 @@ class AYActivityStream(AYContainer):
             comment_date=time_stamp(),
         )
         idx = self.scroll_ctnr.count() - 1
-        w = AYComment(self, data=m)
+        w = AYComment(self, data=m, user_list=self._project.users)
         self.scroll_ctnr.insert_widget(idx, w)
         self._activities.activity_list.append(m)
-        style_widget_and_siblings(self)
+        style_widget_and_siblings(self, fix_app=False)
 
     @Slot(str)
     def _on_view_changed(self, category: Categories) -> None:

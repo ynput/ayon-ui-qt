@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 
-from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
+from qtpy.QtCore import (
+    QObject,
+    Signal,  # type: ignore
+    Slot,  # type: ignore
+)  # type: ignore
 from qtpy import QtWidgets
 from qtpy.QtGui import (
     QFont,
@@ -10,25 +15,43 @@ from qtpy.QtGui import (
     QTextDocument,
     QTextFrameFormat,
 )
-from qtpy.QtWidgets import QSizePolicy, QTextEdit
+from qtpy.QtWidgets import (
+    QSizePolicy,
+    QTextEdit,
+)
 
 from .buttons import AYButton
 from .frame import AYFrame
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .combo_box import AYComboBox
-from ..data_models import CommentCategory, ProjectData
+from .comment_completion import (
+    setup_user_completer,
+    on_completer_text_changed,
+    on_completer_activated,
+    on_completer_key_press,
+    on_users_updated,
+)
+from ..data_models import CommentCategory, ProjectData, User
+from .. import style_widget_and_siblings
 
+logger = logging.getLogger(__name__)
 
 MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYTextEditor(QTextEdit):
     def __init__(
-        self, *args, num_lines: int = 0, read_only: bool = False, **kwargs
+        self,
+        *args,
+        num_lines: int = 0,
+        read_only: bool = False,
+        user_list: list[User] | None,
+        **kwargs,
     ):
         # remove our kwargs
         self.num_lines: int = num_lines
         self._read_only: bool = read_only
+        self._user_list: list[User] = user_list or []
 
         super().__init__(*args, **kwargs)
 
@@ -52,6 +75,30 @@ class AYTextEditor(QTextEdit):
                 "Comment or mention with @user, @@version, @@@task..."
             )
         self.setReadOnly(self._read_only)
+
+        # Setup user completer
+        setup_user_completer(
+            self,
+            self._on_completer_activated,
+            self._on_text_changed,
+        )
+
+        style_widget_and_siblings(self, fix_app=False)
+
+    def _on_text_changed(self) -> None:
+        """Handle text changes to show/hide completer."""
+        on_completer_text_changed(self)
+
+    def _on_completer_activated(self, text: str) -> None:
+        """Handle completer selection."""
+        on_completer_activated(self, text)
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key press events for completer."""
+        if on_completer_key_press(self, event):
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def set_style(self, style):
         cursor = self.textCursor()
@@ -189,6 +236,7 @@ class AYTextBox(AYFrame):
         *args,
         num_lines=0,
         show_categories=False,
+        user_list: list[User] | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -196,6 +244,7 @@ class AYTextBox(AYFrame):
         self.show_categories = show_categories
         self.comment_categories: list[dict] = _dict_from_comment_category([])
         self.category = self.comment_categories[0]["text"]
+        self._user_list: list[User] = user_list or []
         self._build(num_lines)
 
     def _build_upper_bar(self):
@@ -222,7 +271,9 @@ class AYTextBox(AYFrame):
         return lyt
 
     def _build_edit_field(self, num_lines):
-        self.edit_field = AYTextEditor(self, num_lines=num_lines)
+        self.edit_field = AYTextEditor(
+            self, num_lines=num_lines, user_list=self._user_list
+        )
         for var in self.style_icons:
             getattr(self, var).clicked.connect(
                 partial(self.edit_field.set_style, var)
@@ -261,6 +312,8 @@ class AYTextBox(AYFrame):
         )
         if self.show_categories:
             self.com_cat.update_items(self.comment_categories)
+        self.edit_field._user_list = self._user_list = data.users
+        on_users_updated(self.edit_field)
 
     def _build(self, num_lines):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
@@ -286,7 +339,7 @@ if __name__ == "__main__":
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
         )
-        w.addWidget(ww)
+        w.add_widget(ww)
         ww.signals.comment_submitted.connect(
             lambda x, y: print(
                 f"Comment [{y}] {'=' * (70 - len(y) - 2)}\n{x}{'=' * 78}"
