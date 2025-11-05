@@ -30,6 +30,7 @@ from .comment_completion import (
     on_completer_activated,
     on_completer_key_press,
     on_users_updated,
+    format_comment_on_change,
 )
 from ..data_models import CommentCategory, ProjectData, User
 from .. import style_widget_and_siblings
@@ -81,6 +82,9 @@ class AYTextEditor(QTextEdit):
             self,
             self._on_completer_activated,
             self._on_text_changed,
+        )
+        self.document().contentsChanged.connect(
+            lambda: format_comment_on_change(self)
         )
 
         style_widget_and_siblings(self, fix_app=False)
@@ -285,7 +289,7 @@ class AYTextBox(AYFrame):
         return self.edit_field
 
     def _build_lower_bar(self):
-        lyt = AYHBoxLayout(self, margin=0, spacing=0)
+        lyt = AYHBoxLayout(margin=0, spacing=0)
         for icn in ("person", "layers", "check_circle"):
             lyt.addWidget(AYButton(self, variant="nav", icon=icn))
         lyt.addSpacerItem(

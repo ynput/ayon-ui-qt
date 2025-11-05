@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 
 from qtpy.QtCore import Qt, QSize
 from qtpy.QtGui import (
@@ -7,6 +8,7 @@ from qtpy.QtGui import (
     QStandardItem,
     QPainter,
     QTextCursor,
+    QTextCharFormat
 )
 from qtpy.QtWidgets import (
     QCompleter,
@@ -18,7 +20,7 @@ from qtpy.QtWidgets import (
 
 from .user_image import AYUserImage
 from ..data_models import User
-from .. import style_widget_and_siblings
+from .. import style_widget_and_siblings, get_ayon_style
 
 
 class UserCompleterDelegate(QStyledItemDelegate):
@@ -293,3 +295,81 @@ def on_completer_key_press(
                     text_edit.completer.activated.emit(completion)
                     return True
     return False
+
+
+def format_comment_on_change(text_edit: QTextEdit) -> None:
+    """Format QTextDocument to highlight mentions starting with @.
+
+    Any word starting with @ will be formatted in red.
+    """
+    text_edit.document().blockSignals(True)
+
+    pal = get_ayon_style().model.base_palette
+    document = text_edit.document()
+    cursor = text_edit.textCursor()
+    fmt = cursor.charFormat()
+
+    # Create a format for red text
+    user_format = QTextCharFormat(fmt)
+    user_format.setForeground(pal.link())
+    url_format = QTextCharFormat(fmt)
+    url_format.setForeground(pal.link())
+    url_format.setFontUnderline(True)
+
+    # Create a format for normal text
+    normal_format = QTextCharFormat()
+
+    # Get all text from document
+    md = document.toMarkdown()
+
+    users = [u.full_name for u in text_edit._user_list]
+
+    # Find all words starting with @
+    p_user = r"(?P<user>@\w+( \w+)?)"
+    p_link = r"(?P<link>\[[\w\s]+\]\(.+\))"
+    p_raw_link = r"(?P<raw_link>https?://)"
+    p_all = f"{p_user}|{p_link}|{p_raw_link}"
+    matches = list(re.finditer(p_all, md))
+
+    # Clear all formatting first
+    cursor.select(QTextCursor.SelectionType.Document)
+    cursor.setCharFormat(normal_format)
+
+    # We parsed the markdown but the cursor if using the plain text, so we
+    # need to keep track of the number of extra markdown characters to keep
+    # things aligned.
+    xtra = 0
+    for match in matches:
+        for key, val in match.groupdict().items():
+            if val is None:
+                continue
+            if key == "user":
+                cursor.setPosition(match.start())
+                if val[1:] in users:
+                    cursor.setPosition(
+                        match.end(), QTextCursor.MoveMode.KeepAnchor
+                    )
+                else:
+                    cursor.setPosition(
+                        match.end() - len(val.split()[-1]),
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+
+                cursor.setCharFormat(user_format)
+            if key == "raw_link":
+                cursor.setPosition(match.start())
+                cursor.setPosition(
+                    match.end(), QTextCursor.MoveMode.KeepAnchor
+                )
+                cursor.setCharFormat(user_format)
+            elif key == "link":
+                p0 = match.start() - xtra
+                cursor.setPosition(p0)
+                link_name = re.search(r"\[(.+)\]", val).group(1)
+                p1 = (match.start() - xtra) + len(link_name)
+                cursor.setPosition(p1, QTextCursor.MoveMode.KeepAnchor)
+                xtra += len(val) - len(link_name) + 1
+                cursor.setCharFormat(url_format)
+
+    # Restore original cursor position
+    text_edit.document().blockSignals(False)

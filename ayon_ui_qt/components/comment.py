@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Signal
-from PySide6.QtGui import QEnterEvent, QTextDocument
+from PySide6.QtGui import (
+    QEnterEvent,
+    QTextDocument,
+)
 from qtpy.QtWidgets import QTextEdit, QMessageBox
 
 from .buttons import AYButton
@@ -17,6 +20,7 @@ from .comment_completion import (
     on_completer_text_changed,
     on_completer_activated,
     on_completer_key_press,
+    format_comment_on_change,
 )
 from ..data_models import (
     StatusChangeModel,
@@ -201,6 +205,11 @@ class AYCommentField(QTextEdit):
             self,
             self._on_completer_activated,
             self._on_text_changed,
+        )
+
+        # Connect text changed signal to format mentions
+        self.document().contentsChanged.connect(
+            lambda: format_comment_on_change(self)
         )
 
     def set_markdown(self, md: str) -> None:
@@ -450,7 +459,12 @@ if __name__ == "__main__":
             AYComment(
                 data=CommentModel(
                     user_full_name="Katniss Evergreen",
-                    comment="One squirrel...\nTwo squirrels\nThree squirrels !",
+                    comment=(
+                        "Please check "
+                        "[this link](https://doc.qt.io/qt-6/qtextdocument.html)\n\n"
+                        "or [that one](https://doc.qt.io/qt-6/qtextblock.html#details) if need be. "
+                        "maybe [a last URL](https://doc.qt.io/qt-6/qtextblock.html#details) ?"
+                    ),
                 )
             )
         )
