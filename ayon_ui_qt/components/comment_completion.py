@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QStyle,
+    QTextEdit,
 )
 
 from .user_image import AYUserImage
@@ -93,7 +94,7 @@ class UserCompleterModel(QStandardItemModel):
 
 
 def setup_user_completer(
-    text_edit,
+    text_edit: QTextEdit,
     on_completer_activated,
     on_text_changed,
 ) -> None:
@@ -138,7 +139,7 @@ def setup_user_completer(
     text_edit.textChanged.connect(on_text_changed)
 
 
-def on_users_updated(text_edit):
+def on_users_updated(text_edit: QTextEdit):
     if not hasattr(text_edit, "completer"):
         return
 
@@ -158,14 +159,14 @@ def on_users_updated(text_edit):
 
 
 def on_completer_text_changed(
-    text_edit,
+    text_edit: QTextEdit,
 ) -> None:
     """Handle text changes to show/hide completer.
 
     Args:
         text_edit: The QTextEdit widget with completer.
     """
-    if not hasattr(text_edit, "completer"):
+    if not hasattr(text_edit, "completer") or text_edit.isReadOnly():
         return
 
     cursor = text_edit.textCursor()
@@ -201,7 +202,7 @@ def on_completer_text_changed(
             popup.hide()
 
 
-def show_completer_popup(text_edit, at_pos: int) -> None:
+def show_completer_popup(text_edit: QTextEdit, at_pos: int) -> None:
     """Show completer popup above the QTextEdit.
 
     Args:
@@ -233,7 +234,7 @@ def show_completer_popup(text_edit, at_pos: int) -> None:
 
 
 def on_completer_activated(
-    text_edit,
+    text_edit: QTextEdit,
     text: str,
 ) -> None:
     """Handle completer selection.
@@ -266,7 +267,7 @@ def on_completer_activated(
 
 
 def on_completer_key_press(
-    text_edit,
+    text_edit: QTextEdit,
     event,
 ) -> bool:
     """Handle key press events for completer.
