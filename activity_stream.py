@@ -240,7 +240,7 @@ class AYActivityStream(AYContainer):
                 )
         self.scroll_ctnr.addStretch(100)
         self._activities = activities
-        style_widget_and_siblings(self, fix_app=False)
+        style_widget_and_siblings(self)
 
     def on_comment_submitted(self, markdown: str, category: str) -> None:
         keys = [c.name for c in self._project.comment_category]
@@ -262,7 +262,7 @@ class AYActivityStream(AYContainer):
         w = AYComment(self, data=m, user_list=self._project.users)
         self.scroll_ctnr.insert_widget(idx, w)
         self._activities.activity_list.append(m)
-        style_widget_and_siblings(self, fix_app=False)
+        style_widget_and_siblings(self)
 
     @Slot(str)
     def _on_view_changed(self, category: Categories) -> None:
