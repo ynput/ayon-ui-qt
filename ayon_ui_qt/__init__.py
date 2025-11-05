@@ -22,7 +22,7 @@ def get_ayon_style() -> AYONStyle:
     return _ayon_style_instance
 
 
-def style_widget_and_siblings(widget: QWidget) -> None:
+def style_widget_and_siblings(widget: QWidget, fix_app=True) -> None:
     """Apply AYON style to a widget and its siblings recursively.
 
     Removes any existing stylesheets and applies the AYON QStyle
@@ -66,11 +66,11 @@ def style_widget_and_siblings(widget: QWidget) -> None:
 
     qss = None
     app = QApplication.instance()
-    if app and isinstance(app, QApplication):
+    if fix_app and app and isinstance(app, QApplication):
         qss = copy.copy(app.property("styleSheet"))
         # print(f"[ayon style]  App QSS contains {len(qss.splitlines())} lines.")
 
-    if qss and isinstance(app, QApplication):
+    if fix_app and qss and isinstance(app, QApplication):
         # print("[ayon style]  Resetting app stylesheet...")
         app.setStyleSheet("")
 
@@ -83,6 +83,6 @@ def style_widget_and_siblings(widget: QWidget) -> None:
         w.style().unpolish(w)
         w.setStyle(style)
 
-    if qss and isinstance(app, QApplication):
+    if fix_app and qss and isinstance(app, QApplication):
         # print("[ayon style]  Restoring app stylesheet...")
         app.setStyleSheet(qss)
