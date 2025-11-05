@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 
 from PySide6.QtCore import QEvent, Signal
 from PySide6.QtGui import QEnterEvent, QTextDocument
@@ -342,7 +341,7 @@ class AYComment(AYFrame):
             self._data.category,
             icon_color=self._data.category_color,
             variant="badge",
-            rel_text_size=-2
+            rel_text_size=-2,
         )
         self.top_line.insert_widget(0, cat)
 
