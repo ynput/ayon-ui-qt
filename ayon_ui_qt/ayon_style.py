@@ -1510,7 +1510,15 @@ class AYONStyle(QCommonStyle):
             sizer = self.sizers[key]
         except KeyError:
             # Fall back to parent implementation
-            return super().subElementRect(element, option, widget)
+            # Catch RuntimeError in case widget's C++ object was already deleted
+            try:
+                if widget is not None:
+                    return super().subElementRect(element, option, widget)
+                else:
+                    return super().subElementRect(element, option)
+            except RuntimeError:
+                # Widget was deleted, call without it
+                return super().subElementRect(element, option)
 
         return sizer(element, option, widget)
 
