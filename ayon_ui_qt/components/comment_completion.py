@@ -120,6 +120,7 @@ def setup_user_completer(
     text_edit.completer.setCompletionMode(
         QCompleter.CompletionMode.PopupCompletion
     )
+    text_edit.completer.setFilterMode(Qt.MatchFlag.MatchContains)
     text_edit.completer.setMaxVisibleItems(4)
     text_edit.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
     text_edit.completer.setWidget(text_edit)
