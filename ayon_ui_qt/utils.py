@@ -55,6 +55,7 @@ def process_activity_data(
             act["activityData"] = act_data
 
         activity_type = act.get("activityType", "")
+        activity_id = act["activityId"]
 
         user_name = act.get("author", {}).get("name", nothing)
         user_full_name = user_name
@@ -67,6 +68,7 @@ def process_activity_data(
         if activity_type == "comment":
             ui_data.append(
                 CommentModel(
+                    activity_id=activity_id,
                     user_full_name=user_full_name,
                     user_name=user_name,
                     comment=act.get("body", nothing),
@@ -76,6 +78,7 @@ def process_activity_data(
         elif activity_type == "version.publish":
             ui_data.append(
                 VersionPublishModel(
+                    activity_id=activity_id,
                     user_full_name=user_full_name,
                     user_name=user_name,
                     version=str(
@@ -91,6 +94,7 @@ def process_activity_data(
             print(act.get("activityData", {}).get("oldValue", nothing))
             ui_data.append(
                 StatusChangeModel(
+                    activity_id=activity_id,
                     user_full_name=user_full_name,
                     user_name=user_name,
                     product=nothing,

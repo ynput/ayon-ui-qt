@@ -45,6 +45,7 @@ class VersionInfoModel:
 
 @dataclass(unsafe_hash=True)
 class StatusChangeModel:
+    activity_id: str = ""
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
@@ -62,6 +63,7 @@ class StatusChangeModel:
 
 @dataclass(unsafe_hash=True)
 class VersionPublishModel:
+    activity_id: str = ""
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
@@ -77,6 +79,7 @@ class VersionPublishModel:
 
 @dataclass(unsafe_hash=True)
 class CommentModel:
+    activity_id: str = ""
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
