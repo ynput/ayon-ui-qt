@@ -298,5 +298,5 @@ class ImageCache:
         """Save metadata when cache is destroyed."""
         try:
             self._save_metadata()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to save cache metadata: {e}")
