@@ -1132,7 +1132,7 @@ class ScrollBarDrawer:
         if (
             sc == QStyle.SubControl.SC_ScrollBarSlider
             or sc == QStyle.SubControl.SC_ScrollBarGroove
-        ):
+        ) and isinstance(opt, QStyleOptionSlider):
             rect = sup.subControlRect(cc, opt, sc, w)
             if opt.orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, als.height())
