@@ -179,6 +179,8 @@ class VersionData:
     folder_path: str
     assignees: list[str]
     attrib: dict[str, str]
+    thumbnail_id: Optional[str] = None
+    thumbnail_local_path: Optional[str] = None
 
     @staticmethod
     def not_set():
@@ -195,6 +197,8 @@ class VersionData:
             folder_path=ns,
             assignees=[],
             attrib={},
+            thumbnail_id=None,
+            thumbnail_local_path=None
         )
 
 
