@@ -8,7 +8,7 @@ import logging
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPalette, QPen
+from qtpy.QtGui import QBrush, QColor, QPainter, QPalette, QPen, QPainterPath
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -405,7 +405,30 @@ class ButtonDrawer:
         painter.setBrush(QBrush(bg_color))
         painter.setPen(Qt.PenStyle.NoPen)
         border_radius = style.get("border-radius", 0)
-        painter.drawRoundedRect(rect, border_radius, border_radius)
+        if self.get_button_variant(widget) == "thumbnail":
+            # draw the icon clipped by the same rounded rect
+            painter.save()
+            clip_path = QPainterPath()
+            clip_path.addRoundedRect(rect, border_radius, border_radius)
+            painter.setClipPath(clip_path)
+            mode = QtGui.QIcon.Mode.Normal
+            painter.setBrush(QColor("#000000"))
+            painter.drawRoundedRect(rect, border_radius, border_radius)
+            option.icon.paint(
+                painter,
+                rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+            )
+            painter.setClipping(False)
+            pen = QPen(QColor(style.get("border-color")))
+            pen.setWidth(int(style.get("border-width", 0)))
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect, border_radius, border_radius)
+            painter.restore()
+        else:
+            painter.drawRoundedRect(rect, border_radius, border_radius)
 
         # Draw focus outline if needed
         if (
@@ -1437,7 +1460,7 @@ class AYONStyle(QCommonStyle):
         """Draw control elements (buttons, labels, etc.)."""
         key = enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
 
-        if isinstance(w, QLabel):
+        if isinstance(w, QPushButton):
             log.debug("%s %s", type(w), key)
 
         try:
@@ -1622,10 +1645,11 @@ if __name__ == "__main__":
     import time
 
     from .components.buttons import AYButton
-    from .components.container import AYContainer, AYFrame
+    from .components.container import AYContainer
     from .components.label import AYLabel
-    from .components.layouts import AYHBoxLayout
+    from .components.layouts import AYHBoxLayout, AYVBoxLayout
     from .components.text_box import AYTextBox
+    from .components.user_image import AYUserImage
     from .tester import Style, test
 
     def time_it(func):
@@ -1739,17 +1763,45 @@ if __name__ == "__main__":
             layout_margin=10,
             layout_spacing=10,
         )
-        cb = QtWidgets.QCheckBox("CheckBox")
-        cb.setToolTip(("A typical switch..."))
-        container_3.add_widget(cb)
         te = AYTextBox()
         te.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
         )
         container_3.add_widget(te)
-        container_3.add_widget(AYLabel("Normal"))
-        container_3.add_widget(AYLabel("Dimmed", dim=True))
+        vblyt = AYVBoxLayout(spacing=8)
+        cb = QtWidgets.QCheckBox("CheckBox")
+        cb.setToolTip(("A typical switch..."))
+        vblyt.addWidget(cb)
+        vblyt.addWidget(AYLabel("Normal label", tool_tip="text only"))
+        vblyt.addWidget(
+            AYLabel("Dimmed label", dim=True, tool_tip="text dimmed")
+        )
+        vblyt.addWidget(
+            AYLabel(
+                "Icon + text label", icon="favorite", tool_tip="Icon and text"
+            )
+        )
+        vblyt.addWidget(
+            AYLabel(
+                icon="token",
+                icon_color="#ff8800",
+                icon_size=32,
+                tool_tip="32 px orange icon only",
+            )
+        )
+        vblyt.addWidget(
+            AYLabel(
+                "a badge",
+                icon_color="#0088ff",
+                variant="badge",
+                tool_tip="a blue badge",
+            )
+        )
+        usr_ly = AYHBoxLayout(spacing=8)
+        usr_ly.addWidget(AYUserImage(src="avatar1"))
+        vblyt.addStretch()
+        container_3.add_layout(vblyt)
         container_3.addStretch()
 
         widget.add_widget(container_3)

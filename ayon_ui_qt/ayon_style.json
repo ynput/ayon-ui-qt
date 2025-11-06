@@ -181,6 +181,12 @@
                     "checked": {
                         "background-color": "--md-sys-color-primary-container-dark"
                     }
+                },
+                "thumbnail":
+                {
+                    "background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "border-color":     "--md-sys-color-surface-container-highest-dark",
+                    "border-width": 2
                 }
             }
         },

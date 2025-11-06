@@ -1,22 +1,41 @@
+from __future__ import annotations
+
+from typing import Callable
+from functools import partial
 from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets
 
+from ..image_cache import ImageCache
+
 
 class AYUserImage(QtWidgets.QLabel):
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        *args,
+        src: Path | str = "",
+        name: str = "",
+        full_name: str = "",
+        size: int = 30,
+        highlight: bool = False,
+        outline: bool = True,
+        file_cacher: Callable | None = None,
+        **kwargs,
+    ):
         # file path to icon
-        self._src = kwargs.pop("src", None)
+        self._src = src
         # short user name
-        self._name = kwargs.pop("name", None)
+        self._name = name
         # full user name
-        self._full_name = kwargs.pop("full_name", None)
+        self._full_name = full_name
         # pixmap size
-        self._size = kwargs.pop("size", 30)
+        self._size = size
         # green outline if true, light grey otherwise
-        self._highlight = kwargs.pop("highlight", False)
+        self._highlight = highlight
         # enable / disable outline
-        self._outline = kwargs.pop("outline", True)
+        self._outline = outline
+        # a file loader function for the image cache: src is the cache key.
+        self._file_cacher = file_cacher
         # background color for initials
         self._bg = QtGui.QColor("#484875")
         self._grey = QtGui.QColor(225, 225, 225)
@@ -36,6 +55,12 @@ class AYUserImage(QtWidgets.QLabel):
         outline_color = self._green if self._highlight else self._grey
 
         if self._src:
+            if not Path(str(self._src)).exists() and self._file_cacher:
+                ic = ImageCache.get_instance()
+                self._src = ic.get(
+                    str(self._src), partial(self._file_cacher, self._src)
+                )
+
             # Load and draw src icon file in a circle
             source_pixmap = QtGui.QPixmap(self._src)
             if not source_pixmap.isNull():
@@ -113,26 +138,32 @@ if __name__ == "__main__":
     from ..tester import Style, test
     from .container import AYContainer
 
+    def resource_loader(key):
+        rsrc_dir = Path(__file__).parent.parent / "resources"
+        jpg = rsrc_dir / f"{key}.jpg"
+        if jpg.exists():
+            return jpg
+        return ""
+
     def build():
-        fp = Path(__file__).parent.parent.joinpath("resources", "avatar2.jpg")
         w = AYContainer(
             layout=AYContainer.Layout.HBox,
             margin=8,
             layout_margin=8,
             layout_spacing=4,
         )
-        w.addWidget(AYUserImage(src=fp))
-        w.addWidget(AYUserImage(src=fp, highlight=True))
-        w.addWidget(AYUserImage(src=fp, outline=False))
-        w.addWidget(AYUserImage(full_name="Oliver Cromwell"))
-        w.addWidget(AYUserImage(name="Oliver"))
-        w.addWidget(AYUserImage(highlight=True))
-        w.addWidget(AYUserImage(name="Oliver", outline=False))
-        w.addWidget(AYUserImage(name="Oliver", outline=False, highlight=True))
-        w.addWidget(AYUserImage(src=fp, outline=False, size=60))
-        w.addWidget(AYUserImage(src=fp, highlight=True, size=60))
-        w.addWidget(AYUserImage(full_name="Oliver Cromwell", size=60))
-        w.addWidget(AYUserImage(name="Oliver", outline=False, size=60))
+        w.add_widget(AYUserImage(src="avatar1", file_cacher=resource_loader))
+        w.add_widget(AYUserImage(src="avatar2", highlight=True, file_cacher=resource_loader))
+        w.add_widget(AYUserImage(src="avatar3", outline=False, file_cacher=resource_loader))
+        w.add_widget(AYUserImage(full_name="Oliver Cromwell"))
+        w.add_widget(AYUserImage(name="Oliver"))
+        w.add_widget(AYUserImage(highlight=True))
+        w.add_widget(AYUserImage(name="Oliver", outline=False))
+        w.add_widget(AYUserImage(name="Oliver", outline=False, highlight=True))
+        w.add_widget(AYUserImage(src="avatar1", outline=False, size=60, file_cacher=resource_loader))
+        w.add_widget(AYUserImage(src="avatar2", highlight=True, size=60, file_cacher=resource_loader))
+        w.add_widget(AYUserImage(full_name="Oliver Cromwell", size=60))
+        w.add_widget(AYUserImage(name="Oliver", outline=False, size=60))
         return w
 
     test(build, style=Style.Widget)
