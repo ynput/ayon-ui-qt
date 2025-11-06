@@ -271,8 +271,8 @@ class AYActivityStream(AYContainer):
     @Slot(CommentModel)
     def _on_comment_deleted(self, data: CommentModel) -> None:
         """Delete widget, delete comment from activities and emit signal."""
-        for i in range(self.scroll_ctnr._layout.count()):
-            item = self.scroll_ctnr._layout.itemAt(i)
+        for i in range(self.scroll_ctnr.count()):
+            item = self.scroll_ctnr.itemAt(i)
             if not item:
                 continue
             w = item.widget()

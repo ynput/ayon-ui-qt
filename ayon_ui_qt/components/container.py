@@ -91,6 +91,11 @@ class AYContainer(AYFrame):
     def takeAt(self, index: int) -> QLayoutItem:
         return self._layout.takeAt(index)
 
+    def itemAt(self, index: int) -> QLayoutItem:
+        if isinstance(self._layout, AYGridLayout):
+            raise NotImplementedError
+        return self._layout.itemAt(index)
+
 
 if __name__ == "__main__":
     from ayon_ui_qt.tester import Style, test
