@@ -138,6 +138,7 @@ class AYPublish(AYFrame):
             variant="low",
             layout_spacing=8,
         )
+        cntr.setContentsMargins(0, 0, 0, 4)
         cntr.add_widget(self.user_icon, stretch=0)
         cntr.add_widget(self.user_name, stretch=0)
         cntr.add_widget(self.static, stretch=0)
@@ -273,6 +274,7 @@ class AYComment(AYFrame):
             variant="low",
             layout_spacing=8,
         )
+        cntr.setContentsMargins(0, 0, 0, 4)
         cntr.add_widget(self.user_icon)
         cntr.add_widget(self.user_name)
         cntr.addStretch()
