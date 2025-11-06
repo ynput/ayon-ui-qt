@@ -122,7 +122,7 @@ class User:
     short_name: str
     full_name: str
     email: str
-    avatar_url: str
+    avatar_url: Optional[str] = None
     avatar_local_path: Optional[str] = None
 
 
