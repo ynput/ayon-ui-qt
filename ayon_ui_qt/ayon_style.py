@@ -23,6 +23,7 @@ from qtpy.QtWidgets import (
     QStyleOptionComboBox,
     QStyleOptionComplex,
     QStyleOptionFrame,
+    QStyleOptionSlider,
     QToolTip,
     QWidget,
 )
@@ -1139,7 +1140,9 @@ class ScrollBarDrawer:
                 rect.adjust(-sls.width(), 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage and isinstance(
+            opt, QStyleOptionSlider
+        ):
             rect = sup.subControlRect(cc, opt, sc, w)
             if opt.orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, 0, 0, als.height())
@@ -1147,7 +1150,9 @@ class ScrollBarDrawer:
                 rect.adjust(0, 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage and isinstance(
+            opt, QStyleOptionSlider
+        ):
             rect = sup.subControlRect(cc, opt, sc, w)
             if opt.orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, 0)
