@@ -122,8 +122,8 @@ class User:
     short_name: str
     full_name: str
     email: str
-    avatar_url: Optional[str] = None
-    avatar_local_path: Optional[str] = None
+    avatar_url: str = ""
+    avatar_local_path: str = ""
 
 
 @dataclass
@@ -180,8 +180,8 @@ class VersionData:
     folder_path: str
     assignees: list[str]
     attrib: dict[str, str]
-    thumbnail_id: Optional[str] = None
-    thumbnail_local_path: Optional[str] = None
+    thumbnail_id: str = ""
+    thumbnail_local_path: str = ""
 
     @staticmethod
     def not_set():
