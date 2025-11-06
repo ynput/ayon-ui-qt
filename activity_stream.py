@@ -38,7 +38,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("activity stream")
 
 
-def time_stamp():
+def time_stamp() -> str:
+    """Return the current UTC time as an ISO formatted string."""
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
@@ -243,11 +244,21 @@ class AYActivityStream(AYContainer):
         style_widget_and_siblings(self)
 
     def on_comment_submitted(self, markdown: str, category: str) -> None:
+        """Handle the submission of a new comment.
+
+        Args:
+            markdown (str): The comment text in markdown format.
+            category (str): The category of the comment.
+
+        Raises:
+            ValueError: if current user is not provided.
+        """
         keys = [c.name for c in self._project.comment_category]
         cat = self._project.comment_category[keys.index(category)]
 
         if not self._project.current_user:
-            raise ValueError("current_user MUST be provided !")
+            err = "current_user MUST be provided !"
+            raise ValueError(err)
 
         m = CommentModel(
             user_full_name=self._project.current_user.full_name,
