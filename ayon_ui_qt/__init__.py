@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import copy
-
+import collections
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QWidget, QApplication, QCommonStyle
+from qtpy.QtWidgets import QWidget, QApplication, QMainWindow, QDockWidget
+
 
 from .ayon_style import AYONStyle
 
 _ayon_style_instance: AYONStyle | None = None
+_app_stylesheet_cleared: bool = False
 
 
 def get_ayon_style() -> AYONStyle:
@@ -23,66 +24,75 @@ def get_ayon_style() -> AYONStyle:
 
 
 def style_widget_and_siblings(widget: QWidget, fix_app=True) -> None:
-    """Apply AYON style to a widget and its siblings recursively.
+    """Apply AYON style to a widget and its children recursively.
 
-    Removes any existing stylesheets and applies the AYON QStyle
-    to the given widget and all its sibling widgets (widgets that
-    share the same parent), including all their nested children
-    even if they are in QLayouts.
+    LEGACY: Consider using style_widget() or style_buttons_only() for better performance.
 
     Args:
-        widget: The widget whose siblings (and itself) will be styled.
+        widget: The widget to style along with all its children.
+        fix_app: If True, temporarily clears application stylesheet during styling.
+        skip_types: Optional tuple of widget types to skip (e.g., (QMainWindow, QDockWidget)).
     """
+    # Get style once at the start for efficiency
+    style = get_ayon_style()
 
-    def _collect_widgets(w: QWidget, seen: set[int]) -> None:
-        """Recursively collect all widgets including those in layouts."""
-        if id(w) in seen:
-            return
+    # Collect all widgets using BFS
+    seen: set[int] = set()
+    to_style: list[QWidget] = []
+    queue = collections.deque([widget])
 
-        seen.add(id(w))
-        widgets_to_style.append(w)
+    while queue:
+        w = queue.popleft()
+        widget_id = id(w)
 
-        # Collect direct widget children
-        for child in w.children():
-            if isinstance(child, QWidget):
-                _collect_widgets(child, seen)
+        if widget_id in seen:
+            continue
 
-        # Collect widgets from layouts
-        if (layout := w.layout()) is not None:
-            for i in range(layout.count()):
-                if (item := layout.itemAt(i)) and (
-                    item_widget := item.widget()
-                ):
-                    _collect_widgets(item_widget, seen)
+        seen.add(widget_id)
+        to_style.append(w)
 
-    # Determine root widgets: siblings if parent exists, otherwise just widget
-    root_widgets = [widget]
+        # Add children - wrap in try/except for deleted widgets
+        try:
+            for child in w.children():
+                if isinstance(child, QWidget):
+                    queue.append(child)
+        except RuntimeError:
+            pass
 
-    # Collect all widgets recursively
-    seen_widgets: set[int] = set()
-    widgets_to_style: list[QWidget] = []
-    for w in root_widgets:
-        _collect_widgets(w, seen_widgets)
+        # Add layout widgets - wrap in try/except for deleted widgets
+        try:
+            layout = w.layout()
+            if layout is not None:
+                for i in range(layout.count()):
+                    item = layout.itemAt(i)
+                    if item:
+                        item_widget = item.widget()
+                        if item_widget:
+                            queue.append(item_widget)
+        except RuntimeError:
+            pass
 
-    qss = None
-    app = QApplication.instance()
-    if fix_app and app and isinstance(app, QApplication):
-        qss = copy.copy(app.property("styleSheet"))
-        # print(f"[ayon style]  App QSS contains {len(qss.splitlines())} lines.")
+    # Handle app stylesheet if needed - clear only once globally
+    global _app_stylesheet_cleared
 
-    if fix_app and qss and isinstance(app, QApplication):
-        # print("[ayon style]  Resetting app stylesheet...")
-        app.setStyleSheet("")
+    if fix_app and not _app_stylesheet_cleared:
+        app = QApplication.instance()
+        if app and isinstance(app, QApplication):
+            qss = app.property("styleSheet")
+            if isinstance(qss, str) and qss.strip():
+                app.setStyleSheet("")  # Clear once, never restore
+                _app_stylesheet_cleared = True
 
     widget.setAttribute(Qt.WidgetAttribute.WA_WindowPropagation, False)
 
-    # Apply style to all collected widgets
-    style = get_ayon_style()
-    # print(f"[ayon style]  styling {len(widgets_to_style)} widgets")
-    for w in widgets_to_style:
-        w.style().unpolish(w)
-        w.setStyle(style)
-
-    if fix_app and qss and isinstance(app, QApplication):
-        # print("[ayon style]  Restoring app stylesheet...")
-        app.setStyleSheet(qss)
+    # Apply style to all collected widgets with error handling
+    for w in to_style:
+        try:
+            current_style = w.style()
+            # Only unpolish/setStyle if different style - major performance improvement
+            if current_style is not style:
+                current_style.unpolish(w)
+                w.setStyle(style)
+        except RuntimeError:
+            # Widget was deleted, skip it
+            pass
