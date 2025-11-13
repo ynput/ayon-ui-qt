@@ -77,6 +77,27 @@ class VersionPublishModel:
         self.short_date = short_date(self.date)
 
 
+@dataclass
+class AnnotationModel:
+    id: str
+    range: List[int]
+    composite: str
+    transparent: str
+
+
+@dataclass
+class FileModel:
+    """Model for activity attached files.
+
+    Attachments could be images, there could be also preview available for
+    them.
+    """
+    id: str
+    mime: str
+    local_path: str = ""
+    thumb_local_path: str = ""
+
+
 @dataclass(unsafe_hash=True)
 class CommentModel:
     activity_id: str = ""
@@ -89,6 +110,8 @@ class CommentModel:
     comment_date: str = ""
     short_date: str = field(init=False, hash=False)
     type: str = field(init=False, default="comment", hash=False)
+    files: list[FileModel] = field(default_factory=list, hash=False)
+    annotations: list[AnnotationModel] = field(default_factory=list, hash=False)
 
     def __post_init__(self):
         self.short_date = short_date(self.comment_date)
