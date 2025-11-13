@@ -13,6 +13,8 @@ from .data_models import (
     CommentCategory,
     VersionData,
     ActivityData,
+    AnnotationModel,
+    FileModel,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +68,8 @@ def process_activity_data(
         date = act.get("updatedAt", nothing)
 
         if activity_type == "comment":
+            annotation_models = _parse_annotations(act_data, nothing)
+            file_models = _parse_files(act, nothing)
             ui_data.append(
                 CommentModel(
                     activity_id=activity_id,
@@ -73,6 +77,8 @@ def process_activity_data(
                     user_name=user_name,
                     comment=act.get("body", nothing),
                     comment_date=date,
+                    files=file_models,
+                    annotations=annotation_models,
                 )
             )
         elif activity_type == "version.publish":
@@ -106,6 +112,36 @@ def process_activity_data(
             )
 
     return ui_data
+
+
+def _parse_files(act, nothing):
+    """Attached files to comment activities."""
+    files = act.get("files", [])
+    file_models = []
+    for file_info in files:
+        file_models.append(
+            FileModel(
+                id=file_info.get("id", nothing),
+                mime=file_info.get("mime", nothing),
+            )
+        )
+    return file_models
+
+
+def _parse_annotations(act_data, nothing):
+    """Attached annotations to comment activities."""
+    annotation_models = []
+    annotations = act_data.get("annotations", [])
+    for annotation in annotations:
+        annotation_models.append(
+            AnnotationModel(
+                id=annotation.get("id", nothing),
+                range=annotation.get("range", nothing),
+                composite=annotation.get("composite", nothing),
+                transparent=annotation.get("transparent", nothing),
+            )
+        )
+    return annotation_models
 
 
 def clear_layout(layout):
