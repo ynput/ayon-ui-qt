@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Signal
+from PySide6.QtCore import QEvent, Signal, Qt
 from PySide6.QtGui import (
     QEnterEvent,
     QTextDocument,
+    QPixmap
 )
-from qtpy.QtWidgets import QTextEdit, QMessageBox
+from qtpy.QtWidgets import QTextEdit, QMessageBox, QWidget, QLabel
 
 from .buttons import AYButton
 from .container import AYContainer, AYFrame
@@ -171,6 +172,8 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYCommentField(QTextEdit):
+    """Text field for comment display with markdown support."""
+
     def __init__(
         self,
         *args,
@@ -235,7 +238,97 @@ class AYCommentField(QTextEdit):
         super().keyPressEvent(event)
 
 
+class AYImageAttachment(AYLabel):
+    """Widget to display an image attachment with thumbnail and full-size preview."""
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        image_path: str = "",
+        thumb_path: str = "",
+        max_width: int = 400,
+        max_height: int = 300,
+    ):
+        super().__init__(parent)
+        self._image_path = image_path
+        self._thumb_path = thumb_path or image_path
+        self._max_width = max_width
+        self._max_height = max_height
+
+        self.setScaledContents(False)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Set tooltip
+        self.setToolTip("Click to view full size")
+
+        # Load and display thumbnail
+        self._load_thumbnail()
+
+    def _load_thumbnail(self):
+        """Load and display the thumbnail image."""
+        if not self._thumb_path or not Path(self._thumb_path).exists():
+            self.setText("Image not available")
+            return
+
+        pixmap = QPixmap(self._thumb_path)
+        if pixmap.isNull():
+            self.setText("Failed to load image")
+            return
+
+        # Scale pixmap to fit within max dimensions while maintaining aspect ratio
+        scaled_pixmap = pixmap.scaled(
+            self._max_width,
+            self._max_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
+        self.setPixmap(scaled_pixmap)
+
+    def mousePressEvent(self, event):
+        """Handle click to show full-size image."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._show_full_size()
+        super().mousePressEvent(event)
+
+    def _show_full_size(self):
+        """Show full-size image in a dialog or external viewer."""
+        # For now, just show a message box with the full image
+        # In production, you might want to use a custom dialog or system viewer
+        if not self._image_path or not Path(self._image_path).exists():
+            QMessageBox.warning(
+                self,
+                "Image Not Available",
+                "The full-size image is not available.",
+            )
+            return
+
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Image Preview")
+        pixmap = QPixmap(self._image_path)
+
+        # Scale if too large for screen
+        screen_size = dialog.screen().availableGeometry()
+        max_w = int(screen_size.width() * 0.8)
+        max_h = int(screen_size.height() * 0.8)
+
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            pixmap = pixmap.scaled(
+                max_w,
+                max_h,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+
+        dialog.setIconPixmap(pixmap)
+        dialog.setText("")
+        dialog.exec()
+
+
 class AYComment(AYFrame):
+    """Enhanced comment widget that displays images from CommentModel.files."""
+
     comment_deleted = Signal(object)
     comment_edited = Signal(object)
 
@@ -257,6 +350,7 @@ class AYComment(AYFrame):
             self.text_field.set_markdown(self._data.comment)
             self.date.setText(self._data.short_date)
             self.set_comment_category()
+            self._build_image_attachments()
 
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
@@ -327,8 +421,8 @@ class AYComment(AYFrame):
         self.edit_button.clicked.connect(self._edit_comment)
 
     def _build(self):
-        lyt = AYVBoxLayout(self, margin=0, spacing=0)
-        lyt.addWidget(self._build_top_bar())
+        self.main_lyt = AYVBoxLayout(self, margin=0, spacing=0)
+        self.main_lyt.addWidget(self._build_top_bar())
         self.text_field = AYCommentField(
             self,
             text=self._data.comment,
@@ -345,9 +439,70 @@ class AYComment(AYFrame):
         self.top_line.setFixedHeight(20)
         editor_lyt.add_widget(self.top_line, stretch=0)
         editor_lyt.add_widget(self.text_field, stretch=10)
+
         editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
-        lyt.addWidget(editor_lyt)
+        self.main_lyt.addWidget(editor_lyt)
         self._build_edit_buttons()
+
+    def _build_image_attachments(self):
+        """Build and display image attachments embedded in the text field."""
+        if not self._data or not hasattr(self._data, 'files') or not self._data.files:
+            return
+
+        # Only show the first image from the files list
+        file_model = self._data.files[0]
+
+        # Check if file has local_path
+        if not hasattr(file_model, 'local_path'):
+            return
+
+        # Check if path exists
+        if not Path(file_model.local_path).exists():
+            return
+
+        # Get the text field width to scale images accordingly
+        text_field_width = self.text_field.viewport().width()
+        # Account for margins/padding - fallback to reasonable width
+        max_image_width = (
+            max(text_field_width - 40, 150) if text_field_width > 50 else 400
+        )
+
+        # Load the full image
+        image_path = str(file_model.local_path)
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            return
+
+        # Scale image to fit the text field width while maintaining aspect ratio
+        if pixmap.width() > max_image_width:
+            pixmap = pixmap.scaled(
+                max_image_width,
+                10000,  # Very large height to maintain aspect ratio
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+
+        # Get document and cursor
+        doc = self.text_field.document()
+        cursor = self.text_field.textCursor()
+
+        # Move cursor to end
+        cursor.movePosition(cursor.MoveOperation.End)
+
+        # Add line breaks before image if there's content
+        if not cursor.atStart():
+            cursor.insertText("\n\n")
+
+        # Add resource to document and insert image
+        doc.addResource(
+            QTextDocument.ResourceType.ImageResource,
+            image_path,
+            pixmap
+        )
+        cursor.insertImage(image_path)
+
+        # Set cursor back
+        self.text_field.setTextCursor(cursor)
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
@@ -358,7 +513,7 @@ class AYComment(AYFrame):
         self.save_edit.setVisible(True)
 
     def _cancel_edit(self):
-        """Make rthe field read-only and restore text."""
+        """Make the field read-only and restore text."""
         self.text_field.setReadOnly(True)
         self.cancel_edit.setVisible(False)
         self.save_edit.setVisible(False)
