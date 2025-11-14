@@ -438,16 +438,24 @@ class AYComment(AYFrame):
         )
         self.top_line.setFixedHeight(20)
         editor_lyt.add_widget(self.top_line, stretch=0)
+        self.images_container = AYContainer(
+            layout=AYContainer.Layout.VBox, variant="high"
+        )
+        editor_lyt.add_widget(self.images_container, stretch=10)
         editor_lyt.add_widget(self.text_field, stretch=10)
+
 
         editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
         self.main_lyt.addWidget(editor_lyt)
         self._build_edit_buttons()
 
     def _build_image_attachments(self):
-        """Build and display image attachments embedded in the text field."""
+        """Build and display image attachments as separate clickable widgets."""
         if not self._data or not hasattr(self._data, 'files') or not self._data.files:
             return
+
+        from .. import get_ayon_style
+        style = get_ayon_style()
 
         # Only show the first image from the files list
         file_model = self._data.files[0]
@@ -461,48 +469,25 @@ class AYComment(AYFrame):
             return
 
         # Get the text field width to scale images accordingly
-        text_field_width = self.text_field.viewport().width()
-        # Account for margins/padding - fallback to reasonable width
-        max_image_width = (
-            max(text_field_width - 40, 150) if text_field_width > 50 else 400
+        text_field_width = self.text_field.width()
+        # Account for margins/padding
+        max_image_width = text_field_width - 20 if text_field_width > 20 else 400
+
+        thumb_path = getattr(file_model, 'thumb_local_path', None)
+
+        # Create image widget with dynamic width matching text field
+        image_widget = AYImageAttachment(
+            parent=self,
+            image_path=file_model.local_path,
+            thumb_path=thumb_path,
+            max_width=max_image_width,
+            max_height=800,
         )
 
-        # Load the full image
-        image_path = str(file_model.local_path)
-        pixmap = QPixmap(image_path)
-        if pixmap.isNull():
-            return
+        # Ensure the image widget is styled
+        image_widget.setStyle(style)
 
-        # Scale image to fit the text field width while maintaining aspect ratio
-        if pixmap.width() > max_image_width:
-            pixmap = pixmap.scaled(
-                max_image_width,
-                10000,  # Very large height to maintain aspect ratio
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-
-        # Get document and cursor
-        doc = self.text_field.document()
-        cursor = self.text_field.textCursor()
-
-        # Move cursor to end
-        cursor.movePosition(cursor.MoveOperation.End)
-
-        # Add line breaks before image if there's content
-        if not cursor.atStart():
-            cursor.insertText("\n\n")
-
-        # Add resource to document and insert image
-        doc.addResource(
-            QTextDocument.ResourceType.ImageResource,
-            image_path,
-            pixmap
-        )
-        cursor.insertImage(image_path)
-
-        # Set cursor back
-        self.text_field.setTextCursor(cursor)
+        self.images_container.add_widget(image_widget, stretch=0)
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
