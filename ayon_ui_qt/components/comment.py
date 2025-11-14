@@ -8,7 +8,7 @@ from PySide6.QtGui import (
     QTextDocument,
     QPixmap
 )
-from qtpy.QtWidgets import QTextEdit, QMessageBox, QWidget, QLabel
+from qtpy.QtWidgets import QTextEdit, QMessageBox, QWidget, QLabel, QDialog, QVBoxLayout
 
 from .buttons import AYButton
 from .container import AYContainer, AYFrame
@@ -293,9 +293,7 @@ class AYImageAttachment(AYLabel):
         super().mousePressEvent(event)
 
     def _show_full_size(self):
-        """Show full-size image in a dialog or external viewer."""
-        # For now, just show a message box with the full image
-        # In production, you might want to use a custom dialog or system viewer
+        """Show full-size image in a dialog that respects aspect ratio."""
         if not self._image_path or not Path(self._image_path).exists():
             QMessageBox.warning(
                 self,
@@ -304,25 +302,52 @@ class AYImageAttachment(AYLabel):
             )
             return
 
-        dialog = QMessageBox(self)
-        dialog.setWindowTitle("Image Preview")
-        pixmap = QPixmap(self._image_path)
+        # Load the full-size image
+        original_pixmap = QPixmap(self._image_path)
 
-        # Scale if too large for screen
-        screen_size = dialog.screen().availableGeometry()
+        if original_pixmap.isNull():
+            QMessageBox.warning(
+                self,
+                "Image Load Error",
+                "Failed to load the full-size image.",
+            )
+            return
+
+        # Get screen dimensions
+        screen_size = self.screen().availableGeometry()
         max_w = int(screen_size.width() * 0.8)
         max_h = int(screen_size.height() * 0.8)
 
-        if pixmap.width() > max_w or pixmap.height() > max_h:
-            pixmap = pixmap.scaled(
+        # Scale if too large for screen while maintaining aspect ratio
+        display_pixmap = original_pixmap
+        if original_pixmap.width() > max_w or original_pixmap.height() > max_h:
+            display_pixmap = original_pixmap.scaled(
                 max_w,
                 max_h,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
 
-        dialog.setIconPixmap(pixmap)
-        dialog.setText("")
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Image Preview")
+        dialog.setModal(True)
+
+        # Create layout
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create label to display image
+        image_label = QLabel(dialog)
+        image_label.setPixmap(display_pixmap)
+        image_label.setScaledContents(False)
+        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(image_label)
+
+        # Set dialog size to match image
+        dialog.resize(display_pixmap.size())
+
+        # Show dialog
         dialog.exec()
 
 
@@ -436,11 +461,11 @@ class AYComment(AYFrame):
         self.top_line = AYContainer(
             layout=AYContainer.Layout.HBox, variant="high"
         )
-        self.top_line.setFixedHeight(20)
-        editor_lyt.add_widget(self.top_line, stretch=0)
         self.images_container = AYContainer(
             layout=AYContainer.Layout.VBox, variant="high"
         )
+        self.top_line.setFixedHeight(20)
+        editor_lyt.add_widget(self.top_line, stretch=0)
         editor_lyt.add_widget(self.images_container, stretch=10)
         editor_lyt.add_widget(self.text_field, stretch=10)
 
