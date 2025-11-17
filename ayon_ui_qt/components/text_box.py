@@ -7,6 +7,7 @@ from qtpy.QtCore import (
     QObject,
     Signal,  # type: ignore
     Slot,  # type: ignore
+    Qt,
 )  # type: ignore
 from qtpy import QtWidgets
 from qtpy.QtGui import (
@@ -14,10 +15,13 @@ from qtpy.QtGui import (
     QTextCursor,
     QTextDocument,
     QTextFrameFormat,
+    QPixmap,
 )
 from qtpy.QtWidgets import (
     QSizePolicy,
     QTextEdit,
+    QLabel,
+    QScrollArea,
 )
 
 from .buttons import AYButton
@@ -214,6 +218,84 @@ def _dict_from_comment_category(
     ]
 
 
+class AttachmentWidget(QtWidgets.QWidget):
+    """Widget to display a single attachment thumbnail with remove button."""
+
+    remove_clicked = Signal(int)  # Signal emits the attachment index
+
+    def __init__(self, parent=None, index=0, filename="", file_path=""):
+        super().__init__(parent)
+        self.index = index
+        self.filename = filename
+        self.file_path = file_path
+
+        # Use a container for the thumbnail with overlay button
+        container = QtWidgets.QWidget(self)
+        container.setFixedSize(80, 60)
+
+        # Thumbnail
+        self.thumbnail_label = QLabel(container)
+        self.thumbnail_label.setFixedSize(80, 60)
+        self.thumbnail_label.setScaledContents(True)
+        self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Load thumbnail from file_path or base64
+        if file_path.startswith("data:image"):
+            # Base64 encoded image
+            import base64
+
+            # Extract base64 data
+            base64_data = file_path.split(",", 1)[1] if "," in file_path else file_path
+            image_data = base64.b64decode(base64_data)
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(image_data)
+            self.thumbnail_label.setPixmap(pixmap.scaled(
+                80, 60, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            ))
+        else:
+            # File path
+            pixmap = QPixmap(file_path)
+            if not pixmap.isNull():
+                self.thumbnail_label.setPixmap(pixmap.scaled(
+                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+            else:
+                self.thumbnail_label.setText("Image")
+
+        # Remove button overlaid on top-right corner
+        remove_btn = AYButton("×", variant="nav", parent=container)
+        remove_btn.setFixedSize(18, 18)
+        remove_btn.move(62, 0)  # Position at top-right corner
+        remove_btn.setStyleSheet("""
+            AYButton {
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                border-radius: 9px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            AYButton:hover {
+                background-color: rgba(200, 0, 0, 0.9);
+            }
+        """)
+        remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.index))
+        remove_btn.raise_()  # Ensure button is on top
+
+        # Main layout
+        layout = AYVBoxLayout(self, margin=4, spacing=2)
+        layout.addWidget(container)
+
+        # Filename label (truncated)
+        filename_label = QLabel(
+            filename[:12] + "..." if len(filename) > 12 else filename, self
+        )
+        filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(filename_label)
+
+
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str)  # type: ignore
@@ -249,6 +331,7 @@ class AYTextBox(AYFrame):
         self.comment_categories: list[dict] = _dict_from_comment_category([])
         self.category = self.comment_categories[0]["text"]
         self._user_list: list[User] = user_list or []
+        self._attachments: list[dict] = []  # Store attachment data
         self._build(num_lines)
 
     def _build_upper_bar(self):
@@ -273,6 +356,29 @@ class AYTextBox(AYFrame):
         lyt.addSpacing(grp_spacing)
         lyt.addWidget(AYButton(self, variant="nav", icon="attach_file"))
         return lyt
+
+    def _build_attachment_area(self):
+        """Build the scrollable attachment display area."""
+        # Container for attachments
+        self.attachment_container = QtWidgets.QWidget(self)
+        self.attachment_layout = AYHBoxLayout(
+            self.attachment_container, margin=4, spacing=4
+        )
+
+        # Scroll area
+        self.attachment_scroll = QScrollArea(self)
+        self.attachment_scroll.setWidget(self.attachment_container)
+        self.attachment_scroll.setWidgetResizable(True)
+        self.attachment_scroll.setFixedHeight(100)
+        self.attachment_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.attachment_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.attachment_scroll.hide()  # Hidden by default
+
+        return self.attachment_scroll
 
     def _build_edit_field(self, num_lines):
         self.edit_field = AYTextEditor(
@@ -305,9 +411,87 @@ class AYTextBox(AYFrame):
         markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
         self.signals.comment_submitted.emit(markdown_content, self.category)
         self.edit_field.clear()
+        self.clear_attachments()
 
     def _on_category_changed(self, category: str) -> None:
         self.category = category
+
+    def _on_attachment_removed(self, index: int) -> None:
+        """Handle removal of an attachment."""
+        if 0 <= index < len(self._attachments):
+            self._attachments.pop(index)
+            self._refresh_attachment_display()
+
+    def _refresh_attachment_display(self) -> None:
+        """Refresh the attachment display area."""
+        # Clear existing widgets
+        while self.attachment_layout.count():
+            item = self.attachment_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        # Add attachment widgets
+        if self._attachments:
+            for idx, attachment in enumerate(self._attachments):
+                widget = AttachmentWidget(
+                    parent=self.attachment_container,
+                    index=idx,
+                    filename=attachment.get("filename", f"attachment_{idx}"),
+                    file_path=attachment.get("file_path", "")
+                )
+                widget.remove_clicked.connect(self._on_attachment_removed)
+                self.attachment_layout.addWidget(widget)
+
+            self.attachment_layout.addStretch()
+            self.attachment_scroll.show()
+        else:
+            self.attachment_scroll.hide()
+
+    def add_attachment(self, file_path: str, filename: str, **kwargs) -> None:
+        """Add an attachment to the comment editor.
+
+        Args:
+            file_path: Path to the file or base64 data URL
+            filename: Name of the file
+            **kwargs: Additional metadata (timestamp, etc.)
+        """
+        for existing in self._attachments:
+            if existing.get("file_path") == file_path:
+                logger.info("Attachment already exists: %s", filename)
+                return
+        attachment = {
+            "file_path": file_path,
+            "filename": filename,
+            **kwargs
+        }
+        self._attachments.append(attachment)
+        self._refresh_attachment_display()
+
+    def add_attachments(self, attachments: list[dict]) -> None:
+        """Add multiple attachments at once.
+
+        Args:
+            attachments: List of attachment dictionaries with 'file_path'
+                        and 'filename' keys
+        """
+        for attachment in attachments:
+            self.add_attachment(
+                file_path=attachment.get("file_path", ""),
+                filename=attachment.get("filename", "attachment"),
+                timestamp=attachment.get("timestamp")
+            )
+
+    def clear_attachments(self) -> None:
+        """Clear all attachments from the editor."""
+        self._attachments.clear()
+        self._refresh_attachment_display()
+
+    def get_attachments(self) -> list[dict]:
+        """Get the current list of attachments.
+
+        Returns:
+            List of attachment dictionaries
+        """
+        return self._attachments.copy()
 
     @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData):
@@ -322,6 +506,7 @@ class AYTextBox(AYFrame):
     def _build(self, num_lines):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
         lyt.addLayout(self._build_upper_bar())
+        lyt.addWidget(self._build_attachment_area())  # Add attachment area
         lyt.addWidget(self._build_edit_field(num_lines), stretch=10)
         lyt.addLayout(self._build_lower_bar())
 
@@ -349,6 +534,14 @@ if __name__ == "__main__":
                 f"Comment [{y}] {'=' * (70 - len(y) - 2)}\n{x}{'=' * 78}"
             )
         )
+
+        # Test adding attachments
+        ww.add_attachment(
+            file_path="test.png",
+            filename="test_annotation.png",
+            timestamp=12345678
+        )
+
         return w
 
     test(build, style=Style.Widget)
