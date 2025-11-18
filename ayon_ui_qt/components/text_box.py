@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import partial
+import os
 
 from qtpy.QtCore import (
     QObject,
@@ -419,6 +420,9 @@ class AYTextBox(AYFrame):
     def _on_attachment_removed(self, index: int) -> None:
         """Handle removal of an attachment."""
         if 0 <= index < len(self._attachments):
+            file_path = self._attachments[index].get("file_path", "")
+            logger.info("Removing attachment: %s", file_path)
+            os.remove(file_path)
             self._attachments.pop(index)
             self._refresh_attachment_display()
 
@@ -490,6 +494,10 @@ class AYTextBox(AYFrame):
 
     def clear_attachments(self) -> None:
         """Clear all attachments from the editor."""
+        for attachment in self._attachments:
+            file_path = attachment.get("file_path", "")
+            logger.info("Removing attachment: %s", file_path)
+            os.remove(file_path)
         self._attachments.clear()
         self._refresh_attachment_display()
 
