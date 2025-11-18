@@ -457,6 +457,7 @@ class AYTextBox(AYFrame):
         for existing in self._attachments:
             if existing.get("file_path") == file_path:
                 logger.info("Attachment already exists: %s", filename)
+                self._refresh_attachment_display()
                 return
         attachment = {
             "file_path": file_path,
