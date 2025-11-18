@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from functools import partial
-import os
 
 from qtpy.QtCore import (
     QObject,
@@ -300,6 +299,7 @@ class AttachmentWidget(QtWidgets.QWidget):
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str)  # type: ignore
+    clear_attachments = Signal(str)  # type: ignore
 
 
 class AYTextBox(AYFrame):
@@ -422,8 +422,10 @@ class AYTextBox(AYFrame):
         if 0 <= index < len(self._attachments):
             file_path = self._attachments[index].get("file_path", "")
             logger.info("Removing attachment: %s", file_path)
-            os.remove(file_path)
-            self._attachments.pop(index)
+            target_attachment = self._attachments.pop(index)
+            self.signals.clear_attachments.emit(
+                target_attachment.get("current_frame", None)
+            )
             self._refresh_attachment_display()
 
     def _refresh_attachment_display(self) -> None:
@@ -494,10 +496,6 @@ class AYTextBox(AYFrame):
 
     def clear_attachments(self) -> None:
         """Clear all attachments from the editor."""
-        for attachment in self._attachments:
-            file_path = attachment.get("file_path", "")
-            logger.info("Removing attachment: %s", file_path)
-            os.remove(file_path)
         self._attachments.clear()
         self._refresh_attachment_display()
 
