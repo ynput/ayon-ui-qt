@@ -424,48 +424,36 @@ class AYTextBox(AYFrame):
 
     def _refresh_attachment_display(self) -> None:
         """Refresh the attachment display area."""
-        # Clear existing widgets
-        while self.attachment_layout.count():
-            item = self.attachment_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        # Add attachment widgets
-        if self._attachments:
-            for idx, attachment in enumerate(self._attachments):
-                widget = AttachmentWidget(
-                    parent=self.attachment_container,
-                    index=idx,
-                    filename=attachment.get("filename", f"attachment_{idx}"),
-                    file_path=attachment.get("file_path", "")
-                )
-                widget.remove_clicked.connect(self._on_attachment_removed)
-                self.attachment_layout.addWidget(widget)
+        # Disable updates during rebuild to prevent flickering
+        self.attachment_container.setUpdatesEnabled(False)
 
-            self.attachment_layout.addStretch()
-            self.attachment_scroll.show()
-        else:
-            self.attachment_scroll.hide()
+        try:
+            # Clear existing widgets
+            while self.attachment_layout.count():
+                item = self.attachment_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
 
-    def add_attachment(self, file_path: str, filename: str, **kwargs) -> None:
-        """Add an attachment to the comment editor.
+            # Add attachment widgets
+            if self._attachments:
+                for idx, attachment in enumerate(self._attachments):
+                    widget = AttachmentWidget(
+                        parent=self.attachment_container,
+                        index=idx,
+                        filename=attachment.get("filename", f"attachment_{idx}"),
+                        file_path=attachment.get("file_path", "")
+                    )
+                    widget.remove_clicked.connect(self._on_attachment_removed)
+                    self.attachment_layout.addWidget(widget)
 
-        Args:
-            file_path: Path to the file or base64 data URL
-            filename: Name of the file
-            **kwargs: Additional metadata (timestamp, etc.)
-        """
-        for existing in self._attachments:
-            if existing.get("file_path") == file_path:
-                logger.info("Attachment already exists: %s", filename)
-                self._refresh_attachment_display()
-                return
-        attachment = {
-            "file_path": file_path,
-            "filename": filename,
-            **kwargs
-        }
-        self._attachments.append(attachment)
-        self._refresh_attachment_display()
+                self.attachment_layout.addStretch()
+                self.attachment_scroll.show()
+            else:
+                self.attachment_scroll.hide()
+        finally:
+            # Re-enable updates and trigger repaint once
+            self.attachment_container.setUpdatesEnabled(True)
+            self.attachment_container.update()
 
     def add_attachments(self, attachments: list[dict]) -> None:
         """Add multiple attachments at once.
@@ -474,12 +462,31 @@ class AYTextBox(AYFrame):
             attachments: List of attachment dictionaries with 'file_path'
                         and 'filename' keys
         """
+        if not attachments:
+            return
+
+        added_count = 0
         for attachment in attachments:
-            self.add_attachment(
-                file_path=attachment.get("file_path", ""),
-                filename=attachment.get("filename", "attachment"),
-                timestamp=attachment.get("timestamp")
-            )
+            filename = attachment.get("filename", "")
+            file_path = attachment.get("file_path", "")
+
+            # Check for duplicates
+            if any(existing.get("filename") == filename for existing in self._attachments):
+                logger.info("Attachment already exists: %s", filename)
+                continue
+
+            # Add to list without refreshing
+            self._attachments.append({
+                "file_path": file_path,
+                "filename": filename,
+                "timestamp": attachment.get("timestamp")
+            })
+            added_count += 1
+
+        # Refresh display only once after all additions
+        if added_count > 0:
+            self._refresh_attachment_display()
+            logger.info("Added %d attachment(s)", added_count)
 
     def clear_attachments(self) -> None:
         """Clear all attachments from the editor."""
@@ -537,10 +544,19 @@ if __name__ == "__main__":
         )
 
         # Test adding attachments
-        ww.add_attachment(
-            file_path="test.png",
-            filename="test_annotation.png",
-            timestamp=12345678
+        ww.add_attachments(
+            [
+                {
+                    "file_path": "test1.png",
+                    "filename": "test_annotation1.png",
+                    "timestamp": 12345678
+                },
+                {
+                    "file_path": "test2.png",
+                    "filename": "test_annotation2.png",
+                    "timestamp": 12345679
+                },
+            ]
         )
 
         return w
