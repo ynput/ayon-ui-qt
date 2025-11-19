@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Signal, Qt
-from PySide6.QtGui import (
+from qtpy.QtCore import QEvent, Signal, Qt
+from qtpy.QtGui import (
     QEnterEvent,
     QTextDocument,
     QPixmap
