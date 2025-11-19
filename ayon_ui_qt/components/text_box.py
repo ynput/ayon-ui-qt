@@ -495,10 +495,6 @@ class AYTextBox(AYFrame):
 
     def clear_attachments(self) -> None:
         """Clear all attachments from the editor."""
-        for attachment in self._attachments:
-            file_path = attachment.get("file_path", "")
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
         self._attachments.clear()
 
         self._refresh_attachment_display()
