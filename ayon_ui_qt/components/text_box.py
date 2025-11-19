@@ -428,36 +428,36 @@ class AYTextBox(AYFrame):
 
     def _refresh_attachment_display(self) -> None:
         """Refresh the attachment display area."""
-        # Disable updates during rebuild to prevent flickering
-        self.attachment_container.setUpdatesEnabled(False)
+        # Disable updates during refresh to prevent flickering
+        self.attachment_container.setUpdatesEnabled(True)
 
-        try:
-            # Clear existing widgets
-            while self.attachment_layout.count():
-                item = self.attachment_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+        # Clear existing widgets
+        while self.attachment_layout.count():
+            item = self.attachment_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
-            # Add attachment widgets
-            if self._attachments:
-                for idx, attachment in enumerate(self._attachments):
-                    widget = AttachmentWidget(
-                        parent=self.attachment_container,
-                        index=idx,
-                        filename=attachment.get("filename", f"attachment_{idx}"),
-                        file_path=attachment.get("file_path", "")
-                    )
-                    widget.remove_clicked.connect(self._on_attachment_removed)
-                    self.attachment_layout.addWidget(widget)
+        # Add attachment widgets
+        if self._attachments:
+            for idx, attachment in enumerate(self._attachments):
+                widget = AttachmentWidget(
+                    parent=self.attachment_container,
+                    index=idx,
+                    filename=attachment.get("filename", f"attachment_{idx}"),
+                    file_path=attachment.get("file_path", "")
+                )
+                widget.remove_clicked.connect(self._on_attachment_removed)
+                self.attachment_layout.addWidget(widget)
 
-                self.attachment_layout.addStretch()
-                self.attachment_scroll.show()
-            else:
-                self.attachment_scroll.hide()
-        finally:
-            # Re-enable updates and trigger repaint once
-            self.attachment_container.setUpdatesEnabled(True)
-            self.attachment_container.update()
+            self.attachment_layout.addStretch()
+            self.attachment_scroll.show()
+        else:
+            self.attachment_scroll.hide()
+
+        # Re-enable updates and force refresh
+        self.attachment_container.setUpdatesEnabled(True)
+        self.attachment_container.update()
+
 
     def add_attachments(self, attachments: list[dict]) -> None:
         """Add multiple attachments at once.
@@ -477,6 +477,7 @@ class AYTextBox(AYFrame):
             # Check for duplicates
             if any(existing.get("filename") == filename for existing in self._attachments):
                 logger.info("Attachment already exists: %s", filename)
+                self._refresh_attachment_display()
                 continue
 
             # Add to list without refreshing
