@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import logging
 from functools import partial
 
@@ -420,9 +419,6 @@ class AYTextBox(AYFrame):
     def _on_attachment_removed(self, index: int) -> None:
         """Handle removal of an attachment."""
         if 0 <= index < len(self._attachments):
-            file_path = self._attachments[index].get("file_path", "")
-            logger.info("Removing attachment: %s", file_path)
-            os.remove(file_path)
             self._attachments.pop(index)
             self._refresh_attachment_display()
 
