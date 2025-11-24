@@ -96,9 +96,6 @@ class ActivityPanel(AYContainer):
         self.editor.signals.comment_submitted.connect(
             self.signals.ui_comment_submitted.emit
         )
-        self.editor.signals.comment_submitted.connect(
-            self.stream.on_comment_submitted
-        )
         self.details.signals.version_status_changed.connect(
             self.signals.ui_version_status_changed.emit
         )
@@ -141,6 +138,20 @@ class ActivityPanel(AYContainer):
         self._version_data.status = status
         self.details.on_ctlr_version_status_changed(status)
 
+    @Slot(list)
+    def on_ctrl_annotation_submitted(self, annotation_list: list) -> None:
+        """Handle annotation submission from controller.
+
+        Adds annotation images/attachments to the comment editor.
+
+        Args:
+            annotation_list: List of annotation dictionaries with 'file_path',
+                            'timestamp', and 'filename' keys.
+        """
+        if not annotation_list:
+            return
+
+        self.editor.add_attachments(annotation_list)
 
 #  TEST =======================================================================
 

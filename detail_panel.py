@@ -6,6 +6,7 @@ from __future__ import annotations
 from qtpy.QtCore import QObject, Qt, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
+from ayon_ui_qt import style_widget_and_siblings
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.combo_box import AYComboBox
 from ayon_ui_qt.components.container import AYContainer
@@ -122,6 +123,9 @@ class AYDetailPanel(AYContainer):
         self._project: ProjectData = ProjectData.not_set()
         self._version_data: VersionData = VersionData.not_set()
         self._build()
+
+        # # Apply styling to this widget and its children
+        # style_widget_and_siblings(self)
 
     def _build_thumbnail(self) -> AYHBoxLayout:
         """Build the thumbnail section layout.
