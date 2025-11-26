@@ -39,6 +39,7 @@ class AYEntityThumbnail(QPushButton):
 
     def set_thumbnail(self, name: Path | str):
         """Set the thumbnail image for the button."""
+        self._src = name
         if not Path(self._src).exists() and self._file_cacher:
             ic = ImageCache.get_instance()
             self._src = ic.get(
