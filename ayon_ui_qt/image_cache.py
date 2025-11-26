@@ -33,12 +33,6 @@ class ImageCache:
     _instance: ImageCache | None = None
     _lock: threading.Lock = threading.Lock()
 
-    def __new__(cls) -> ImageCache:
-        """Prevent direct instantiation. Use get_instance() instead."""
-        raise RuntimeError(
-            "Use ImageCache.get_instance() to get the singleton instance"
-        )
-
     @classmethod
     def get_instance(
         cls, cache_path: str | Path | None = None, max_size_in_MB: int = 50
@@ -71,7 +65,8 @@ class ImageCache:
         tmp = tmp / "AYON_IMG_CACHE"
         # make tmp writable and readable to the user only
         tmp.mkdir(parents=True, exist_ok=True)
-        os.chmod(tmp, 0o700)
+        if os.name != "nt":
+            os.chmod(tmp, 0o700)
         logger.info(f"image cache: {tmp} ({self.max_size_in_MB} MB)")
         return tmp
 
