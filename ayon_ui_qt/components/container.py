@@ -24,9 +24,16 @@ class AYContainer(AYFrame):
         margin=0,
         layout_spacing=0,
         layout_margin=0,
+        bg_tint="",
         **kwargs,
     ):
-        super().__init__(*args, **kwargs, variant=variant, margin=margin)
+        super().__init__(
+            *args,
+            **kwargs,
+            variant=variant,
+            margin=margin,
+            bg_tint=bg_tint,
+        )
         self.variant = variant
         if layout == AYContainer.Layout.HBox:
             self._layout = AYHBoxLayout(

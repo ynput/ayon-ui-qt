@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 
@@ -114,6 +114,10 @@ class CommentModel:
     annotations: list[AnnotationModel] = field(default_factory=list, hash=False)
 
     def __post_init__(self):
+        """Set the date if not set and compute the short date."""
+        if not self.comment_date:
+            self.comment_date = datetime.now(timezone.utc).isoformat()
+
         self.short_date = short_date(self.comment_date)
 
 

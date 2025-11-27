@@ -16,9 +16,22 @@ from .data_models import (
     AnnotationModel,
     FileModel,
 )
+from qtpy.QtGui import QColor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def color_blend(bg: str, fg: str, mix: float):
+    b = QColor(bg)
+    t = QColor(fg)
+    o = mix
+    io = 1.0 - o
+    return QColor(
+        int(b.red() * io + t.red() * o),
+        int(b.green() * io + t.green() * o),
+        int(b.blue() * io + t.blue() * o),
+    )
 
 
 def process_activity_data(

@@ -709,6 +709,22 @@ class FrameDrawer:
         # get style
         variant = getattr(w, "variant", "")
         style = self.model.get_style("QFrame", variant)
+        # widget override for comment types
+        if hasattr(w, "get_bg_color"):
+            bgc: QColor = w.get_bg_color(style["background-color"])
+            style = dict(style)
+            style["border-color"] = bgc
+            style["background-color"] = bgc
+            # set background color of QTextEdit widgets
+            try:
+                viewport = w.viewport()
+            except AttributeError:
+                pass
+            else:
+                palette = viewport.palette()
+                palette.setColor(QPalette.ColorRole.Base, bgc)
+                viewport.setPalette(palette)
+
         # pen setup
         border_color = QColor(style["border-color"])
         border_width = style.get("border-width", 0)
@@ -1465,8 +1481,8 @@ class AYONStyle(QCommonStyle):
         """Draw control elements (buttons, labels, etc.)."""
         key = enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
 
-        if isinstance(w, QPushButton):
-            log.debug("%s %s", type(w), key)
+        # if isinstance(w, QPushButton):
+        #     log.debug("%s %s", type(w), key)
 
         try:
             draw_ce_calls = self.drawers[key]

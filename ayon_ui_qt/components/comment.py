@@ -3,12 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from qtpy.QtCore import QEvent, Signal, Qt
-from qtpy.QtGui import (
-    QEnterEvent,
-    QTextDocument,
-    QPixmap
+from qtpy.QtGui import QEnterEvent, QTextDocument, QPixmap
+from qtpy.QtWidgets import (
+    QTextEdit,
+    QMessageBox,
+    QWidget,
+    QLabel,
+    QDialog,
+    QVBoxLayout,
 )
-from qtpy.QtWidgets import QTextEdit, QMessageBox, QWidget, QLabel, QDialog, QVBoxLayout
 
 from .buttons import AYButton
 from .container import AYContainer, AYFrame
@@ -30,6 +33,7 @@ from ..data_models import (
     CommentModel,
     User,
 )
+from ..utils import color_blend
 
 
 # STATUS ---------------------------------------------------------------------
@@ -181,12 +185,15 @@ class AYCommentField(QTextEdit):
         read_only: bool = False,
         num_lines: int = 0,
         user_list: list[User] | None = None,
+        model: CommentModel | None = None,
         **kwargs,
     ) -> None:
         # remove our kwargs
         self._num_lines = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
+        self._data = model
+        self._bg_color = None
 
         super().__init__(*args, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
@@ -215,6 +222,15 @@ class AYCommentField(QTextEdit):
         self.document().contentsChanged.connect(
             lambda: format_comment_on_change(self)
         )
+
+    def get_bg_color(self, base_color: str):
+        if not self._bg_color:
+            self._bg_color = base_color
+            if self._data and self._data.category_color:
+                self._bg_color = color_blend(
+                    base_color, self._data.category_color, 0.1
+                )
+        return self._bg_color
 
     def set_markdown(self, md: str) -> None:
         self.document().setMarkdown(md, MD_DIALECT)
@@ -256,7 +272,9 @@ class AYImageAttachment(AYLabel):
         self._max_height = max_height
 
         self.setScaledContents(False)
-        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         # Set tooltip
@@ -366,8 +384,14 @@ class AYComment(AYFrame):
     ):
         self._data = data if data else CommentModel()
         self._user_list: list[User] = user_list or []
+        self._bg_color = None
 
-        super().__init__(*args, variant="low", **kwargs)
+        super().__init__(
+            *args,
+            variant="low",
+            bg_tint=self._data.category_color,
+            **kwargs,
+        )
 
         self._build()
         # configure
@@ -376,6 +400,15 @@ class AYComment(AYFrame):
             self.date.setText(self._data.short_date)
             self.set_comment_category()
             self._build_image_attachments()
+
+    def get_bg_color(self, base_color: str):
+        if not self._bg_color:
+            self._bg_color = base_color
+            if self._data and self._data.category_color:
+                self._bg_color = color_blend(
+                    base_color, self._data.category_color, 0.1
+                )
+        return self._bg_color
 
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
@@ -424,7 +457,9 @@ class AYComment(AYFrame):
 
     def _build_edit_buttons(self):
         self.edit_frame = AYContainer(
-            layout=AYContainer.Layout.HBox, parent=self.top_line
+            layout=AYContainer.Layout.HBox,
+            bg_tint=self._data.category_color,
+            parent=self.top_line,
         )
         bsize = 22
         self.del_button = AYButton(
@@ -453,22 +488,28 @@ class AYComment(AYFrame):
             text=self._data.comment,
             read_only=True,
             user_list=self._user_list,
+            model=self._data,
         )
 
         editor_lyt = AYContainer(
-            layout=AYContainer.Layout.VBox, variant="high"
+            layout=AYContainer.Layout.VBox,
+            variant="high",
+            bg_tint=self._data.category_color,
         )
         self.top_line = AYContainer(
-            layout=AYContainer.Layout.HBox, variant="high"
+            layout=AYContainer.Layout.HBox,
+            variant="high",
+            bg_tint=self._data.category_color,
         )
         self.images_container = AYContainer(
-            layout=AYContainer.Layout.VBox, variant="high"
+            layout=AYContainer.Layout.VBox,
+            variant="high",
+            bg_tint=self._data.category_color,
         )
         self.top_line.setFixedHeight(20)
         editor_lyt.add_widget(self.top_line, stretch=0)
         editor_lyt.add_widget(self.images_container, stretch=10)
         editor_lyt.add_widget(self.text_field, stretch=10)
-
 
         editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
         self.main_lyt.addWidget(editor_lyt)
@@ -476,17 +517,22 @@ class AYComment(AYFrame):
 
     def _build_image_attachments(self):
         """Build and display image attachments as separate clickable widgets."""
-        if not self._data or not hasattr(self._data, 'files') or not self._data.files:
+        if (
+            not self._data
+            or not hasattr(self._data, "files")
+            or not self._data.files
+        ):
             return
 
         from .. import get_ayon_style
+
         style = get_ayon_style()
 
         # Only show the first image from the files list
         file_model = self._data.files[0]
 
         # Check if file has local_path
-        if not hasattr(file_model, 'local_path'):
+        if not hasattr(file_model, "local_path"):
             return
 
         # Check if path exists
@@ -496,9 +542,11 @@ class AYComment(AYFrame):
         # Get the text field width to scale images accordingly
         text_field_width = self.text_field.width()
         # Account for margins/padding
-        max_image_width = text_field_width - 20 if text_field_width > 20 else 400
+        max_image_width = (
+            text_field_width - 20 if text_field_width > 20 else 400
+        )
 
-        thumb_path = getattr(file_model, 'thumb_local_path', None)
+        thumb_path = getattr(file_model, "thumb_local_path", None)
 
         # Create image widget with dynamic width matching text field
         image_widget = AYImageAttachment(
