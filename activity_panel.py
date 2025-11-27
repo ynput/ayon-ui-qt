@@ -178,6 +178,9 @@ if __name__ == "__main__":
                 f"ActivityPanel.signals.comment_submitted: [{cat}] {md!r}"
             )  # noqa: T201
         )
+        w.editor.signals.comment_submitted.connect(
+            w.stream.on_comment_submitted
+        )
         w.signals.ui_version_status_changed.connect(
             lambda stat: print(
                 f"ActivityPanel.signals.status_changed: {stat!r}"
