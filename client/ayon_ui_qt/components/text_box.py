@@ -58,6 +58,8 @@ class AYTextEditor(QTextEdit):
         self.num_lines: int = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
+        # Flag to prevent format_comment_on_change during style application
+        self._applying_style = False
 
         super().__init__(*args, **kwargs)
 
@@ -92,7 +94,7 @@ class AYTextEditor(QTextEdit):
             lambda: format_comment_on_change(self)
         )
 
-        style_widget_and_siblings(self, fix_app=False)
+        style_widget_and_siblings(self)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
@@ -104,93 +106,125 @@ class AYTextEditor(QTextEdit):
 
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
+        # Handle completer first
         if on_completer_key_press(self, event):
             event.accept()
             return
+
+        cursor = self.textCursor()
+
+        # If there's a selection, let Qt handle format changes naturally
+        if cursor.hasSelection():
+            super().keyPressEvent(event)
+            return
+
+        # Process the key event normally
         super().keyPressEvent(event)
 
     def set_style(self, style):
         cursor = self.textCursor()
-        # print(f"selected: {cursor.selectedText()}")
-        if style == "stl_h1":
-            cursor.beginEditBlock()
-            char_format = cursor.blockCharFormat()
 
-            # Check if already a header (by checking font size)
-            current_size = cursor.charFormat().fontPointSize()
+        # Disconnect the format_comment_on_change to prevent re-formatting
+        self.document().contentsChanged.disconnect()
+        self._applying_style = True
+
+        cursor.beginEditBlock()
+
+        if style == "stl_bold":
+            # Toggle bold for current format or set it for new text
+            fmt = cursor.charFormat()
+            new_weight = (
+                QFont.Weight.Normal
+                if fmt.fontWeight() == QFont.Weight.Bold
+                else QFont.Weight.Bold
+            )
+            fmt.setFontWeight(new_weight)
+
+            # Apply the format to current selection OR set as current format for next text
+            if cursor.hasSelection():
+                cursor.setCharFormat(fmt)
+            else:
+                # Set as the current format for subsequent typing
+                self.setCurrentCharFormat(fmt)
+
+            # Ensure the cursor maintains this format
+            self.setTextCursor(cursor)
+
+        elif style == "stl_italic":
+            fmt = cursor.charFormat()
+            new_italic = not fmt.fontItalic()
+            fmt.setFontItalic(new_italic)
+
+            if cursor.hasSelection():
+                cursor.setCharFormat(fmt)
+            else:
+                self.setCurrentCharFormat(fmt)
+
+            self.setTextCursor(cursor)
+
+        elif style == "stl_h1":
+            fmt = cursor.charFormat()
             base_size = self.font().pointSize()
-
-            # print(f"current_size = {current_size}   base_size = {base_size}")
+            current_size = fmt.fontPointSize()
 
             # Toggle header formatting
             if current_size > base_size:  # Already a header
-                # Remove header formatting
-                char_format.setFontPointSize(base_size)
-                char_format.setFontWeight(QFont.Weight.Normal)
+                fmt.setFontPointSize(base_size)
+                fmt.setFontWeight(QFont.Weight.Normal)
             else:  # Make it a header
-                # Apply header formatting (H2 style)
-                char_format.setFontPointSize(base_size * 1.5)  # 1.5x larger
-                char_format.setFontWeight(QFont.Weight.Bold)
+                fmt.setFontPointSize(base_size * 1.5)
+                fmt.setFontWeight(QFont.Weight.Bold)
 
-            # Apply to entire block
-            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-            cursor.setCharFormat(char_format)
-            cursor.endEditBlock()
-            # keep focus in editor
-            self.setFocus()
-
-        elif cursor.hasSelection():
-            fmt = cursor.charFormat()
-            cursor.beginEditBlock()
-
-            if style == "stl_bold":
-                if cursor.charFormat().fontWeight() == QFont.Weight.Normal:
-                    fmt.setFontWeight(QFont.Weight.Bold)
-                else:
-                    fmt.setFontWeight(QFont.Weight.Normal)
+            if cursor.hasSelection():
                 cursor.setCharFormat(fmt)
+            else:
+                self.setCurrentCharFormat(fmt)
 
-            elif style == "stl_italic":
-                if cursor.charFormat().fontItalic():
-                    fmt.setFontItalic(False)
-                else:
-                    fmt.setFontItalic(True)
-                cursor.setCharFormat(fmt)
+            self.setTextCursor(cursor)
 
-            elif style == "stl_link":
-                pw = self.parentWidget()
-                if not pw:
-                    return
+        elif style == "stl_link":
+            pw = self.parentWidget()
+            if not pw:
+                return
 
-                field = QtWidgets.QLineEdit(cursor.selectedText(), parent=pw)
+            selected_text = cursor.selectedText() if cursor.hasSelection() else ""
+            field = QtWidgets.QLineEdit(selected_text, parent=pw)
 
-                def _make_link():
-                    link = field.text()
-                    fmt.setAnchor(True)
-                    fmt.setAnchorHref(link)
-                    fmt.setFontUnderline(True)
+            def _make_link():
+                link = field.text()
+                fmt = self.currentCharFormat()
+                fmt.setAnchor(True)
+                fmt.setAnchorHref(link)
+                fmt.setFontUnderline(True)
+
+                if cursor.hasSelection():
                     cursor.setCharFormat(fmt)
-                    field.close()
-                    field.deleteLater()
-                    self.setFocus()
-                    self.update()
+                else:
+                    self.setCurrentCharFormat(fmt)
 
-                # open link edit field
-                field.show()
-                fr = field.rect()
-                field.setGeometry(4, 0, self.rect().width(), fr.height())
-                field.selectAll()
-                field.setFocus()
-                field.returnPressed.connect(_make_link)
+                field.close()
+                field.deleteLater()
+                self.setFocus()
+                self.update()
 
-            elif style == "stl_code":
-                txt = cursor.selectedText()
-                frame_fmt = QTextFrameFormat()
-                cursor.insertFrame(frame_fmt)
+            # open link edit field
+            field.show()
+            fr = field.rect()
+            field.setGeometry(4, 0, self.rect().width(), fr.height())
+            field.selectAll()
+            field.setFocus()
+            field.returnPressed.connect(_make_link)
 
-                print("IMPLEMENT ME !")
+        elif style == "stl_code":
+            frame_fmt = QTextFrameFormat()
+            cursor.insertFrame(frame_fmt)
+            print("IMPLEMENT ME !")
 
-            cursor.endEditBlock()
+        cursor.endEditBlock()
+        self._applying_style = False
+        self.document().contentsChanged.connect(
+            lambda: format_comment_on_change(self)
+        )
 
     def set_format(self, format):
         print(f"format: {format}")

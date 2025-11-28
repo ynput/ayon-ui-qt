@@ -508,7 +508,7 @@ def apply_web_markdown_formatting(
                 base_size = text_edit.fontInfo().pointSize()
             if base_size <= 0:
                 base_size = 12  # Fallback
-            
+
             char_fmt.setFontPointSize(int(base_size * 1.5))
             char_fmt.setFontWeight(QFont.Weight.Bold)
             if styles and "h1" in styles and "color" in styles["h1"]:
@@ -557,22 +557,20 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
 
     Any word starting with @ will be formatted in red.
     """
-    text_edit.document().blockSignals(True)
+    # Skip formatting if we're applying style changes
+    if hasattr(text_edit, '_applying_style') and text_edit._applying_style:
+        return
+
+    # Skip if no user list
+    if not hasattr(text_edit, '_user_list'):
+        return
 
     pal = get_ayon_style().model.base_palette
     document = text_edit.document()
     cursor = text_edit.textCursor()
-    fmt = cursor.charFormat()
 
-    # Create a format for red text
-    user_format = QTextCharFormat(fmt)
-    user_format.setForeground(pal.link())
-    url_format = QTextCharFormat(fmt)
-    url_format.setForeground(pal.link())
-    url_format.setFontUnderline(True)
-
-    # Create a format for normal text
-    normal_format = QTextCharFormat()
+    # Store original cursor position
+    original_pos = cursor.position()
 
     # Get all text from document
     md = document.toMarkdown()
@@ -586,45 +584,68 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
     p_all = f"{p_user}|{p_link}|{p_raw_link}"
     matches = list(re.finditer(p_all, md))
 
-    # Clear all formatting first
-    cursor.select(QTextCursor.SelectionType.Document)
-    cursor.setCharFormat(normal_format)
+    # Block signals and start edit block
+    document.blockSignals(True)
+    cursor.beginEditBlock()
 
-    # We parsed the markdown but the cursor if using the plain text, so we
-    # need to keep track of the number of extra markdown characters to keep
-    # things aligned.
+    # Collect all formatting operations
+    format_ops = []  # List of (start, end, format) tuples
     xtra = 0
+
     for match in matches:
         for key, val in match.groupdict().items():
             if val is None:
                 continue
-            if key == "user":
-                cursor.setPosition(match.start())
-                if val[1:] in users:
-                    cursor.setPosition(
-                        match.end(), QTextCursor.MoveMode.KeepAnchor
-                    )
-                else:
-                    cursor.setPosition(
-                        match.end() - len(val.split()[-1]),
-                        QTextCursor.MoveMode.KeepAnchor,
-                    )
 
-                cursor.setCharFormat(user_format)
-            if key == "raw_link":
-                cursor.setPosition(match.start())
-                cursor.setPosition(
-                    match.end(), QTextCursor.MoveMode.KeepAnchor
-                )
-                cursor.setCharFormat(user_format)
+            if key == "user":
+                # Create a clean format with ONLY link color
+                user_format = QTextCharFormat()
+                user_format.setForeground(pal.link())
+
+                start = match.start()
+                if val[1:] in users:
+                    end = match.end()
+                else:
+                    end = match.end() - len(val.split()[-1])
+
+                format_ops.append((start, end, user_format))
+
+            elif key == "raw_link":
+                # Create a clean format with link color and underline
+                link_format = QTextCharFormat()
+                link_format.setForeground(pal.link())
+                link_format.setFontUnderline(True)
+
+                format_ops.append((match.start(), match.end(), link_format))
+
             elif key == "link":
+                # Create a clean format with link color and underline
+                link_format = QTextCharFormat()
+                link_format.setForeground(pal.link())
+                link_format.setFontUnderline(True)
+
                 p0 = match.start() - xtra
-                cursor.setPosition(p0)
                 link_name = re.search(r"\[(.+)\]", val).group(1)
-                p1 = (match.start() - xtra) + len(link_name)
-                cursor.setPosition(p1, QTextCursor.MoveMode.KeepAnchor)
+                p1 = p0 + len(link_name)
                 xtra += len(val) - len(link_name) + 1
-                cursor.setCharFormat(url_format)
+                format_ops.append((p0, p1, link_format))
+
+    # Now apply all formatting operations
+    for start, end, fmt in format_ops:
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.setCharFormat(fmt)
+
+    # Reset to default format after last formatting operation
+    # This ensures the next typed character won't inherit the @mention color
+    default_format = QTextCharFormat()
+    cursor.setPosition(original_pos)
+    cursor.setCharFormat(default_format)
+
+    # End edit block and unblock signals
+    cursor.endEditBlock()
+    document.blockSignals(False)
 
     # Restore original cursor position
-    text_edit.document().blockSignals(False)
+    cursor.setPosition(original_pos)
+    text_edit.setTextCursor(cursor)
