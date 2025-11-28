@@ -25,6 +25,7 @@ from .comment_completion import (
     on_completer_activated,
     on_completer_key_press,
     format_comment_on_change,
+    apply_web_markdown_formatting,
 )
 from ..data_models import (
     StatusChangeModel,
@@ -233,7 +234,38 @@ class AYCommentField(QTextEdit):
         return self._bg_color
 
     def set_markdown(self, md: str) -> None:
-        self.document().setMarkdown(md, MD_DIALECT)
+        """Set markdown content, supporting both standard markdown and web markdown.
+        
+        If text contains web markdown syntax (text\\n----, **bold**, _italic_, [link](url), `code`),
+        it will be parsed and formatted accordingly with syntax removed.
+        Otherwise, uses standard QTextDocument markdown.
+        
+        Args:
+            md: Markdown text to display
+        """
+        # Check if text contains web markdown syntax
+        has_web_markdown = any(
+            pattern in md for pattern in ["\n----", "**", "_", "[", "`"]
+        )
+        
+        if has_web_markdown:
+            # Use web markdown formatting (removes syntax, applies formatting)
+            self.set_web_markdown(md)
+        else:
+            # Use standard markdown
+            self.document().setMarkdown(md, MD_DIALECT)
+
+    def set_web_markdown(self, md: str, styles: dict | None = None) -> None:
+        """Set markdown from web data with formatting.
+        
+        Removes markdown syntax (**text** becomes text with bold formatting).
+        
+        Args:
+            md: Markdown text from web (**bold**, _italic_, [link](url), `code`)
+            styles: Optional custom styles for formatting
+        """
+        apply_web_markdown_formatting(self, md, styles=styles)
+        self.setReadOnly(self._read_only)
 
     def as_markdown(self) -> str:
         return self.document().toMarkdown(MD_DIALECT)
@@ -252,6 +284,41 @@ class AYCommentField(QTextEdit):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        """Handle mouse press events to open links only in read-only mode."""
+        # Only handle link clicks in read-only mode (display comments)
+        if self.isReadOnly():
+            # Get the character at the click position
+            cursor = self.cursorForPosition(event.pos())
+            char_format = cursor.charFormat()
+            
+            # Check if the clicked text is a link (has anchor href)
+            if char_format.isAnchor() and char_format.anchorHref():
+                import webbrowser
+                url = char_format.anchorHref()
+                webbrowser.open(url)
+                event.accept()
+                return
+        
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        """Change cursor to hand when hovering over links in read-only mode."""
+        # Only show hand cursor in read-only mode (display comments)
+        if self.isReadOnly():
+            cursor = self.cursorForPosition(event.pos())
+            char_format = cursor.charFormat()
+            
+            # Show hand cursor only for actual links with href
+            if char_format.isAnchor() and char_format.anchorHref():
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+            else:
+                self.setCursor(Qt.CursorShape.IBeamCursor)
+        else:
+            self.setCursor(Qt.CursorShape.IBeamCursor)
+        
+        super().mouseMoveEvent(event)
 
 
 class AYImageAttachment(AYLabel):

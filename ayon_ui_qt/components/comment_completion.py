@@ -8,7 +8,8 @@ from qtpy.QtGui import (
     QStandardItem,
     QPainter,
     QTextCursor,
-    QTextCharFormat
+    QTextCharFormat,
+    QFont,
 )
 from qtpy.QtWidgets import (
     QCompleter,
@@ -295,6 +296,260 @@ def on_completer_key_press(
                     text_edit.completer.activated.emit(completion)
                     return True
     return False
+
+
+def parse_markdown_from_web(text: str) -> list[dict]:
+    """Parse web markdown syntax and return format information.
+
+    Identifies H1 (text\n----), **bold**, _italic_, [link](url),
+    and `code` patterns.
+
+    Args:
+        text: Markdown text containing web syntax
+
+    Returns:
+        List of dicts with keys: 'type', 'start', 'end', 'content', 'url'
+    """
+    formats = []
+
+    # Pattern for H1 (text followed by newline and dashes)
+    for match in re.finditer(r"^(.+?)\n-{2,}$", text, re.MULTILINE):
+        formats.append({
+            "type": "h1",
+            "start": match.start(),
+            "end": match.end(),
+            "content": match.group(1),
+        })
+
+    # Pattern for **bold**
+    for match in re.finditer(r"\*\*(.+?)\*\*", text):
+        formats.append({
+            "type": "bold",
+            "start": match.start(),
+            "end": match.end(),
+            "content": match.group(1),
+        })
+
+    # Pattern for _italic_
+    for match in re.finditer(r'_(.+?)_', text):
+        formats.append({
+            "type": "italic",
+            "start": match.start(),
+            "end": match.end(),
+            "content": match.group(1),
+        })
+
+    # Pattern for [link](url)
+    for match in re.finditer(r"\[(.+?)\]\((.+?)\)", text):
+        formats.append({
+            "type": "link",
+            "start": match.start(),
+            "end": match.end(),
+            "content": match.group(1),
+            "url": match.group(2),
+        })
+
+    # Pattern for `code`
+    for match in re.finditer(r"`(.+?)`", text):
+        formats.append({
+            "type": "code",
+            "start": match.start(),
+            "end": match.end(),
+            "content": match.group(1),
+        })
+
+    return formats
+
+
+def apply_web_markdown_formatting(
+    text_edit: QTextEdit,
+    text: str,
+    styles: dict | None = None,
+) -> None:
+    """Apply web markdown formatting to text, removing syntax.
+
+    Removes markdown syntax while preserving formatting
+    (**bold** becomes bold text, _italic_ becomes italic text, etc).
+
+    Args:
+        text_edit: QTextEdit widget to apply formatting to
+        text: Markdown text from web
+        styles: Optional custom styles dict with keys: "bold", "italic", "link", "code"
+    """
+    pal = get_ayon_style().model.base_palette
+
+    # Parse markdown to find all format positions
+    formats = parse_markdown_from_web(text)
+
+    # Sort by start position (reverse order for proper offset calculation)
+    formats.sort(key=lambda x: x["start"], reverse=True)
+
+    # Build plain text by removing syntax and track position mappings
+    plain_text = text
+    position_map = {}  # Maps original positions to new positions
+
+    for fmt in formats:
+        start = fmt["start"]
+        end = fmt["end"]
+        content = fmt["content"]
+        fmt_type = fmt["type"]
+
+        # Calculate what to remove based on format type
+        if fmt_type == "h1":
+            plain_text = plain_text[:start] + content + plain_text[end:]
+            position_map[fmt_type] = (start, start + len(content))
+        elif fmt_type == "bold":
+            plain_text = plain_text[:start] + content + plain_text[end:]
+            position_map[fmt_type] = (start, start + len(content))
+        elif fmt_type == "italic":
+            plain_text = plain_text[:start] + content + plain_text[end:]
+            position_map[fmt_type] = (start, start + len(content))
+        elif fmt_type == "link":
+            link_text = fmt["content"]
+            plain_text = plain_text[:start] + link_text + plain_text[end:]
+            position_map[fmt_type] = (start, start + len(link_text))
+        elif fmt_type == "code":
+            plain_text = plain_text[:start] + content + plain_text[end:]
+            position_map[fmt_type] = (start, start + len(content))
+
+    # Set plain text
+    text_edit.setPlainText(plain_text)
+
+    # Block signals and start edit block for performance
+    text_edit.document().blockSignals(True)
+    cursor = text_edit.textCursor()
+    cursor.beginEditBlock()
+
+    # Re-parse to get all formats with their new positions
+    formats = parse_markdown_from_web(text)
+    formats.sort(key=lambda x: x["start"], reverse=True)
+
+    # Build mapping of original to plain text positions
+    plain_text = text
+    offset_map = {}
+    current_offset = 0
+
+    for fmt in formats:
+        start = fmt["start"]
+        end = fmt["end"]
+        content = fmt["content"]
+        fmt_type = fmt["type"]
+
+        # Track the offset and new position
+        if fmt_type == "h1":
+            # H1 syntax: text\n---- the match.end() already includes the dashes
+            # So the syntax_len is the difference between match end and content
+            syntax_len = end - start - len(content)
+            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            current_offset += syntax_len
+        elif fmt_type == "bold":
+            syntax_len = len(f"**{content}**") - len(content)
+            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            current_offset += syntax_len
+        elif fmt_type == "italic":
+            syntax_len = len(f"_{content}_") - len(content)
+            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            current_offset += syntax_len
+        elif fmt_type == "link":
+            syntax_len = len(fmt["content"] + fmt.get("url", "")) + 4
+            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            current_offset += syntax_len
+        elif fmt_type == "code":
+            syntax_len = len(f"`{content}`") - len(content)
+            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            current_offset += syntax_len
+
+    # Now apply formatting in correct order (forward iteration)
+    formats_sorted = parse_markdown_from_web(text)
+    formats_sorted.sort(key=lambda x: x['start'])
+
+    # Create a list to accumulate offset changes
+    cumulative_offset = 0
+    format_list = []
+
+    for fmt in formats_sorted:
+        start = fmt["start"] - cumulative_offset
+        content = fmt["content"]
+        fmt_type = fmt["type"]
+        url = fmt.get("url", "")
+
+        if fmt_type == "h1":
+            # H1: text\n---- becomes just text
+            end = start + len(content)
+            # The cumulative offset is the difference between original end and new end
+            original_syntax_len = fmt["end"] - fmt["start"] - len(fmt["content"])
+            cumulative_offset += original_syntax_len
+        elif fmt_type == "bold":
+            end = start + len(content)
+            cumulative_offset += len(f"**{content}**") - len(content)
+        elif fmt_type == "italic":
+            end = start + len(content)
+            cumulative_offset += len(f"_{content}_") - len(content)
+        elif fmt_type == "link":
+            end = start + len(content)
+            cumulative_offset += len(fmt["content"] + fmt.get("url", "")) + 4
+        elif fmt_type == "code":
+            end = start + len(content)
+            cumulative_offset += len(f"`{content}`") - len(content)
+
+        format_list.append((fmt_type, start, end, url))
+
+    # Apply formats from the accumulated list
+    for fmt_type, start, end, url in format_list:
+        char_fmt = QTextCharFormat()
+
+        if fmt_type == "h1":
+            # Get base font size and apply H1 styling (1.5x larger, bold)
+            # Try multiple sources for font size
+            base_size = text_edit.font().pointSize()
+            if base_size <= 0:
+                base_size = text_edit.document().defaultFont().pointSize()
+            if base_size <= 0:
+                base_size = text_edit.fontInfo().pointSize()
+            if base_size <= 0:
+                base_size = 12  # Fallback
+            
+            char_fmt.setFontPointSize(int(base_size * 1.5))
+            char_fmt.setFontWeight(QFont.Weight.Bold)
+            if styles and "h1" in styles and "color" in styles["h1"]:
+                char_fmt.setForeground(styles["h1"]["color"])
+        elif fmt_type == "bold":
+            char_fmt.setFontWeight(QFont.Weight.Bold)
+            if styles and "bold" in styles and "color" in styles["bold"]:
+                char_fmt.setForeground(styles["bold"]["color"])
+        elif fmt_type == "italic":
+            char_fmt.setFontItalic(True)
+            if styles and "italic" in styles and "color" in styles["italic"]:
+                char_fmt.setForeground(styles["italic"]["color"])
+        elif fmt_type == "link":
+            char_fmt.setForeground(pal.link())
+            char_fmt.setFontUnderline(True)
+            # Set anchor href for link
+            char_fmt.setAnchor(True)
+            char_fmt.setAnchorHref(url)
+            if styles and "link" in styles and "color" in styles["link"]:
+                char_fmt.setForeground(styles["link"]["color"])
+        elif fmt_type == "code":
+            code_font = QFont()
+            code_font.setFixedPitch(True)
+            char_fmt.setFont(code_font)
+            char_fmt.setForeground(pal.light())
+            if styles and "code" in styles and "color" in styles["code"]:
+                char_fmt.setForeground(styles["code"]["color"])
+
+        # Apply format to the range
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.setCharFormat(char_fmt)
+
+    # End edit block and unblock signals
+    cursor.endEditBlock()
+    text_edit.document().blockSignals(False)
+
+    # Clear selection and place cursor at end
+    cursor.clearSelection()
+    cursor.movePosition(QTextCursor.MoveOperation.End)
+    text_edit.setTextCursor(cursor)
 
 
 def format_comment_on_change(text_edit: QTextEdit) -> None:
