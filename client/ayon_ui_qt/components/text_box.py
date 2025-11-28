@@ -94,7 +94,7 @@ class AYTextEditor(QTextEdit):
             lambda: format_comment_on_change(self)
         )
 
-        style_widget_and_siblings(self)
+        # style_widget_and_siblings(self)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
@@ -227,8 +227,26 @@ class AYTextEditor(QTextEdit):
         )
 
     def set_format(self, format):
-        print(f"format: {format}")
+        """Set up the bullet/numbered/checklist formatting."""
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        # Select all and delete to remove placeholder
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        if format == "fmt_bullet":
+            # Apply bullet list formatting
+            self.document().setMarkdown("- ", MD_DIALECT)
+        elif format == "fmt_number":
+            # Apply numbered list formatting
+            self.document().setMarkdown("1. ", MD_DIALECT)
+        elif format == "fmt_checklist":
+            # Apply checklist formatting
+            self.document().setMarkdown("- [ ] ", MD_DIALECT)
 
+        cursor.insertText(" ")
+        cursor.endEditBlock()
+        # Move cursor to end
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.setTextCursor(cursor)
 
 def _dict_from_comment_category(
     comment_categories: list[CommentCategory],
