@@ -94,7 +94,7 @@ class AYTextEditor(QTextEdit):
             lambda: format_comment_on_change(self)
         )
 
-        # style_widget_and_siblings(self)
+        style_widget_and_siblings(self)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
