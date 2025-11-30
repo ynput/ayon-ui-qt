@@ -269,7 +269,10 @@ class AttachmentWidget(QtWidgets.QWidget):
         self.index = index
         self.filename = filename
         self.file_path = file_path
+        self.setup_ui()
+        self.load_image()
 
+    def setup_ui(self):
         # Use a container for the thumbnail with overlay button
         container = QtWidgets.QWidget(self)
         container.setFixedSize(80, 60)
@@ -280,37 +283,11 @@ class AttachmentWidget(QtWidgets.QWidget):
         self.thumbnail_label.setScaledContents(True)
         self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Load thumbnail from file_path or base64
-        if file_path.startswith("data:image"):
-            # Base64 encoded image
-            import base64
-
-            # Extract base64 data
-            base64_data = file_path.split(",", 1)[1] if "," in file_path else file_path
-            image_data = base64.b64decode(base64_data)
-
-            pixmap = QPixmap()
-            pixmap.loadFromData(image_data)
-            self.thumbnail_label.setPixmap(pixmap.scaled(
-                80, 60, Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            ))
-        else:
-            # File path
-            pixmap = QPixmap(file_path)
-            if not pixmap.isNull():
-                self.thumbnail_label.setPixmap(pixmap.scaled(
-                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                ))
-            else:
-                self.thumbnail_label.setText("Image")
-
         # Remove button overlaid on top-right corner
-        remove_btn = AYButton("×", variant="nav", parent=container)
-        remove_btn.setFixedSize(18, 18)
-        remove_btn.move(62, 0)  # Position at top-right corner
-        remove_btn.setStyleSheet("""
+        self.remove_btn = AYButton("×", variant="nav", parent=container)
+        self.remove_btn.setFixedSize(18, 18)
+        self.remove_btn.move(62, 0)  # Position at top-right corner
+        self.remove_btn.setStyleSheet("""
             AYButton {
                 background-color: rgba(0, 0, 0, 0.7);
                 color: white;
@@ -322,20 +299,65 @@ class AttachmentWidget(QtWidgets.QWidget):
                 background-color: rgba(200, 0, 0, 0.9);
             }
         """)
-        remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.index))
-        remove_btn.raise_()  # Ensure button is on top
+        self.remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.index))
+        self.remove_btn.raise_()  # Ensure button is on top
 
         # Main layout
         layout = AYVBoxLayout(self, margin=4, spacing=2)
         layout.addWidget(container)
 
         # Filename label (truncated)
-        filename_label = QLabel(
-            filename[:12] + "..." if len(filename) > 12 else filename, self
-        )
-        filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(filename_label)
+        self.filename_label = QLabel(self)
+        self.filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.filename_label)
 
+        self.update_display()
+
+    def load_image(self):
+        """Load thumbnail from file_path or base64"""
+        if self.file_path.startswith("data:image"):
+            # Base64 encoded image
+            import base64
+            # Extract base64 data
+            base64_data = self.file_path.split(",", 1)[1] if "," in self.file_path else self.file_path
+            try:
+                image_data = base64.b64decode(base64_data)
+                pixmap = QPixmap()
+                pixmap.loadFromData(image_data)
+                self.thumbnail_label.setPixmap(pixmap.scaled(
+                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+            except Exception as e:
+                logger.error("Failed to load base64 image: %s", e)
+                self.thumbnail_label.setText("Image")
+        else:
+            # File path
+            pixmap = QPixmap(self.file_path)
+            if not pixmap.isNull():
+                self.thumbnail_label.setPixmap(pixmap.scaled(
+                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                ))
+            else:
+                self.thumbnail_label.setText("Image")
+
+    def update_display(self):
+        """Update the display with current filename and image"""
+        # Update filename label
+        self.filename_label.setText(
+            self.filename[:12] + "..." if len(self.filename) > 12 else self.filename
+        )
+        # Reload image
+        self.load_image()
+
+    def update_content(self, filename="", file_path=""):
+        """Update the widget content"""
+        if filename:
+            self.filename = filename
+        if file_path:
+            self.file_path = file_path
+        self.update_display()
 
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
@@ -372,7 +394,8 @@ class AYTextBox(AYFrame):
         self.comment_categories: list[dict] = _dict_from_comment_category([])
         self.category = self.comment_categories[0]["text"]
         self._user_list: list[User] = user_list or []
-        self._attachments: list[dict] = []  # Store attachment data
+        self._annotation_attachments: list[dict] = []  # Store image annotation data
+        self._file_attachments: list[str] = []  # Store file paths only
         self._build(num_lines)
 
     def _build_upper_bar(self):
@@ -395,7 +418,9 @@ class AYTextBox(AYFrame):
             setattr(self, var, AYButton(self, variant="nav", icon=icn))
             lyt.addWidget(getattr(self, var))
         lyt.addSpacing(grp_spacing)
-        lyt.addWidget(AYButton(self, variant="nav", icon="attach_file"))
+        self.attach_file_btn = AYButton(self, variant="nav", icon="attach_file")
+        self.attach_file_btn.clicked.connect(self._on_attach_file_clicked)
+        lyt.addWidget(self.attach_file_btn)
         return lyt
 
     def _build_attachment_area(self):
@@ -452,54 +477,166 @@ class AYTextBox(AYFrame):
         markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
         self.signals.comment_submitted.emit(markdown_content, self.category)
         self.edit_field.clear()
-        self.clear_attachments()
+        self.clear_annotation_attachment()
+        self.clear_file_attachments()
 
     def _on_category_changed(self, category: str) -> None:
         self.category = category
 
-    def _on_attachment_removed(self, index: int) -> None:
-        """Handle removal of an attachment."""
-        if 0 <= index < len(self._attachments):
-            file_path = self._attachments[index].get("file_path", "")
+    def _on_attach_file_clicked(self) -> None:
+        """Handle attach file button click and open file dialog."""
+        file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self,
+            "Select files to attach"
+        )
+        
+        if file_paths:
+            self.add_file_attachments(file_paths)
+
+    def _on_annotation_attachment_removed(self, index: int) -> None:
+        """Handle removal of an image annotation attachment."""
+        if 0 <= index < len(self._annotation_attachments):
+            file_path = self._annotation_attachments[index].get("file_path", "")
             os.remove(file_path)  # Optionally delete the file
-            self._attachments.pop(index)
+            self._annotation_attachments.pop(index)
             self._refresh_attachment_display()
+
+    def _on_file_attachment_removed(self, index: int) -> None:
+        """Handle removal of a file attachment."""
+        if 0 <= index < len(self._file_attachments):
+            self._file_attachments.pop(index)
+            self._refresh_file_attachment_display()
 
     def _refresh_attachment_display(self) -> None:
         """Refresh the attachment display area."""
-        # Disable updates during refresh to prevent flickering
-        self.attachment_container.setUpdatesEnabled(True)
+        # Keep track of existing widgets by index
+        existing_widgets = {}
+        for idx in range(self.attachment_layout.count()):
+            item = self.attachment_layout.itemAt(idx)
+            if item and item.widget() and hasattr(item.widget(), 'index'):
+                widget = item.widget()
+                existing_widgets[widget.index] = widget
 
+        # Update or create widgets
+        if self._annotation_attachments:
+            for idx, attachment in enumerate(self._annotation_attachments):
+                logger.info("Displaying attachment: %s with path: %s",
+                            attachment.get("filename"),
+                            attachment.get("file_path"))
+
+                if idx in existing_widgets:
+                    # Update existing widget
+                    widget = existing_widgets[idx]
+                    widget.update_content(
+                        filename=attachment.get("filename", f"attachment_{idx}"),
+                        file_path=attachment.get("file_path", "")
+                    )
+                    # Update index if it changed
+                    widget.index = idx
+                else:
+                    # Create new widget
+                    widget = AttachmentWidget(
+                        parent=self.attachment_container,
+                        index=idx,
+                        filename=attachment.get("filename", f"attachment_{idx}"),
+                        file_path=attachment.get("file_path", "")
+                    )
+                    widget.remove_clicked.connect(self._on_annotation_attachment_removed)
+                    self.attachment_layout.insertWidget(idx, widget)
+
+            # Remove any extra widgets that shouldn't be there
+            for idx in list(existing_widgets.keys()):
+                if idx >= len(self._annotation_attachments):
+                    widget = existing_widgets[idx]
+                    self.attachment_layout.removeWidget(widget)
+                    widget.deleteLater()
+
+            # Make sure we have a stretch at the end
+            if self.attachment_layout.count() > 0 and (
+                not isinstance(
+                    self.attachment_layout.itemAt(
+                    self.attachment_layout.count()-1).widget(),
+                    type(None))):
+                self.attachment_layout.addStretch()
+
+            self.attachment_scroll.show()
+        else:
+            # Remove all widgets if no attachments
+            while self.attachment_layout.count():
+                item = self.attachment_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            self.attachment_scroll.hide()
+
+        # Force a complete refresh
+        self.attachment_container.update()
+        self.attachment_scroll.viewport().update()
+
+    def _build_file_attachment_area(self):
+        """Build the scrollable file attachment display area."""
+        # Container for file attachments
+        self.file_attachment_container = QtWidgets.QWidget(self)
+        self.file_attachment_layout = AYVBoxLayout(
+            self.file_attachment_container, margin=4, spacing=2
+        )
+
+        # Scroll area
+        self.file_attachment_scroll = QScrollArea(self)
+        self.file_attachment_scroll.setWidget(self.file_attachment_container)
+        self.file_attachment_scroll.setWidgetResizable(True)
+        self.file_attachment_scroll.setFixedHeight(60)
+        self.file_attachment_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.file_attachment_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.file_attachment_scroll.hide()  # Hidden by default
+
+        return self.file_attachment_scroll
+
+    def _refresh_file_attachment_display(self) -> None:
+        """Refresh the file attachment display area."""
         # Clear existing widgets
-        while self.attachment_layout.count():
-            item = self.attachment_layout.takeAt(0)
+        while self.file_attachment_layout.count():
+            item = self.file_attachment_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        # Add attachment widgets
-        if self._attachments:
-            for idx, attachment in enumerate(self._attachments):
-                widget = AttachmentWidget(
-                    parent=self.attachment_container,
-                    index=idx,
-                    filename=attachment.get("filename", f"attachment_{idx}"),
-                    file_path=attachment.get("file_path", "")
+        # Add file attachment items
+        if self._file_attachments:
+            for idx, file_path in enumerate(self._file_attachments):
+                filename = os.path.basename(file_path)
+                
+                # Create a container for the file item
+                file_item = QtWidgets.QWidget(self.file_attachment_container)
+                file_item_layout = AYHBoxLayout(file_item, margin=2, spacing=4)
+                
+                # File label
+                file_label = QLabel(filename, file_item)
+                file_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+                file_item_layout.addWidget(file_label)
+                
+                # Remove button
+                remove_btn = AYButton("×", variant="nav", parent=file_item)
+                remove_btn.setFixedSize(20, 20)
+                remove_btn.clicked.connect(
+                    lambda checked=False, i=idx: self._on_file_attachment_removed(i)
                 )
-                widget.remove_clicked.connect(self._on_attachment_removed)
-                self.attachment_layout.addWidget(widget)
-
-            self.attachment_layout.addStretch()
-            self.attachment_scroll.show()
+                file_item_layout.addWidget(remove_btn)
+                
+                self.file_attachment_layout.addWidget(file_item)
+            
+            self.file_attachment_layout.addStretch()
+            self.file_attachment_scroll.show()
         else:
-            self.attachment_scroll.hide()
+            self.file_attachment_scroll.hide()
 
-        # Re-enable updates and force refresh
-        self.attachment_container.setUpdatesEnabled(True)
-        self.attachment_container.update()
+        self.file_attachment_container.update()
 
 
-    def add_attachments(self, attachments: list[dict]) -> None:
-        """Add multiple attachments at once.
+    def add_annotation_attachments(self, attachments: list[dict]) -> None:
+        """Add multiple image annotation attachments at once.
 
         Args:
             attachments: List of attachment dictionaries with 'file_path'
@@ -508,43 +645,91 @@ class AYTextBox(AYFrame):
         if not attachments:
             return
 
-        added_count = 0
         for attachment in attachments:
+            file_pattern = attachment.get("file_pattern", "")
+            current_frame = attachment.get("current_frame", 0)
             filename = attachment.get("filename", "")
             file_path = attachment.get("file_path", "")
+            timestamp = attachment.get("timestamp", 0)
 
-            # Check for duplicates
-            if any(existing.get("filename") == filename for existing in self._attachments):
-                logger.info("Attachment already exists: %s", filename)
+            # Find existing attachment that matches
+            existing_attachments = [
+                existing for existing in self._annotation_attachments
+                if existing.get("file_pattern") == file_pattern
+                and existing.get("current_frame") == current_frame
+            ]
+            if existing_attachments:
+                # Update the first matching attachment (should be only one)
+                existing = existing_attachments[0]
+                logger.info("Attachment already exists, updating: %s", filename)
+                existing.update({
+                    "file_path": file_path,
+                    "filename": filename,
+                    "timestamp": timestamp
+                })
                 self._refresh_attachment_display()
+
+            else:
+                # Add new attachment
+                self._annotation_attachments.append({
+                    "file_pattern": file_pattern,
+                    "current_frame": current_frame,
+                    "file_path": file_path,
+                    "filename": filename,
+                    "timestamp": timestamp
+                })
+
+        self._refresh_attachment_display()
+
+    def add_file_attachments(self, file_paths: list[str]) -> None:
+        """Add multiple file attachments at once.
+
+        Args:
+            file_paths: List of file paths to attach
+        """
+        if not file_paths:
+            return
+
+        added_count = 0
+        for file_path in file_paths:
+            # Check for duplicates
+            if file_path in self._file_attachments:
+                logger.info("File attachment already exists: %s", file_path)
                 continue
 
-            # Add to list without refreshing
-            self._attachments.append({
-                "file_path": file_path,
-                "filename": filename,
-                "timestamp": attachment.get("timestamp")
-            })
+            self._file_attachments.append(file_path)
             added_count += 1
 
         # Refresh display only once after all additions
         if added_count > 0:
-            self._refresh_attachment_display()
-            logger.info("Added %d attachment(s)", added_count)
+            self._refresh_file_attachment_display()
+            logger.info("Added %d file attachment(s)", added_count)
 
-    def clear_attachments(self) -> None:
-        """Clear all attachments from the editor."""
-        self._attachments.clear()
-
+    def clear_annotation_attachment(self) -> None:
+        """Clear all image annotations from the editor."""
+        self._annotation_attachments.clear()
         self._refresh_attachment_display()
 
+    def clear_file_attachments(self) -> None:
+        """Clear all file attachments from the editor."""
+        self._file_attachments.clear()
+        self._refresh_file_attachment_display()
+
     def get_attachments(self) -> list[dict]:
-        """Get the current list of attachments.
+        """Get the current list of image annotations.
 
         Returns:
-            List of attachment dictionaries
+            List of annotation attachment dictionaries
         """
-        return self._attachments.copy()
+        return self._annotation_attachments.copy()
+
+    def get_file_attachments(self) -> list[str]:
+        """Get the current list of file attachments.
+
+        Returns:
+            List of file paths
+        """
+        return self._file_attachments.copy()
 
     @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData):
@@ -559,7 +744,8 @@ class AYTextBox(AYFrame):
     def _build(self, num_lines):
         lyt = AYVBoxLayout(self, margin=4, spacing=0)
         lyt.addLayout(self._build_upper_bar())
-        lyt.addWidget(self._build_attachment_area())  # Add attachment area
+        lyt.addWidget(self._build_attachment_area())  # Add image annotation area
+        lyt.addWidget(self._build_file_attachment_area())  # Add file attachment area
         lyt.addWidget(self._build_edit_field(num_lines), stretch=10)
         lyt.addLayout(self._build_lower_bar())
 
@@ -589,7 +775,7 @@ if __name__ == "__main__":
         )
 
         # Test adding attachments
-        ww.add_attachments(
+        ww.add_annotation_attachments(
             [
                 {
                     "file_path": "test1.png",
