@@ -489,7 +489,9 @@ class AYTextBox(AYFrame):
         """Handle attach file button click and open file dialog."""
         file_paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self,
-            "Select files to attach"
+            "Select files to attach",
+            "",
+            "Image Files (*.png *.jpeg *.jpg);;All Files (*)"
         )
         
         if file_paths:
