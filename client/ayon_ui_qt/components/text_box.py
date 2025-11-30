@@ -287,21 +287,9 @@ class AttachmentWidget(QtWidgets.QWidget):
         self.remove_btn = AYButton("×", variant="nav", parent=container)
         self.remove_btn.setFixedSize(18, 18)
         self.remove_btn.move(62, 0)  # Position at top-right corner
-        self.remove_btn.setStyleSheet("""
-            AYButton {
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
-                border-radius: 9px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            AYButton:hover {
-                background-color: rgba(200, 0, 0, 0.9);
-            }
-        """)
         self.remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.index))
-        self.remove_btn.raise_()  # Ensure button is on top
-
+        # Ensure button is on top
+        self.remove_btn.raise_()
         # Main layout
         layout = AYVBoxLayout(self, margin=4, spacing=2)
         layout.addWidget(container)
