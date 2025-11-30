@@ -361,7 +361,7 @@ class AttachmentWidget(QtWidgets.QWidget):
 
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
-    comment_submitted = Signal(str, str)  # type: ignore
+    comment_submitted = Signal(str, str, list)  # type: ignore
 
 
 class AYTextBox(AYFrame):
@@ -475,7 +475,9 @@ class AYTextBox(AYFrame):
     def _on_comment_clicked(self) -> None:
         """Handle comment button click and emit signal with markdown content."""
         markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
-        self.signals.comment_submitted.emit(markdown_content, self.category)
+        self.signals.comment_submitted.emit(
+            markdown_content, self.category, self._file_attachments
+        )
         self.edit_field.clear()
         self.clear_annotation_attachment()
         self.clear_file_attachments()
