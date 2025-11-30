@@ -235,11 +235,11 @@ class AYCommentField(QTextEdit):
 
     def set_markdown(self, md: str) -> None:
         """Set markdown content, supporting both standard markdown and web markdown.
-        
+
         If text contains web markdown syntax (text\\n----, **bold**, _italic_, [link](url), `code`),
         it will be parsed and formatted accordingly with syntax removed.
         Otherwise, uses standard QTextDocument markdown.
-        
+
         Args:
             md: Markdown text to display
         """
@@ -247,7 +247,7 @@ class AYCommentField(QTextEdit):
         has_web_markdown = any(
             pattern in md for pattern in ["\n----", "**", "_", "[", "`"]
         )
-        
+
         if has_web_markdown:
             # Use web markdown formatting (removes syntax, applies formatting)
             self.set_web_markdown(md)
@@ -257,9 +257,9 @@ class AYCommentField(QTextEdit):
 
     def set_web_markdown(self, md: str, styles: dict | None = None) -> None:
         """Set markdown from web data with formatting.
-        
+
         Removes markdown syntax (**text** becomes text with bold formatting).
-        
+
         Args:
             md: Markdown text from web (**bold**, _italic_, [link](url), `code`)
             styles: Optional custom styles for formatting
@@ -292,7 +292,7 @@ class AYCommentField(QTextEdit):
             # Get the character at the click position
             cursor = self.cursorForPosition(event.pos())
             char_format = cursor.charFormat()
-            
+
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
                 import webbrowser
@@ -300,7 +300,7 @@ class AYCommentField(QTextEdit):
                 webbrowser.open(url)
                 event.accept()
                 return
-        
+
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
@@ -309,7 +309,7 @@ class AYCommentField(QTextEdit):
         if self.isReadOnly():
             cursor = self.cursorForPosition(event.pos())
             char_format = cursor.charFormat()
-            
+
             # Show hand cursor only for actual links with href
             if char_format.isAnchor() and char_format.anchorHref():
                 self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -317,7 +317,7 @@ class AYCommentField(QTextEdit):
                 self.setCursor(Qt.CursorShape.IBeamCursor)
         else:
             self.setCursor(Qt.CursorShape.IBeamCursor)
-        
+
         super().mouseMoveEvent(event)
 
 
