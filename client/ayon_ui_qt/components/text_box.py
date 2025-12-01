@@ -17,6 +17,8 @@ from qtpy.QtGui import (
     QTextDocument,
     QTextFrameFormat,
     QPixmap,
+    QPalette,
+    QColor,
 )
 from qtpy.QtWidgets import (
     QSizePolicy,
@@ -81,7 +83,9 @@ class AYTextEditor(QTextEdit):
                 "Comment or mention with @user, @@version, @@@task..."
             )
         self.setReadOnly(self._read_only)
-
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("white"))
+        self.setPalette(palette)
         # Setup user completer
         setup_user_completer(
             self,

@@ -25,6 +25,7 @@ class AYEntityThumbnail(QPushButton):
         self._file_cacher = file_cacher
         self._size = size
         self._variant = "thumbnail"
+        self._icon = QIcon()
 
         if not Path(self._src).exists() and self._file_cacher:
             ic = ImageCache.get_instance()
@@ -32,7 +33,7 @@ class AYEntityThumbnail(QPushButton):
                 str(self._src), partial(self._file_cacher, self._src)
             )
 
-        super().__init__(QIcon(), "", **kwargs)
+        super().__init__(self._icon, "", **kwargs)
 
         self.set_thumbnail(self._src)
         self.setFixedSize(*self._size)
