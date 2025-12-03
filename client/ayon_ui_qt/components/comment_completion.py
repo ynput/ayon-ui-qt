@@ -579,11 +579,13 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
 
     users = [u.full_name for u in text_edit._user_list]
 
-    # Find all words starting with @
-    p_user = r"(?P<user>@\w+( \w+)?)"
+    # Find all words starting with @, @@, or @@@
+    p_user = r"(?P<user>@(?!@)\w+( \w+)?)"
+    p_version = r"(?P<version>@@(?!@)\w+( \w+)?)"
+    p_task = r"(?P<task>@@@\w+( \w+)?)"
     p_link = r"(?P<link>\[[\w\s]+\]\(.+\))"
     p_raw_link = r"(?P<raw_link>https?://)"
-    p_all = f"{p_user}|{p_link}|{p_raw_link}"
+    p_all = f"{p_user}|{p_version}|{p_task}|{p_link}|{p_raw_link}"
     matches = list(re.finditer(p_all, md))
 
     # Clear all formatting first
@@ -610,6 +612,18 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
                         QTextCursor.MoveMode.KeepAnchor,
                     )
 
+                cursor.setCharFormat(user_format)
+            elif key == "version":
+                cursor.setPosition(match.start())
+                cursor.setPosition(
+                    match.end(), QTextCursor.MoveMode.KeepAnchor
+                )
+                cursor.setCharFormat(user_format)
+            elif key == "task":
+                cursor.setPosition(match.start())
+                cursor.setPosition(
+                    match.end(), QTextCursor.MoveMode.KeepAnchor
+                )
                 cursor.setCharFormat(user_format)
             if key == "raw_link":
                 cursor.setPosition(match.start())
