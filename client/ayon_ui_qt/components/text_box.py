@@ -371,6 +371,11 @@ class AYTextBox(AYFrame):
         "fmt_bullet": "format_list_bulleted",
         "fmt_checklist": "checklist",
     }
+    mention_map = {
+        "person": "@",
+        "layers": "@@",
+        "check_circle": "@@@"
+    }
 
     def __init__(
         self,
@@ -454,8 +459,14 @@ class AYTextBox(AYFrame):
 
     def _build_lower_bar(self):
         lyt = AYHBoxLayout(margin=0, spacing=0)
-        for icn in ("person", "layers", "check_circle"):
-            lyt.addWidget(AYButton(self, variant="nav", icon=icn))
+
+        for icn, mention in self.mention_map.items():
+            btn = AYButton(self, variant="nav", icon=icn)
+            btn.clicked.connect(
+                partial(self._add_mention_to_editor, mention)
+            )
+            lyt.addWidget(btn)
+
         lyt.addSpacerItem(
             QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
         )
@@ -473,6 +484,13 @@ class AYTextBox(AYFrame):
         self.edit_field.clear()
         self.clear_annotation_attachment()
         self.clear_file_attachments()
+
+    def _add_mention_to_editor(self, mention: str) -> None:
+        """Add mention text to the editor at cursor position."""
+        cursor = self.edit_field.textCursor()
+        cursor.insertText(mention)
+        self.edit_field.setTextCursor(cursor)
+        self.edit_field.setFocus()
 
     def _on_category_changed(self, category: str) -> None:
         self.category = category
