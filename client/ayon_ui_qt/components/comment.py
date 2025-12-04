@@ -573,10 +573,13 @@ class AYComment(AYFrame):
             layout=AYContainer.Layout.HBox,
             variant="high",
             bg_tint=self._data.category_color,
+            layout_spacing=4,
+            layout_margin=0,
         )
+        self.images_container.setContentsMargins(0, 0, 0, 0)
         self.top_line.setFixedHeight(20)
         editor_lyt.add_widget(self.top_line, stretch=0)
-        editor_lyt.add_widget(self.images_container, stretch=10)
+        editor_lyt.add_widget(self.images_container, stretch=0)
         editor_lyt.add_widget(self.text_field, stretch=10)
 
         editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
@@ -616,9 +619,21 @@ class AYComment(AYFrame):
 
             # Get the text field width to scale images accordingly
             text_field_width = self.text_field.width()
-            # Account for margins/padding
-            max_image_width = (
-                text_field_width - 20 if text_field_width > 20 else 400
+            # Account for margins/padding and spacing between multiple images
+            # Calculate how many images we'll have (not transparent)
+            image_count = sum(
+                1 for file in self._data.files
+                if not any(
+                    file.id == annotation.transparent
+                    for annotation in (self._data.annotations or [])
+                )
+            )
+            # Each image spacing is 4px (from layout_spacing)
+            spacing_total = (image_count - 1) * 4
+            max_image_width = max(
+                int((text_field_width - spacing_total) / image_count)
+                if image_count > 0 else 400,
+                100  # Minimum width for images
             )
 
             thumb_path = getattr(file_model, "thumb_local_path", None)
@@ -634,8 +649,17 @@ class AYComment(AYFrame):
 
             # Ensure the image widget is styled
             image_widget.setStyle(style)
+            # Set fixed width to prevent expanding
+            image_widget.setFixedWidth(max_image_width)
+            # Set maximum height to maintain aspect ratio
+            image_widget.setMaximumHeight(800)
 
-            self.images_container.add_widget(image_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignLeft)
+            self.images_container.add_widget(
+                image_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignLeft
+            )
+        
+        # Add stretch to push images to the left
+        self.images_container.addStretch()
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
