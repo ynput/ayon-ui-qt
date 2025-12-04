@@ -10,6 +10,7 @@ from qtpy.QtWidgets import (
     QWidget,
     QLabel,
     QDialog,
+    QSizePolicy,
     QVBoxLayout,
 )
 
@@ -569,7 +570,7 @@ class AYComment(AYFrame):
             bg_tint=self._data.category_color,
         )
         self.images_container = AYContainer(
-            layout=AYContainer.Layout.VBox,
+            layout=AYContainer.Layout.HBox,
             variant="high",
             bg_tint=self._data.category_color,
         )
@@ -594,40 +595,47 @@ class AYComment(AYFrame):
         from .. import get_ayon_style
 
         style = get_ayon_style()
+        for file_model in self._data.files:
+            # Check if this file is marked as transparent in annotations
+            is_transparent = False
+            if hasattr(self._data, "annotations"):
+                for annotation in self._data.annotations:
+                    if file_model.id == annotation.transparent:
+                        is_transparent = True
+                        break
 
-        # Only show the first image from the files list
-        file_model = self._data.files[0]
+            if is_transparent:
+                continue
+            # Check if file has local_path
+            if not hasattr(file_model, "local_path"):
+                return
 
-        # Check if file has local_path
-        if not hasattr(file_model, "local_path"):
-            return
+            # Check if path exists
+            if not Path(file_model.local_path).exists():
+                return
 
-        # Check if path exists
-        if not Path(file_model.local_path).exists():
-            return
+            # Get the text field width to scale images accordingly
+            text_field_width = self.text_field.width()
+            # Account for margins/padding
+            max_image_width = (
+                text_field_width - 20 if text_field_width > 20 else 400
+            )
 
-        # Get the text field width to scale images accordingly
-        text_field_width = self.text_field.width()
-        # Account for margins/padding
-        max_image_width = (
-            text_field_width - 20 if text_field_width > 20 else 400
-        )
+            thumb_path = getattr(file_model, "thumb_local_path", None)
 
-        thumb_path = getattr(file_model, "thumb_local_path", None)
+            # Create image widget with dynamic width matching text field
+            image_widget = AYImageAttachment(
+                parent=self,
+                image_path=file_model.local_path,
+                thumb_path=thumb_path,
+                max_width=max_image_width,
+                max_height=800,
+            )
 
-        # Create image widget with dynamic width matching text field
-        image_widget = AYImageAttachment(
-            parent=self,
-            image_path=file_model.local_path,
-            thumb_path=thumb_path,
-            max_width=max_image_width,
-            max_height=800,
-        )
+            # Ensure the image widget is styled
+            image_widget.setStyle(style)
 
-        # Ensure the image widget is styled
-        image_widget.setStyle(style)
-
-        self.images_container.add_widget(image_widget, stretch=0)
+            self.images_container.add_widget(image_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignLeft)
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
