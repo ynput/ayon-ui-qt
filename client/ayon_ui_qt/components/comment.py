@@ -595,9 +595,6 @@ class AYComment(AYFrame):
         ):
             return
 
-        from .. import get_ayon_style
-
-        style = get_ayon_style()
         for file_model in self._data.files:
             # Check if this file is marked as transparent in annotations
             is_transparent = False
@@ -647,8 +644,6 @@ class AYComment(AYFrame):
                 max_height=800,
             )
 
-            # Ensure the image widget is styled
-            image_widget.setStyle(style)
             # Set fixed width to prevent expanding
             image_widget.setFixedWidth(max_image_width)
             # Set maximum height to maintain aspect ratio
@@ -657,7 +652,7 @@ class AYComment(AYFrame):
             self.images_container.add_widget(
                 image_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignLeft
             )
-        
+
         # Add stretch to push images to the left
         self.images_container.addStretch()
 
