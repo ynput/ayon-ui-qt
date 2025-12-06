@@ -21,7 +21,7 @@ from qtpy.QtWidgets import (
 
 from .user_image import AYUserImage
 from ..data_models import User
-from .. import style_widget_and_siblings, get_ayon_style
+from .. import get_ayon_style
 
 
 class UserCompleterDelegate(QStyledItemDelegate):
@@ -135,7 +135,6 @@ def setup_user_completer(
         delegate = UserCompleterDelegate(popup)
         popup.setItemDelegate(delegate)
         popup.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
-        style_widget_and_siblings(popup, fix_app=False)
 
     # Connect completer signals
     text_edit.completer.activated.connect(on_completer_activated)

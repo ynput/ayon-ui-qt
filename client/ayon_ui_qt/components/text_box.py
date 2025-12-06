@@ -40,7 +40,6 @@ from .comment_completion import (
     format_comment_on_change,
 )
 from ..data_models import CommentCategory, ProjectData, User
-from .. import style_widget_and_siblings
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +94,6 @@ class AYTextEditor(QTextEdit):
         self.document().contentsChanged.connect(
             lambda: format_comment_on_change(self)
         )
-
-        style_widget_and_siblings(self, fix_app=False)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
