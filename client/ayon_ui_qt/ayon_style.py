@@ -253,7 +253,7 @@ class ButtonDrawer:
                 QStyle.ControlElement,
                 QStyle.ControlElement.CE_PushButtonBevel,
                 "QPushButton",
-            ): self.draw_push_button,
+            ): self.draw_push_button_bevel,
             enum_to_str(
                 QStyle.ControlElement,
                 QStyle.ControlElement.CE_PushButtonLabel,
@@ -383,7 +383,7 @@ class ButtonDrawer:
 
         return style
 
-    def draw_push_button(
+    def draw_push_button_bevel(
         self,
         option: QStyleOption,
         painter: QPainter,
