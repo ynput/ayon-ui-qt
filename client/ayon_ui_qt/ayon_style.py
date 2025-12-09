@@ -42,6 +42,34 @@ logging.basicConfig(
 log = logging.getLogger("Ayon Style")
 
 
+# DEBUG -----------------------------------------------------------------------
+
+
+def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
+    p.save()
+    pen = QPen(QColor(color))
+    brush = QBrush(Qt.BrushStyle.NoBrush)
+    p.setPen(pen)
+    p.setBrush(brush)
+    p.drawRect(rect)
+    p.restore()
+
+
+def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
+    font = QtGui.QFont()
+    font.setFamily(style["font-family"])
+    pt_size = w.font().pointSizeF() if w else style["font-size"]
+    font.setPointSizeF(pt_size)
+    font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
+    log.debug(
+        "FONT: %s, %g pts, w=%d",
+        font.family(),
+        font.pointSizeF(),
+        font.weight(),
+    )
+    return font
+
+
 def _all_enums(t):
     meta_object: QtCore.QMetaObject = t.staticMetaObject
     enums = [
@@ -472,16 +500,13 @@ class ButtonDrawer:
         painter.setPen(text_color)
 
         # Set up font
-        font = painter.font()
-        font.setFamily(style["font-family"])
-        font.setPointSize(style["font-size"])
-        font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
-        painter.setFont(font)
+        painter.setFont(_style_font(style, widget))
 
         # Get content rectangle
         content_rect = self.style_inst.subElementRect(
             QStyle.SubElement.SE_PushButtonContents, option, widget
         )
+        # _debug_rect(painter, "#ff5555", content_rect)
 
         # Draw icon if present
         if option.icon:  # type: ignore
@@ -581,10 +606,7 @@ class ButtonDrawer:
 
         # Set up font for text measurement
         style = self.get_button_style(widget, option.state)  # type: ignore
-        font = QtGui.QFont()
-        font.setFamily(style["font-family"])
-        font.setPointSize(style["font-size"])
-        font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
+        font = _style_font(style, widget)
 
         # Create font metrics for accurate text measurement
         font_metrics = QtGui.QFontMetrics(font)
