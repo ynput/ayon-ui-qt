@@ -1,3 +1,0 @@
-[ayon.runtimeDependencies]
-qtpy = "^2.3.1"
-pyside6 = "^6.7.1"
