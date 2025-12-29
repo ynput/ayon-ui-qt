@@ -22,6 +22,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget, QApplication
 
 from .version import __version__
+from .addon import UIQtAddon
 from .ayon_style import AYONStyle
 
 _ayon_style_instance: AYONStyle | None = None
@@ -110,4 +111,5 @@ __all__ = [
     "AYONStyle",
     "get_ayon_style",
     "style_widget_and_siblings",
+    "UIQtAddon",
 ]
