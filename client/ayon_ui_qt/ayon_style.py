@@ -1851,4 +1851,4 @@ if __name__ == "__main__":
 
         return widget
 
-    test(_ui_test, style=Style.Widget)
+    test(_ui_test, style=Style.AyonStyleOverCSS)

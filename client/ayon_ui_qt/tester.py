@@ -9,9 +9,10 @@ from . import style_widget_and_siblings, get_ayon_style
 
 
 class Style(Enum):
-    CSS = 0
-    AyonStyle = 1
-    Widget = 2
+    Base = 0
+    CSS = 1
+    AyonStyle = 2
+    AyonStyleOverCSS = 3
 
 
 AWFUL_CSS = """
@@ -32,36 +33,34 @@ QPushButton {
 }
 """
 
+def load_rv_stylesheet(old=True):
+    fpath = Path(__file__).parent.joinpath("resources", "rv_mac_dark_legacy.qss" if old else "rv_dark.qss")
+    print(f"Loading stylesheet from {fpath}")
+    with open(fpath, "r") as fr:
+        return fr.read()
 
-def test(test_widget, style: Style = Style.Widget):
+# RV_CSS = load_rv_stylesheet()
+
+
+def test(test_widget, style: Style = Style.Base):
     """Main function to run the Qt test."""
     app = QtWidgets.QApplication(sys.argv)
-    qcs = QtWidgets.QCommonStyle()
-    app.setStyle(qcs)
+    # qcs = QtWidgets.QCommonStyle()
+    # app.setStyle(qcs)
 
     if style == Style.CSS:
-        # Set a dark theme for the application
-        ss = AWFUL_CSS
-
-        fpath = Path(__file__).parent.joinpath(
-            "old", "output", "complete_styles.qss"
-        )
-        with open(fpath, "r") as fr:
-            ss += fr.read()
-
-        app.setStyleSheet(ss)
-
+        # Set old RV dark theme for the application
+        app.setStyleSheet(load_rv_stylesheet())
     elif style == Style.AyonStyle:
         app.setStyle(get_ayon_style())
+    elif style == Style.AyonStyleOverCSS:
+        app.setStyleSheet(load_rv_stylesheet())
 
     # Create and show the test widget
     widget = test_widget()
 
-    if style == Style.Widget:
-        # add an awfull app css first to make sure it is overriden !
-        app.setStyleSheet(AWFUL_CSS)
-        # no app-level style
-        style_widget_and_siblings(widget)
+    if style == Style.AyonStyleOverCSS:
+        widget.setStyle(get_ayon_style())
 
     widget.show()
 
