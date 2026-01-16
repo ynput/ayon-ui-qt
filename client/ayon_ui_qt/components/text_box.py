@@ -1,66 +1,74 @@
 from __future__ import annotations
 
-import os
 import logging
+import os
 from functools import partial
+from typing import Literal
 
+from qtpy import QtWidgets
 from qtpy.QtCore import (
     QObject,
+    Qt,
     Signal,  # type: ignore
     Slot,  # type: ignore
-    Qt,
 )  # type: ignore
-from qtpy import QtWidgets
 from qtpy.QtGui import (
+    QColor,
     QFont,
+    QPalette,
+    QPixmap,
     QTextCursor,
     QTextDocument,
     QTextFrameFormat,
-    QPixmap,
-    QPalette,
-    QColor,
 )
 from qtpy.QtWidgets import (
-    QSizePolicy,
-    QTextEdit,
     QLabel,
     QScrollArea,
+    QSizePolicy,
+    QTextEdit,
 )
 
+from .. import get_ayon_style
+from ..data_models import CommentCategory, ProjectData, User
 from .buttons import AYButton
-from .frame import AYFrame
-from .layouts import AYHBoxLayout, AYVBoxLayout
 from .combo_box import AYComboBox
 from .comment_completion import (
-    setup_user_completer,
-    on_completer_text_changed,
+    format_comment_on_change,
     on_completer_activated,
     on_completer_key_press,
+    on_completer_text_changed,
     on_users_updated,
-    format_comment_on_change,
+    setup_user_completer,
 )
-from ..data_models import CommentCategory, ProjectData, User
+from .container import AYContainer
+from .layouts import AYHBoxLayout, AYVBoxLayout
+from .text_edit import AYTextEdit
 
 logger = logging.getLogger(__name__)
 
 MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
-class AYTextEditor(QTextEdit):
+class AYTextEditor(AYTextEdit):
     def __init__(
         self,
         *args,
         num_lines: int = 0,
         read_only: bool = False,
         user_list: list[User] | None,
+        variant: Literal[
+            "", "low", "high", "debug-r", "debug-g", "debug-b"
+        ] = "",
         **kwargs,
     ):
         # remove our kwargs
         self.num_lines: int = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
+        self.variant = variant
 
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, variant=variant, **kwargs)
+        self.setStyle(get_ayon_style())
 
         if self.num_lines:
             self.setFixedHeight(
@@ -237,6 +245,7 @@ class AYTextEditor(QTextEdit):
         cursor.movePosition(QTextCursor.MoveOperation.End)
         self.setTextCursor(cursor)
 
+
 def _dict_from_comment_category(
     comment_categories: list[CommentCategory],
 ) -> list[dict]:
@@ -353,7 +362,7 @@ class AYTextBoxSignals(QObject):
     comment_submitted = Signal(str, str, list)  # type: ignore
 
 
-class AYTextBox(AYFrame):
+class AYTextBox(AYContainer):
     signals = AYTextBoxSignals()
 
     style_icons = {
@@ -371,7 +380,7 @@ class AYTextBox(AYFrame):
     mention_map = {
         "person": "@",
         "layers": "@@",
-        "check_circle": "@@@"
+        "check_circle": "@@@",
     }
 
     def __init__(
@@ -380,9 +389,19 @@ class AYTextBox(AYFrame):
         num_lines=0,
         show_categories=False,
         user_list: list[User] | None = None,
+        variant: Literal[
+            "", "low", "high", "debug-r", "debug-g", "debug-b"
+        ] = "",
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        self.variant = variant
+        super().__init__(
+            *args,
+            layout=AYContainer.Layout.VBox,
+            variant=variant,
+            margin=0,
+            **kwargs,
+        )
 
         self.show_categories = show_categories
         self.comment_categories: list[dict] = _dict_from_comment_category([])
@@ -442,7 +461,10 @@ class AYTextBox(AYFrame):
 
     def _build_edit_field(self, num_lines):
         self.edit_field = AYTextEditor(
-            self, num_lines=num_lines, user_list=self._user_list
+            self,
+            num_lines=num_lines,
+            user_list=self._user_list,
+            variant=self.variant,
         )
         for var in self.style_icons:
             getattr(self, var).clicked.connect(
@@ -500,7 +522,7 @@ class AYTextBox(AYFrame):
             "",
             "Image Files (*.png *.jpeg *.jpg);;All Files (*)"
         )
-        
+
         if file_paths:
             self.add_file_attachments(file_paths)
 
@@ -508,7 +530,8 @@ class AYTextBox(AYFrame):
         """Handle removal of an image annotation attachment."""
         if 0 <= index < len(self._annotation_attachments):
             file_path = self._annotation_attachments[index].get("file_path", "")
-            os.remove(file_path)  # Optionally delete the file
+            if os.path.exists(file_path):
+                os.remove(file_path)  # Optionally delete the file
             self._annotation_attachments.pop(index)
             self._refresh_attachment_display()
 
@@ -526,7 +549,8 @@ class AYTextBox(AYFrame):
             item = self.attachment_layout.itemAt(idx)
             if item and item.widget() and hasattr(item.widget(), 'index'):
                 widget = item.widget()
-                existing_widgets[widget.index] = widget
+                if widget is not None:
+                    existing_widgets[widget.index] = widget
 
         # Update or create widgets
         if self._annotation_attachments:
@@ -575,8 +599,9 @@ class AYTextBox(AYFrame):
             # Remove all widgets if no attachments
             while self.attachment_layout.count():
                 item = self.attachment_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
             self.attachment_scroll.hide()
 
         # Force a complete refresh
@@ -611,23 +636,24 @@ class AYTextBox(AYFrame):
         # Clear existing widgets
         while self.file_attachment_layout.count():
             item = self.file_attachment_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
         # Add file attachment items
         if self._file_attachments:
             for idx, file_path in enumerate(self._file_attachments):
                 filename = os.path.basename(file_path)
-                
+
                 # Create a container for the file item
                 file_item = QtWidgets.QWidget(self.file_attachment_container)
                 file_item_layout = AYHBoxLayout(file_item, margin=2, spacing=4)
-                
+
                 # File label
                 file_label = QLabel(filename, file_item)
                 file_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
                 file_item_layout.addWidget(file_label)
-                
+
                 # Remove button
                 remove_btn = AYButton("×", variant="nav", parent=file_item)
                 remove_btn.setFixedSize(20, 20)
@@ -635,9 +661,9 @@ class AYTextBox(AYFrame):
                     lambda checked=False, i=idx: self._on_file_attachment_removed(i)
                 )
                 file_item_layout.addWidget(remove_btn)
-                
+
                 self.file_attachment_layout.addWidget(file_item)
-            
+
             self.file_attachment_layout.addStretch()
             self.file_attachment_scroll.show()
         else:
@@ -753,12 +779,15 @@ class AYTextBox(AYFrame):
         on_users_updated(self.edit_field)
 
     def _build(self, num_lines):
-        lyt = AYVBoxLayout(self, margin=4, spacing=0)
-        lyt.addLayout(self._build_upper_bar())
-        lyt.addWidget(self._build_attachment_area())  # Add image annotation area
-        lyt.addWidget(self._build_file_attachment_area())  # Add file attachment area
-        lyt.addWidget(self._build_edit_field(num_lines), stretch=10)
-        lyt.addLayout(self._build_lower_bar())
+        self.add_layout(self._build_upper_bar())
+        self.add_widget(
+            self._build_attachment_area()
+        )  # Add image annotation area
+        self.add_widget(
+            self._build_file_attachment_area()
+        )  # Add file attachment area
+        self.add_widget(self._build_edit_field(num_lines), stretch=10)
+        self.add_layout(self._build_lower_bar())
 
     def set_markdown(self, md: str):
         self.edit_field.document().setMarkdown(md, MD_DIALECT)
@@ -773,7 +802,7 @@ if __name__ == "__main__":
 
     def build():
         w = AYContainer(layout=AYContainer.Layout.HBox, margin=8)
-        ww = AYTextBox(parent=w)
+        ww = AYTextBox(parent=w, variant="high")
         ww.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
@@ -791,16 +820,16 @@ if __name__ == "__main__":
                 {
                     "file_path": "test1.png",
                     "filename": "test_annotation1.png",
-                    "timestamp": 12345678
+                    "timestamp": 12345678,
                 },
                 {
                     "file_path": "test2.png",
                     "filename": "test_annotation2.png",
-                    "timestamp": 12345679
+                    "timestamp": 12345679,
                 },
             ]
         )
 
         return w
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

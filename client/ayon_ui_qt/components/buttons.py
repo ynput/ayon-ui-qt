@@ -6,8 +6,10 @@ from typing import Literal, get_args
 
 from qtpy import QtCore, QtGui, QtWidgets
 
+from .. import get_ayon_style
+
 try:
-    from qtmaterialsymbols import get_icon # type: ignore
+    from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
@@ -34,6 +36,7 @@ class AYButton(QtWidgets.QPushButton):
         icon_color: str = "#ffffff",
         checkable=False,
         tooltip: str = "",
+        name_id: str = "",
         **kwargs,
     ):
         self._icon = icon
@@ -43,6 +46,7 @@ class AYButton(QtWidgets.QPushButton):
         self._tooltip = tooltip
 
         super().__init__(*args, **kwargs)
+        self.setStyle(get_ayon_style())
         self.setCheckable(checkable)
 
         if self._icon:
@@ -50,6 +54,38 @@ class AYButton(QtWidgets.QPushButton):
 
         if self._tooltip:
             self.setToolTip(self._tooltip)
+
+        self._name_id = ""
+        if name_id:
+            self.setObjectName(name_id)
+            self._name_id = name_id
+
+    def sizeHint(self) -> QtCore.QSize:
+        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
+            option = QtWidgets.QStyleOptionButton()
+            self.initStyleOption(option)
+            return get_ayon_style().sizeFromContents(
+                QtWidgets.QStyle.ContentsType.CT_PushButton,
+                option,
+                self.rect().size(),
+                self,
+            )
+        return super().sizeHint()
+
+    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
+        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
+            p = QtGui.QPainter(self)
+            option = QtWidgets.QStyleOptionButton()
+            self.initStyleOption(option)
+            # override rect set by stylesheet
+            size = self.sizeHint()
+            self.setFixedSize(size)
+            option.rect = QtCore.QRect(0, 0, size.width(), size.height())
+            # draw
+            return get_ayon_style().drawControl(
+                QtWidgets.QStyle.ControlElement.CE_PushButton, option, p, self
+            )
+        super().paintEvent(arg__1)
 
     def set_icon(self, icon_name: str):
         self._icon = icon_name
@@ -89,7 +125,7 @@ class AYButton(QtWidgets.QPushButton):
 
 if __name__ == "__main__":
     from ..tester import Style, test
-    from .container import AYContainer, AYFrame
+    from .container import AYContainer
 
     def _build_test():
         # Create and show the test widget

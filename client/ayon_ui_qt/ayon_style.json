@@ -221,6 +221,21 @@
                         8,
                         12
                     ]
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "high": {
+                    "background-color": "--md-sys-color-surface-container-dark"
+                },
+                "debug-r": {
+                    "background-color": "#664444"
+                },
+                "debug-g": {
+                    "background-color": "#446644"
+                },
+                "debug-b": {
+                    "background-color": "#444466"
                 }
             }
         },
@@ -273,6 +288,15 @@
                 },
                 "high": {
                     "background-color": "--md-sys-color-surface-container-dark"
+                },
+                "debug-r": {
+                    "background-color": "#664444"
+                },
+                "debug-g": {
+                    "background-color": "#446644"
+                },
+                "debug-b": {
+                    "background-color": "#444466"
                 }
             }
         },

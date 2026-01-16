@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from functools import partial
 from pathlib import Path
-import logging
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPalette, QPen, QPainterPath
+from qtpy.QtGui import QBrush, QColor, QPainter, QPainterPath, QPalette, QPen
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -24,6 +24,7 @@ from qtpy.QtWidgets import (
     QStyleOptionComplex,
     QStyleOptionFrame,
     QStyleOptionSlider,
+    QTextEdit,
     QToolTip,
     QWidget,
 )
@@ -140,6 +141,9 @@ def hsl_to_html_color(hsl: str):
 
 def do_nothing(*args, **kwargs):
     pass
+
+
+# ----------------------------------------------------------------------------
 
 
 class StyleData:
@@ -669,8 +673,8 @@ class ButtonDrawer:
         )  # vertical padding on top and bottom
 
         # Ensure minimum button size (reasonable minimums)
-        min_width = 32
-        min_height = 24
+        min_width = 16
+        min_height = 16
 
         total_width = max(total_width, min_width)
         total_height = max(total_height, min_height)
@@ -785,6 +789,11 @@ class CheckboxDrawer:
         return {
             enum_to_str(
                 QStyle.PrimitiveElement,
+                QStyle.ControlElement.CE_CheckBox,
+                "QCheckBox",
+            ): self.draw_control,
+            enum_to_str(
+                QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_IndicatorCheckBox,
                 "QCheckBox",
             ): self.draw_toggle,
@@ -827,6 +836,16 @@ class CheckboxDrawer:
         elif metric == QStyle.PixelMetric.PM_CheckBoxLabelSpacing:
             return 8
         return 0
+
+    def draw_control(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None,
+    ):
+        super(AYONStyle, self.style_inst).drawControl(
+            QStyle.ControlElement.CE_CheckBox, option, painter, widget
+        )
 
     def draw_toggle(
         self,
@@ -952,6 +971,11 @@ class ComboBoxDrawer:
 
     def register_drawers(self):
         return {
+            # enum_to_str(
+            #     QStyle.ControlElement,
+            #     QStyle.ControlElement.CE_ComboBoxLabel,
+            #     "QComboBox",
+            # ): self.draw_label,
             enum_to_str(
                 QStyle.ComplexControl,
                 QStyle.ComplexControl.CC_ComboBox,
@@ -978,6 +1002,16 @@ class ComboBoxDrawer:
             ): self.combobox_size,
         }
 
+    # def draw_label(
+    #     self,
+    #     option: QStyleOption,
+    #     painter: QPainter,
+    #     widget: QWidget | None,
+    # ):
+    #     super(AYONStyle, self.style_inst).drawControl(
+    #         QStyle.ControlElement.CE_ComboBoxLabel, option, painter, widget
+    #     )
+
     def draw_box(
         self,
         opt: QtWidgets.QStyleOptionComplex,
@@ -986,6 +1020,12 @@ class ComboBoxDrawer:
     ):
         if not isinstance(w, QComboBox):
             return
+
+        _style = self.model.get_style("QComboBox")
+        opt.palette.setBrush(
+            QPalette.ColorRole.Base, self.model.base_palette.base()
+        )
+        _radius = _style.get("border-radius", 0)
 
         # print(f"SUB_CTL: {opt.activeSubControls}")
         if not w.isEditable():
@@ -1021,7 +1061,7 @@ class ComboBoxDrawer:
             p.save()
             p.setBrush(QBrush(bg_color))
             p.setPen(QtCore.Qt.PenStyle.NoPen)
-            p.drawRoundedRect(rect, 4, 4)
+            p.drawRoundedRect(rect, _radius, _radius)
             p.restore()
 
             # set pen for text drawing
@@ -1408,6 +1448,47 @@ class TooltipDrawer:
 # ----------------------------------------------------------------------------
 
 
+class TextEditDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    @property
+    def base_class(self):
+        return {"QTextEdit": QTextEdit}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ShapedFrame,
+                "QTextEdit",
+            ): self.draw_frame,
+        }
+
+    def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
+        variant = getattr(w, "variant", "")
+        style = self.model.get_style("QTextEdit", variant)
+
+        if hasattr(w, "get_bg_color"):
+            bgc: QColor = w.get_bg_color(style["background-color"])
+            style = dict(style)
+            style["border-color"] = bgc
+            style["background-color"] = bgc
+
+        # Draw background
+        bg_color = QColor(style["background-color"])
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        radius = style.get("border-radius", 0)
+        painter.drawRoundedRect(option.rect, radius, radius)
+
+
+# ----------------------------------------------------------------------------
+
+W_T = {}
+
+
 class AYONStyle(QCommonStyle):
     """
     AYON QStyle implementation that replaces QSS styling with native Qt painting.
@@ -1428,6 +1509,7 @@ class AYONStyle(QCommonStyle):
             CheckboxDrawer(self),
             ComboBoxDrawer(self),
             ScrollBarDrawer(self),
+            TextEditDrawer(self),
             FrameDrawer(self),
         ]
         for obj in self.drawer_objs:
@@ -1486,7 +1568,7 @@ class AYONStyle(QCommonStyle):
                 )
 
         elif isinstance(widget, QPalette):
-            print("YES")
+            print("YES: QPalette")
 
         elif isinstance(widget, QApplication):
             super().polish(widget)
@@ -1503,8 +1585,8 @@ class AYONStyle(QCommonStyle):
         """Draw control elements (buttons, labels, etc.)."""
         key = enum_to_str(QStyle.ControlElement, element, self.widget_key(w))
 
-        # if isinstance(w, QPushButton):
-        #     log.debug("%s %s", type(w), key)
+        if type(w).__name__ in W_T:
+            log.info("  >>  drawControl %s %s", type(w), key)
 
         try:
             draw_ce_calls = self.drawers[key]
@@ -1527,10 +1609,12 @@ class AYONStyle(QCommonStyle):
         p: QPainter,
         w: QWidget | None = None,
     ) -> None:
+        key = enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
+        if type(w).__name__ in W_T:
+            log.info("  >>  drawComplexControl %s %s", type(w), key)
+
         try:
-            draw_cc = self.drawers[
-                enum_to_str(QStyle.ComplexControl, cc, self.widget_key(w))
-            ]
+            draw_cc = self.drawers[key]
         except KeyError:
             # no custom drawer fallback
             return super().drawComplexControl(cc, opt, p, w)
@@ -1547,8 +1631,8 @@ class AYONStyle(QCommonStyle):
         """Draw primitive elements."""
 
         key = enum_to_str(QStyle.PrimitiveElement, element, self.widget_key(w))
-        if isinstance(w, QLabel):
-            log.debug("%s %s", w, key)
+        if type(w).__name__ in W_T:
+            log.info("  >>  drawPrimitive %s %s", type(w), key)
 
         try:
             draw_prim = self.drawers[key]
@@ -1688,6 +1772,8 @@ if __name__ == "__main__":
     import time
 
     from .components.buttons import AYButton
+    from .components.check_box import AYCheckBox
+    from .components.combo_box import ALL_STATUSES, AYComboBox
     from .components.container import AYContainer
     from .components.label import AYLabel
     from .components.layouts import AYHBoxLayout, AYVBoxLayout
@@ -1772,6 +1858,7 @@ if __name__ == "__main__":
 
         variants = StyleData().widget_variants("QPushButton")
 
+        # text buttons
         l1 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):
             b = AYButton(
@@ -1780,6 +1867,7 @@ if __name__ == "__main__":
             l1.addWidget(b)
         container_1.add_layout(l1)
 
+        # text + icon buttons
         l2 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):
             b = AYButton(f"{var} button", variant=var, icon="add")
@@ -1793,8 +1881,11 @@ if __name__ == "__main__":
             layout_margin=10,
             layout_spacing=10,
         )
+        # icon buttons
         for i, var in enumerate(variants):
-            b = AYButton(variant=var, icon="add")
+            b = AYButton(
+                variant=var, icon="add", name_id="ICON_ONLY" if i == 0 else ""
+            )
             container_2.add_widget(b)
         container_2.addStretch()
         widget.add_widget(container_2)
@@ -1813,7 +1904,11 @@ if __name__ == "__main__":
         )
         container_3.add_widget(te)
         vblyt = AYVBoxLayout(spacing=8)
-        cb = QtWidgets.QCheckBox("CheckBox")
+        cbb = AYComboBox(items=ALL_STATUSES)
+        vblyt.addWidget(cbb)
+        cbbi = AYComboBox(items=ALL_STATUSES, inverted=True)
+        vblyt.addWidget(cbbi)
+        cb = AYCheckBox("CheckBox")
         cb.setToolTip(("A typical switch..."))
         vblyt.addWidget(cb)
         vblyt.addWidget(AYLabel("Normal label", tool_tip="text only"))
@@ -1842,7 +1937,11 @@ if __name__ == "__main__":
             )
         )
         usr_ly = AYHBoxLayout(spacing=8)
-        usr_ly.addWidget(AYUserImage(src="avatar1"))
+        usr_ly.addWidget(
+            AYUserImage(
+                src=Path(__file__).parent.joinpath("resources", "avatar1.jpg")
+            )
+        )
         vblyt.addStretch()
         container_3.add_layout(vblyt)
         container_3.addStretch()

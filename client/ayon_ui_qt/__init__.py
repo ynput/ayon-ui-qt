@@ -14,6 +14,7 @@ Example:
     >>> # Apply AYON styling to widget tree
     >>> style_widget_and_siblings(my_widget)
 """
+
 from __future__ import annotations
 
 import copy
@@ -22,7 +23,12 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget, QApplication
 
 from .version import __version__
-from .addon import UIQtAddon
+
+try:
+    from .addon import UIQtAddon
+except ImportError:
+    # WE WANT TO BE ABLE TO TEST OUTSIDE OF THE LAUNCHER.
+    pass
 from .ayon_style import AYONStyle
 
 _ayon_style_instance: AYONStyle | None = None
@@ -40,7 +46,7 @@ def get_ayon_style() -> AYONStyle:
     return _ayon_style_instance
 
 
-def style_widget_and_siblings(widget: QWidget, fix_app: bool = True) -> None:
+def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:
     """Apply AYON style to a widget and its siblings recursively.
 
     Removes any existing stylesheets and applies the AYON QStyle

@@ -11,6 +11,7 @@ from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout
 from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.scroll_area import AYScrollArea
 from ayon_ui_qt.data_models import (
     ActivityData,
     CommentModel,
@@ -162,7 +163,7 @@ class AYActivityStream(AYContainer):
 
         return feed_lyt
 
-    def _build_stream(self) -> QScrollArea:
+    def _build_stream(self) -> AYScrollArea:
         """Build and configure the scrollable activity stream container.
 
         Creates a QScrollArea with a vertical box layout container for
@@ -172,7 +173,7 @@ class AYActivityStream(AYContainer):
             QtWidgets.QScrollArea: Configured scroll area containing the
                 activity container.
         """
-        self.scroll_area = QScrollArea()
+        self.scroll_area = AYScrollArea()
         self.scroll_ctnr = AYContainer(
             layout=AYContainer.Layout.VBox,
             variant="low",
@@ -339,4 +340,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(_build, style=Style.Widget)
+    test(_build, style=Style.AyonStyleOverCSS)

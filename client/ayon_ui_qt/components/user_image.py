@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Callable
 from functools import partial
 from pathlib import Path
+from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -166,4 +166,4 @@ if __name__ == "__main__":
         w.add_widget(AYUserImage(name="Oliver", outline=False, size=60))
         return w
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

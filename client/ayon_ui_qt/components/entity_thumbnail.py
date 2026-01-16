@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 from typing import Callable
-from functools import partial
 
-from qtpy.QtCore import QSize
-from qtpy.QtWidgets import QPushButton
-from qtpy.QtGui import QIcon, QPixmap
+from qtpy.QtCore import QRect, QSize, Qt
+from qtpy.QtGui import QIcon, QPainter, QPaintEvent, QPixmap
+from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
+from .. import get_ayon_style
 from ..image_cache import ImageCache
 
 
@@ -34,6 +35,7 @@ class AYEntityThumbnail(QPushButton):
             )
 
         super().__init__(self._icon, "", **kwargs)
+        self.setStyle(get_ayon_style())
 
         self.set_thumbnail(self._src)
         self.setFixedSize(*self._size)
@@ -54,6 +56,33 @@ class AYEntityThumbnail(QPushButton):
             self.setIconSize(QSize(*self._size))
         else:
             self.setIcon(QIcon())
+
+    def sizeHint(self) -> QSize:
+        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
+            option = QStyleOptionButton()
+            self.initStyleOption(option)
+            return get_ayon_style().sizeFromContents(
+                QStyle.ContentsType.CT_PushButton,
+                option,
+                self.rect().size(),
+                self,
+            )
+        return super().sizeHint()
+
+    def paintEvent(self, arg__1: QPaintEvent) -> None:
+        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
+            p = QPainter(self)
+            option = QStyleOptionButton()
+            self.initStyleOption(option)
+            # override rect set by stylesheet
+            size = self.sizeHint()
+            self.setFixedSize(size)
+            option.rect = QRect(0, 0, size.width(), size.height())
+            # draw
+            return get_ayon_style().drawControl(
+                QStyle.ControlElement.CE_PushButton, option, p, self
+            )
+        super().paintEvent(arg__1)
 
 
 if __name__ == "__main__":
@@ -86,4 +115,4 @@ if __name__ == "__main__":
         )
         return w
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

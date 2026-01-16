@@ -5,7 +5,7 @@ from pathlib import Path
 from qtpy import QtWidgets
 
 # from .ayon_style import AYONStyle
-from . import style_widget_and_siblings, get_ayon_style
+from . import get_ayon_style
 
 
 class Style(Enum):
@@ -33,20 +33,19 @@ QPushButton {
 }
 """
 
+
 def load_rv_stylesheet(old=True):
-    fpath = Path(__file__).parent.joinpath("resources", "rv_mac_dark_legacy.qss" if old else "rv_dark.qss")
+    fpath = Path(__file__).parent.joinpath(
+        "resources", "rv_mac_dark_legacy.qss" if old else "rv_dark.qss"
+    )
     print(f"Loading stylesheet from {fpath}")
     with open(fpath, "r") as fr:
         return fr.read()
 
-# RV_CSS = load_rv_stylesheet()
 
-
-def test(test_widget, style: Style = Style.Base):
+def test(test_widget, style: Style = Style.AyonStyleOverCSS):
     """Main function to run the Qt test."""
     app = QtWidgets.QApplication(sys.argv)
-    # qcs = QtWidgets.QCommonStyle()
-    # app.setStyle(qcs)
 
     if style == Style.CSS:
         # Set old RV dark theme for the application

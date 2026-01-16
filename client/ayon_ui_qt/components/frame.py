@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from typing import Literal
 
-from qtpy import QtCore, QtWidgets
+from qtpy import QtCore, QtGui, QtWidgets
+
+from .. import get_ayon_style
 from ..utils import color_blend
 
 
@@ -9,7 +13,9 @@ class AYFrame(QtWidgets.QFrame):
         self,
         *args,
         bg=False,
-        variant: Literal["", "low", "high"] = "",
+        variant: Literal[
+            "", "low", "high", "debug-r", "debug-g", "debug-b"
+        ] = "",
         margin=0,
         bg_tint="",
         **kwargs,
@@ -20,8 +26,22 @@ class AYFrame(QtWidgets.QFrame):
         self._bg_color = None
 
         super().__init__(*args, **kwargs)
+        self.setStyle(get_ayon_style())
 
+        self.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
+        )
         self.setContentsMargins(margin, margin, margin, margin)
+
+    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
+        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
+            p = QtGui.QPainter(self)
+            option = QtWidgets.QStyleOptionFrame()
+            self.initStyleOption(option)
+            return get_ayon_style().drawControl(
+                QtWidgets.QStyle.ControlElement.CE_ShapedFrame, option, p, self
+            )
+        super().paintEvent(arg__1)
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:

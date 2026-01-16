@@ -3,8 +3,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from qtpy.QtWidgets import QWidget, QLayout, QLayoutItem
 from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 
 from .frame import AYFrame
 from .layouts import AYGridLayout, AYHBoxLayout, AYVBoxLayout
@@ -20,7 +20,7 @@ class AYContainer(AYFrame):
         self,
         *args,
         layout: Layout = Layout.HBox,
-        variant: Literal["", "low", "high"] = "",
+        variant: Literal["", "low", "high", "debug-r", "debug-g", "debug-b"] = "",
         margin=0,
         layout_spacing=0,
         layout_margin=0,

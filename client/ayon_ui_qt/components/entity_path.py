@@ -1,10 +1,13 @@
-from typing import Optional
+from __future__ import annotations
+
 from os.path import normpath
+from typing import Optional
 
 from qtpy import QtCore, QtWidgets
 
-from .layouts import AYHBoxLayout
 from ..utils import clear_layout
+from .. import get_ayon_style
+from .layouts import AYHBoxLayout
 
 
 class AYEntityPathSegment(QtWidgets.QLabel):
@@ -24,6 +27,7 @@ class AYEntityPathSegment(QtWidgets.QLabel):
 class AYEntityPath(QtWidgets.QWidget):
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
+        self.setStyle(get_ayon_style())
         self._path = ""
         self._path_segments = []
         self._entity_id = None

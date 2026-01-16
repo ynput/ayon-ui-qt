@@ -1,42 +1,42 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
-from qtpy.QtCore import QEvent, Signal, Qt
-from qtpy.QtGui import QEnterEvent, QTextDocument, QPixmap
+from qtpy.QtCore import QEvent, Qt, Signal
+from qtpy.QtGui import QEnterEvent, QPixmap, QTextDocument
 from qtpy.QtWidgets import (
-    QTextEdit,
-    QMessageBox,
-    QWidget,
-    QLabel,
     QDialog,
-    QSizePolicy,
+    QLabel,
+    QMessageBox,
+    QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
-from .buttons import AYButton
-from .container import AYContainer, AYFrame
-from .label import AYLabel
-from .layouts import AYVBoxLayout, AYHBoxLayout
-from .user_image import AYUserImage
-from .combo_box import ALL_STATUSES
-from .comment_completion import (
-    setup_user_completer,
-    on_completer_text_changed,
-    on_completer_activated,
-    on_completer_key_press,
-    format_comment_on_change,
-    apply_web_markdown_formatting,
-)
 from ..data_models import (
+    CommentModel,
     StatusChangeModel,
     StatusUiModel,
-    VersionPublishModel,
-    CommentModel,
     User,
+    VersionPublishModel,
 )
 from ..utils import color_blend
-
+from .buttons import AYButton
+from .combo_box import ALL_STATUSES
+from .comment_completion import (
+    apply_web_markdown_formatting,
+    format_comment_on_change,
+    on_completer_activated,
+    on_completer_key_press,
+    on_completer_text_changed,
+    setup_user_completer,
+)
+from .container import AYContainer, AYFrame
+from .label import AYLabel
+from .layouts import AYHBoxLayout, AYVBoxLayout
+from .text_edit import AYTextEdit
+from .user_image import AYUserImage
 
 # STATUS ---------------------------------------------------------------------
 
@@ -177,7 +177,7 @@ class AYPublish(AYFrame):
 MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
-class AYCommentField(QTextEdit):
+class AYCommentField(AYTextEdit):
     """Text field for comment display with markdown support."""
 
     def __init__(
@@ -188,6 +188,9 @@ class AYCommentField(QTextEdit):
         num_lines: int = 0,
         user_list: list[User] | None = None,
         model: CommentModel | None = None,
+        variant: Literal[
+            "", "low", "high", "debug-r", "debug-g", "debug-b"
+        ] = "",
         **kwargs,
     ) -> None:
         # remove our kwargs
@@ -197,7 +200,7 @@ class AYCommentField(QTextEdit):
         self._data = model
         self._bg_color = None
 
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, variant=variant, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
         self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
         self.set_markdown(text)
@@ -297,6 +300,7 @@ class AYCommentField(QTextEdit):
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
                 import webbrowser
+
                 url = char_format.anchorHref()
                 webbrowser.open(url)
                 event.accept()
@@ -437,7 +441,7 @@ class AYImageAttachment(AYLabel):
         dialog.exec()
 
 
-class AYComment(AYFrame):
+class AYComment(AYContainer):
     """Enhanced comment widget that displays images from CommentModel.files."""
 
     comment_deleted = Signal(object)
@@ -456,27 +460,23 @@ class AYComment(AYFrame):
 
         super().__init__(
             *args,
+            layout=AYContainer.Layout.VBox,
             variant="low",
-            bg_tint=self._data.category_color,
+            bg_tint="",  # keep neutral
+            margin=0,
+            layout_spacing=0,
+            layout_margin=1,
             **kwargs,
         )
 
         self._build()
+
         # configure
         if self._data:
             self.text_field.set_markdown(self._data.comment)
             self.date.setText(self._data.short_date)
             self.set_comment_category()
             self._build_image_attachments()
-
-    def get_bg_color(self, base_color: str):
-        if not self._bg_color:
-            self._bg_color = base_color
-            if self._data and self._data.category_color:
-                self._bg_color = color_blend(
-                    base_color, self._data.category_color, 0.1
-                )
-        return self._bg_color
 
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
@@ -492,6 +492,7 @@ class AYComment(AYFrame):
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
             variant="low",
+            margin=0,
             layout_spacing=8,
         )
         cntr.setContentsMargins(0, 0, 0, 4)
@@ -549,20 +550,21 @@ class AYComment(AYFrame):
         self.edit_button.clicked.connect(self._edit_comment)
 
     def _build(self):
-        self.main_lyt = AYVBoxLayout(self, margin=0, spacing=0)
-        self.main_lyt.addWidget(self._build_top_bar())
+        self.add_widget(self._build_top_bar())
         self.text_field = AYCommentField(
             self,
             text=self._data.comment,
             read_only=True,
             user_list=self._user_list,
             model=self._data,
+            variant="high",
         )
 
         editor_lyt = AYContainer(
             layout=AYContainer.Layout.VBox,
             variant="high",
             bg_tint=self._data.category_color,
+            layout_margin=4,
         )
         self.top_line = AYContainer(
             layout=AYContainer.Layout.HBox,
@@ -583,7 +585,7 @@ class AYComment(AYFrame):
         editor_lyt.add_widget(self.text_field, stretch=10)
 
         editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
-        self.main_lyt.addWidget(editor_lyt)
+        self.add_widget(editor_lyt)
         self._build_edit_buttons()
 
     def _build_image_attachments(self):
@@ -619,7 +621,8 @@ class AYComment(AYFrame):
             # Account for margins/padding and spacing between multiple images
             # Calculate how many images we'll have (not transparent)
             image_count = sum(
-                1 for file in self._data.files
+                1
+                for file in self._data.files
                 if not any(
                     file.id == annotation.transparent
                     for annotation in (self._data.annotations or [])
@@ -629,8 +632,9 @@ class AYComment(AYFrame):
             spacing_total = (image_count - 1) * 4
             max_image_width = max(
                 int((text_field_width - spacing_total) / image_count)
-                if image_count > 0 else 400,
-                100  # Minimum width for images
+                if image_count > 0
+                else 400,
+                100,  # Minimum width for images
             )
 
             thumb_path = getattr(file_model, "thumb_local_path", None)
@@ -741,7 +745,7 @@ if __name__ == "__main__":
         w = AYContainer(
             layout=AYContainer.Layout.VBox,
             # margin=8,
-            layout_spacing=4,
+            layout_spacing=8,
             layout_margin=16,
             variant="low",
         )
@@ -761,6 +765,8 @@ if __name__ == "__main__":
                     user_src=(str(av2)),
                     user_full_name="Leia Organa",
                     comment="Can you avoid the dark side @Luke ?",
+                    category="Review",
+                    category_color="#44ee9f",
                 )
             )
         )
@@ -780,4 +786,4 @@ if __name__ == "__main__":
         w.add_widget(AYTextBox(num_lines=3))
         return w
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

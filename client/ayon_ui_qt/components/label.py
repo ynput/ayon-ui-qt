@@ -1,22 +1,25 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from qtpy import QtWidgets
 from qtpy.QtCore import QRect, QSize, Qt
 from qtpy.QtGui import (
+    QBrush,
     QColor,
     QFont,
     QIcon,
     QPainter,
     QPaintEvent,
     QPalette,
-    QBrush,
-    QPen,
 )
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
+
+from .. import get_ayon_style
 
 
 class AYLabel(QtWidgets.QLabel):
@@ -48,6 +51,7 @@ class AYLabel(QtWidgets.QLabel):
         self._style_palette = None
 
         super().__init__(*args, **kwargs)
+        self.setStyle(get_ayon_style())
         self._text = self.text()
         self.setToolTip(tool_tip)
 

@@ -11,15 +11,15 @@ requires = ["poetry-core", "setuptools"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-packages = [{ include = "ayon_ui_qt/**/*" }]
+packages = [{ include = "client/ayon_ui_qt/**/*" }]
 include = [
-    { path = "ayon_ui_qt/*.json", format = [
+    { path = "client/ayon_ui_qt/*.json", format = [
         "sdist",
         "wheel",
     ] },
-    { path = "ayon_ui_qt/vendor/resources/*.*", format = [
+    { path = "client/ayon_ui_qt/vendor/resources/*.*", format = [
         "sdist",
         "wheel",
     ] },
 ]
-exclude = ["ayon_ui_qt/old"]
+exclude = ["client/ayon_ui_qt/old"]

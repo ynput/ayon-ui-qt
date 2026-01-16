@@ -2,26 +2,26 @@ from __future__ import annotations
 
 import re
 
-from qtpy.QtCore import Qt, QSize
+from qtpy.QtCore import QSize, Qt
 from qtpy.QtGui import (
-    QStandardItemModel,
-    QStandardItem,
-    QPainter,
-    QTextCursor,
-    QTextCharFormat,
     QFont,
+    QPainter,
+    QStandardItem,
+    QStandardItemModel,
+    QTextCharFormat,
+    QTextCursor,
 )
 from qtpy.QtWidgets import (
     QCompleter,
+    QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
-    QStyle,
     QTextEdit,
 )
 
-from .user_image import AYUserImage
-from ..data_models import User
 from .. import get_ayon_style
+from ..data_models import User
+from .user_image import AYUserImage
 
 
 class UserCompleterDelegate(QStyledItemDelegate):

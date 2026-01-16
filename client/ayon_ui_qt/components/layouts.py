@@ -1,4 +1,6 @@
-from qtpy import QtCore, QtGui, QtWidgets
+from __future__ import annotations
+
+from qtpy import QtWidgets
 
 
 class AYHBoxLayout(QtWidgets.QHBoxLayout):

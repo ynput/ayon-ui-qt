@@ -13,6 +13,8 @@ from qtpy import QtCore, QtWidgets
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QPainter,
+    QPaintEvent,
     QPalette,
     QStandardItemModel,
 )
@@ -101,6 +103,9 @@ class AYComboBox(QtWidgets.QComboBox):
         **kwargs,
     ) -> None:
         super().__init__(parent, **kwargs)
+        from .. import get_ayon_style
+
+        self.setStyle(get_ayon_style())
         self.setMouseTracking(True)
         self.setMaximumHeight(height)
 
@@ -178,6 +183,48 @@ class AYComboBox(QtWidgets.QComboBox):
     def set_size(self, size: str):
         self._size = size
         self.update_items()
+
+    def sizeHint(self) -> QtCore.QSize:
+        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
+            from .. import get_ayon_style
+
+            option = QtWidgets.QStyleOptionComboBox()
+            self.initStyleOption(option)
+            return get_ayon_style().sizeFromContents(
+                QtWidgets.QStyle.ContentsType.CT_ComboBox,
+                option,
+                self.rect().size(),
+                self,
+            )
+        return super().sizeHint()
+
+    def paintEvent(self, arg__1: QPaintEvent) -> None:
+        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
+            from .. import get_ayon_style
+
+            p = QPainter(self)
+            option = QtWidgets.QStyleOptionComboBox()
+            self.initStyleOption(option)
+            _style = get_ayon_style()
+            # option.palette.setBrush(QPalette.ColorRole.Base, _style.model.base_palette.base())
+            # print(f"CBB: {option.palette.base()}")
+            _style.drawComplexControl(
+                QtWidgets.QStyle.ComplexControl.CC_ComboBox, option, p, self
+            )
+            if self.currentIndex() < 0 and self.placeholderText():
+                option.palette.setBrush(
+                    QPalette.ColorRole.ButtonText,
+                    option.palette.placeholderText(),
+                )
+                option.currentText = self.placeholderText()
+            _style.drawControl(
+                QtWidgets.QStyle.ControlElement.CE_ComboBoxLabel,
+                option,
+                p,
+                self,
+            )
+            return
+        super().paintEvent(arg__1)
 
 
 # TEST  =======================================================================
