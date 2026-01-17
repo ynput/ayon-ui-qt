@@ -197,4 +197,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(_build, style=Style.Widget)
+    test(_build, style=Style.AyonStyleOverCSS)

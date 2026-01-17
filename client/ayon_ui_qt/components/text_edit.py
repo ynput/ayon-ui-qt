@@ -33,13 +33,3 @@ class AYTextEdit(QTextEdit):
         super().__init__(*args, **kwargs)
         self.setStyle(get_ayon_style())
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-
-    def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            p = QPainter(self)
-            option = QStyleOptionFrame()
-            self.initStyleOption(option)
-            return get_ayon_style().drawControl(
-                QStyle.ControlElement.CE_ShapedFrame, option, p, self
-            )
-        super().paintEvent(arg__1)

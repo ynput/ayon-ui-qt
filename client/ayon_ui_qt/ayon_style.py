@@ -1448,44 +1448,6 @@ class TooltipDrawer:
 # ----------------------------------------------------------------------------
 
 
-class TextEditDrawer:
-    def __init__(self, style_inst: AYONStyle) -> None:
-        self.style_inst = style_inst
-        self.model = style_inst.model
-
-    @property
-    def base_class(self):
-        return {"QTextEdit": QTextEdit}
-
-    def register_drawers(self):
-        return {
-            enum_to_str(
-                QStyle.ControlElement,
-                QStyle.ControlElement.CE_ShapedFrame,
-                "QTextEdit",
-            ): self.draw_frame,
-        }
-
-    def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
-        variant = getattr(w, "variant", "")
-        style = self.model.get_style("QTextEdit", variant)
-
-        if hasattr(w, "get_bg_color"):
-            bgc: QColor = w.get_bg_color(style["background-color"])
-            style = dict(style)
-            style["border-color"] = bgc
-            style["background-color"] = bgc
-
-        # Draw background
-        bg_color = QColor(style["background-color"])
-        painter.setBrush(QBrush(bg_color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        radius = style.get("border-radius", 0)
-        painter.drawRoundedRect(option.rect, radius, radius)
-
-
-# ----------------------------------------------------------------------------
-
 W_T = {}
 
 
@@ -1509,7 +1471,6 @@ class AYONStyle(QCommonStyle):
             CheckboxDrawer(self),
             ComboBoxDrawer(self),
             ScrollBarDrawer(self),
-            TextEditDrawer(self),
             FrameDrawer(self),
         ]
         for obj in self.drawer_objs:
