@@ -783,7 +783,7 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.add_widget(AYTextBox(num_lines=3))
+        w.add_widget(AYTextBox(num_lines=3, variant="high"))
         return w
 
     test(build, style=Style.AyonStyleOverCSS)
