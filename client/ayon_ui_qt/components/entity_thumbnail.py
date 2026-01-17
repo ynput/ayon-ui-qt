@@ -57,25 +57,13 @@ class AYEntityThumbnail(QPushButton):
         else:
             self.setIcon(QIcon())
 
-    def sizeHint(self) -> QSize:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            option = QStyleOptionButton()
-            self.initStyleOption(option)
-            return get_ayon_style().sizeFromContents(
-                QStyle.ContentsType.CT_PushButton,
-                option,
-                self.rect().size(),
-                self,
-            )
-        return super().sizeHint()
-
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
             p = QPainter(self)
             option = QStyleOptionButton()
             self.initStyleOption(option)
             # override rect set by stylesheet
-            size = self.sizeHint()
+            size = QSize(*self._size)
             self.setFixedSize(size)
             option.rect = QRect(0, 0, size.width(), size.height())
             # draw
