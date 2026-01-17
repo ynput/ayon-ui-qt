@@ -301,7 +301,7 @@ class AttachmentWidget(QtWidgets.QWidget):
         # Ensure button is on top
         self.remove_btn.raise_()
         # Main layout
-        layout = AYVBoxLayout(self, margin=4, spacing=2)
+        layout = AYVBoxLayout(margin=4, spacing=2)
         layout.addWidget(container)
 
         # Filename label (truncated)
@@ -413,7 +413,7 @@ class AYTextBox(AYContainer):
 
     def _build_upper_bar(self):
         grp_spacing = 16
-        lyt = AYHBoxLayout(self, spacing=0, margin=0)
+        lyt = AYHBoxLayout(spacing=0, margin=0)
         # comment category if available
         if self.show_categories:
             self.com_cat = AYComboBox(
