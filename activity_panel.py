@@ -66,7 +66,7 @@ class ActivityPanel(AYContainer):
 
         super().__init__(
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_margin=8,
             layout_spacing=8,
             parent=parent,
@@ -152,6 +152,7 @@ class ActivityPanel(AYContainer):
             return
 
         self.editor.add_attachments(annotation_list)
+
 
 #  TEST =======================================================================
 

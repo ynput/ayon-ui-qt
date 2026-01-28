@@ -8,20 +8,21 @@ from qtpy import QtCore, QtWidgets
 from ..utils import clear_layout
 from .. import get_ayon_style
 from .layouts import AYHBoxLayout
+from ..variants import QLabelVariants
+from .label import AYLabel
 
 
-class AYEntityPathSegment(QtWidgets.QLabel):
-    def __init__(self, text, parent=None, variant="head"):
+class AYEntityPathSegment(AYLabel):
+    def __init__(
+        self,
+        text,
+        parent=None,
+        variant: AYLabel.Variants = AYLabel.Variants.Default,
+        dim=True,
+        rel_text_size=-2,
+    ):
         super().__init__(text, parent=parent)
-        self._variant = variant
-
-    def get_variant(self) -> str:
-        return self._variant
-
-    def set_variant(self, value: str):
-        self._variant = value
-
-    variant = QtCore.Property(str, get_variant, set_variant)  # type: ignore
+        self._variant_str: str = variant.value
 
 
 class AYEntityPath(QtWidgets.QWidget):

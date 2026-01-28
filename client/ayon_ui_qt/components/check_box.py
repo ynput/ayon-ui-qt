@@ -15,8 +15,8 @@ class AYCheckBox(QCheckBox):
     Overrides Qt's stylesheet painting with AYONStyle custom rendering.
 
     Args:
-        *args: Positional arguments passed to QTextEdit.
-        **kwargs: Keyword arguments passed to QTextEdit.
+        *args: Positional arguments passed to QCheckBox.
+        **kwargs: Keyword arguments passed to QCheckBox.
     """
 
     def __init__(self, *args, **kwargs):
@@ -35,3 +35,16 @@ class AYCheckBox(QCheckBox):
             return
 
         super().paintEvent(arg__1)
+
+
+if __name__ == "__main__":
+    from ..tester import test
+    from .container import AYContainer
+
+    def _build():
+        container = AYContainer(layout_margin=10)
+        cb1 = AYCheckBox("Regular Checkbox")
+        container.add_widget(cb1)
+        return container
+
+    test(_build)

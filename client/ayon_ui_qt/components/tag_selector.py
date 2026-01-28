@@ -33,7 +33,7 @@ class AYTagSelector(QDialog):
         self,
         available_tags: list[str] | list[dict] | None = None,
         selected_tags: list[str] | None = None,
-        parent = None,
+        parent=None,
     ):
         """Initialize the tag selector dialog.
 
@@ -111,10 +111,14 @@ class AYTagSelector(QDialog):
         # Buttons layout
         button_layout = AYHBoxLayout(margin=0, spacing=4)
 
-        ok_button = AYButton("OK", variant="filled", parent=self)
+        ok_button = AYButton(
+            "OK", variant=AYButton.Variants.Filled, parent=self
+        )
         ok_button.clicked.connect(self.accept)
 
-        cancel_button = AYButton("Cancel", variant="text", parent=self)
+        cancel_button = AYButton(
+            "Cancel", variant=AYButton.Variants.Text, parent=self
+        )
         cancel_button.clicked.connect(self.reject)
 
         button_layout.addStretch()
@@ -133,8 +137,7 @@ class AYTagSelector(QDialog):
             item = self.tag_list.item(i)
             # Show item if it matches search text or is empty
             should_show = (
-                not search_text
-                or search_lower in item.text().lower()
+                not search_text or search_lower in item.text().lower()
             )
             self.tag_list.setRowHidden(i, not should_show)
 

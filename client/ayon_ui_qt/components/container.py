@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 
 from .frame import AYFrame
 from .layouts import AYGridLayout, AYHBoxLayout, AYVBoxLayout
+from ..variants import QFrameVariants
 
 
 class AYContainer(AYFrame):
@@ -16,11 +16,13 @@ class AYContainer(AYFrame):
         VBox = 1
         Grid = 2
 
+    Variants = QFrameVariants
+
     def __init__(
         self,
         *args,
         layout: Layout = Layout.HBox,
-        variant: Literal["", "low", "high", "debug-r", "debug-g", "debug-b"] = "",
+        variant: Variants = Variants.Default,
         margin=0,
         layout_spacing=0,
         layout_margin=0,
@@ -34,7 +36,7 @@ class AYContainer(AYFrame):
             margin=margin,
             bg_tint=bg_tint,
         )
-        self.variant = variant
+        self._variant_str: str = variant.value
         if layout == AYContainer.Layout.HBox:
             self._layout = AYHBoxLayout(
                 self, spacing=layout_spacing, margin=layout_margin
@@ -110,28 +112,28 @@ if __name__ == "__main__":
     def build():
         w = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_spacing=10,
             layout_margin=10,
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant="high",
+                variant=AYContainer.Variants.High,
                 layout_margin=10,
             )
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant="high",
+                variant=AYContainer.Variants.High,
                 layout_margin=10,
             )
         )
         w.add_widget(
             AYContainer(
                 layout=AYContainer.Layout.VBox,
-                variant="high",
+                variant=AYContainer.Variants.High,
                 layout_margin=10,
             )
         )
@@ -139,4 +141,4 @@ if __name__ == "__main__":
         w.setMinimumHeight(400)
         return w
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

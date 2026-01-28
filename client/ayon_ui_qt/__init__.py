@@ -8,7 +8,7 @@ Example:
     >>> from ayon_ui_qt.components import AYLabel, AYTextBox
     >>>
     >>> # Create styled widgets
-    >>> button = AYButton("Click me", variant="filled")
+    >>> button = AYButton("Click me", variant=AYButton.Variants.Filled)
     >>> container = AYContainer(layout=AYContainer.Layout.VBox)
     >>>
     >>> # Apply AYON styling to widget tree
@@ -44,6 +44,17 @@ def get_ayon_style() -> AYONStyle:
     if _ayon_style_instance is None:
         _ayon_style_instance = AYONStyle()
     return _ayon_style_instance
+
+
+def get_ayon_style_data(widget_cls: str, variant: str | None = None) -> dict:
+    """Get the AYON style data.
+
+    Returns:
+        The AYON style data.
+    """
+    return get_ayon_style().model.get_style(
+        widget_cls, variant=variant, state="all"
+    )
 
 
 def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:

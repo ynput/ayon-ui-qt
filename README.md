@@ -50,13 +50,13 @@ from ayon_ui_qt.components import AYButton, AYContainer, AYLabel
 # Create a styled container with buttons
 container = AYContainer(
     layout=AYContainer.Layout.VBox,
-    variant="low",
+    variant=AYContainer.Variants.Low,
     layout_margin=10,
     layout_spacing=8,
 )
 
 # Add styled widgets
-button = AYButton("Click me", variant="filled")
+button = AYButton("Click me", variant=AYButton.Variants.Filled)
 container.add_widget(button)
 
 label = AYLabel("Status", icon="check_circle", icon_color="#00ff00")
@@ -72,9 +72,9 @@ style_widget_and_siblings(container)
 from ayon_ui_qt.components import AYButton
 
 # Available variants: surface, tonal, filled, tertiary, text, nav, nav-small, danger
-AYButton("Surface", variant="surface")
-AYButton("Filled", variant="filled")
-AYButton("Danger", variant="danger", icon="delete")
+AYButton("Surface", variant=AYButton.Variants.Surface)
+AYButton("Filled", variant=AYButton.Variants.Filled)
+AYButton("Danger", variant=AYButton.Variants.Danger, icon="delete")
 ```
 
 ### Container Layouts

@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
 from .. import get_ayon_style
 from ..image_cache import ImageCache
+from ..variants import QPushButtonVariants
 
 
 class AYEntityThumbnail(QPushButton):
@@ -25,7 +26,7 @@ class AYEntityThumbnail(QPushButton):
         self._src = src
         self._file_cacher = file_cacher
         self._size = size
-        self._variant = "thumbnail"
+        self._variant_str: str = QPushButtonVariants.Thumbnail.value
         self._icon = QIcon()
 
         if not Path(self._src).exists() and self._file_cacher:

@@ -91,7 +91,7 @@ class AYActivityStream(AYContainer):
         super().__init__(
             *args,
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             **kwargs,
         )
 
@@ -104,29 +104,32 @@ class AYActivityStream(AYContainer):
     def _build_buttons(self) -> AYHBoxLayout:
         self.feed_all = AYButton(
             icon="forum",
-            variant="surface",
+            variant=AYButton.Variants.Surface,
             checkable=True,
             tooltip="All activity",
         )
         self.feed_com = AYButton(
-            icon="chat", variant="surface", checkable=True, tooltip="Comments"
+            icon="chat",
+            variant=AYButton.Variants.Surface,
+            checkable=True,
+            tooltip="Comments",
         )
         self.feed_pub = AYButton(
             icon="layers",
-            variant="surface",
+            variant=AYButton.Variants.Surface,
             checkable=True,
             tooltip="Published versions",
         )
         self.feed_chk = AYButton(
             icon="checklist",
-            variant="surface",
+            variant=AYButton.Variants.Surface,
             checkable=True,
             tooltip="Checklists",
         )
         self.feed_det = AYButton(
             "Details",
             parent=self,
-            variant="surface",
+            variant=AYButton.Variants.Surface,
             checkable=True,
         )
 
@@ -176,7 +179,7 @@ class AYActivityStream(AYContainer):
         self.scroll_area = AYScrollArea()
         self.scroll_ctnr = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_spacing=20,
         )
 

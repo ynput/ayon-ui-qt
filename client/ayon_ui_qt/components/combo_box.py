@@ -180,7 +180,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._inverted = state
         self.update_items()
 
-    def set_size(self, size: str):
+    def set_size(self, size: Size):
         self._size = size
         self.update_items()
 
@@ -234,23 +234,27 @@ if __name__ == "__main__":
     import os
 
     from ..tester import Style, test
+    from .. import get_ayon_style
     from .container import AYContainer
+    from .check_box import AYCheckBox
 
     def build():
         w = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_spacing=6,
             layout_margin=10,
         )
         w.setMinimumWidth(250)
-        inv = QtWidgets.QCheckBox("inverted", parent=w)
-        w.addWidget(inv)
+        inv = AYCheckBox("inverted", parent=w)
+        w.add_widget(inv)
         cb = AYComboBox(items=ALL_STATUSES)
-        w.addWidget(cb, stretch=0, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
-        size = QtWidgets.QComboBox(w)
+        w.add_widget(
+            cb, stretch=0, alignment=QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+        size = AYComboBox(w)
         size.addItems([s for s in get_args(Size)])
-        w.addWidget(size)
+        w.add_widget(size)
 
         # configure
         inv.clicked.connect(lambda x: cb.set_inverted(x))
@@ -260,4 +264,4 @@ if __name__ == "__main__":
 
     os.environ["QT_SCALE_FACTOR"] = "1"
 
-    test(build, style=Style.Widget)
+    test(build, style=Style.AyonStyleOverCSS)

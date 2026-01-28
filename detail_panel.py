@@ -117,7 +117,7 @@ class AYDetailPanel(AYContainer):
         """
         super().__init__(
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             parent=parent,
         )
         self._project: ProjectData = ProjectData.not_set()
@@ -138,7 +138,9 @@ class AYDetailPanel(AYContainer):
         """
         self.entity_thumbnail = AYEntityThumbnail(parent=self)
         self.product_name = AYLabel("product name")
-        self.entity_tag = AYButton(parent=self, variant="text", icon="sell")
+        self.entity_tag = AYButton(
+            parent=self, variant=AYButton.Variants.Text, icon="sell"
+        )
         self.task_info = AYLabel("Task - Render")
 
         thumb_lyt = AYHBoxLayout(margin=0)

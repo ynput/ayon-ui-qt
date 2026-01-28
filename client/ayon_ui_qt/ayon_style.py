@@ -18,13 +18,14 @@ from qtpy.QtWidgets import (
     QLabel,
     QPushButton,
     QStyle,
+    QStyledItemDelegate,
     QStyleOption,
     QStyleOptionButton,
     QStyleOptionComboBox,
     QStyleOptionComplex,
     QStyleOptionFrame,
     QStyleOptionSlider,
-    QTextEdit,
+    QStyleOptionViewItem,
     QToolTip,
     QWidget,
 )
@@ -35,6 +36,7 @@ except ImportError:
     from .vendor.qtmaterialsymbols import get_icon
 
 from .components.combo_box import Item
+# from .components.color import AYColor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -204,6 +206,9 @@ class StyleData:
     def widget_data(self, widget):
         return self.data["widgets"].get(widget, {})
 
+    def widget_list(self) -> list[str]:
+        return list(self.data["widgets"].keys())
+
     def default_variant(self, widget_data):
         return widget_data.get(
             "default-variant", list(widget_data.get("variants", {}).keys())[0]
@@ -217,13 +222,19 @@ class StyleData:
     def palette(self):
         return self.data.get("palette", {})
 
-    def get_style(self, widget: str, variant=None, state="base"):
+    def get_style(
+        self,
+        widget_cls: str,
+        variant=None,
+        state="base",
+    ):
+        """Returns a style for a widget, variant and state."""
         try:
-            return self._cache[f"{widget}-{variant}-{state}"]
+            return self._cache[f"{widget_cls}-{variant}-{state}"]
         except KeyError:
             pass
 
-        data = self.widget_data(widget)
+        data = self.widget_data(widget_cls)
         vrt = self.validate_variant(data, variant)
         dvrt = self.default_variant(data)
         pal = self.palette()
@@ -231,22 +242,72 @@ class StyleData:
         d.update(copy.deepcopy(data.get("variants", {}).get(dvrt, {})))
         d.update(copy.deepcopy(data.get("variants", {}).get(vrt, {})))
 
-        to_be_removed = []
-        for key, val in d.items():
-            if isinstance(val, dict):
-                if key == state:
+        if state == "all":
+            for key, val in d.items():
+                if isinstance(val, dict):
                     for kk, vv in val.items():
-                        d[kk] = pal.get(vv, vv)
-                to_be_removed.append(key)
-            elif isinstance(val, list):
-                pass
-            else:
-                d[key] = pal.get(val, val)
-        for k in to_be_removed:
-            d.pop(k)
+                        d[key][kk] = pal.get(vv, vv)
+                elif isinstance(val, list):
+                    pass
+                else:
+                    d[key] = pal.get(val, val)
+        else:
+            # Override palette variables with the current state's values and remove
+            # all states. That way, we can directly use "background-color" without
+            # checking the widget's state.
+            to_be_removed = []
+            for key, val in d.items():
+                if isinstance(val, dict):
+                    if key == state:
+                        for kk, vv in val.items():
+                            d[kk] = pal.get(vv, vv)
+                    to_be_removed.append(key)
+                elif isinstance(val, list):
+                    pass
+                else:
+                    d[key] = pal.get(val, val)
+            for k in to_be_removed:
+                d.pop(k)
+
         # cache result
-        self.last_key = f"{widget}-{variant}-{state}"
+        self.last_key = f"{widget_cls}-{variant}-{state}"
         self._cache[self.last_key] = d
+        return d
+
+    def get_styles(
+        self,
+        widget_cls: str,
+        variant: str | None = None,
+        states: list[str] | None = None,
+    ) -> dict[str, dict]:
+        """Returns styles for a widget, variant and multiple states at once.
+
+        This is more efficient than calling get_style() multiple times
+        when you need styles for several states of the same widget/variant.
+
+        Args:
+            widget_cls: The widget class name (e.g., "QStyledItemDelegate").
+            variant: The variant name (e.g., "default"). Defaults to None.
+            states: List of states to retrieve (e.g., ["base", "hover",
+                "checked"]). Defaults to ["base"].
+
+        Returns:
+            A dictionary mapping state names to their style dictionaries.
+        """
+        if states is None:
+            states = ["base"]
+
+        cache_key = f"{widget_cls}-{variant}-{'|'.join(states)}"
+        try:
+            return self._cache[cache_key]
+        except KeyError:
+            pass
+
+        d = {
+            state: self.get_style(widget_cls, variant, state)
+            for state in states
+        }
+        self._cache[cache_key] = d
         return d
 
     def current_style(self):
@@ -362,18 +423,7 @@ class ButtonDrawer:
         """Extract button variant from widget properties."""
         if widget is None:
             return "surface"
-
-        variant = None
-        for at in ("_variant", "variant"):
-            try:
-                variant = getattr(widget, at)
-            except AttributeError:
-                pass
-
-        if variant and variant in self.model.widget_variants("QPushButton"):
-            return variant
-
-        return "surface"
+        return getattr(widget, "_variant_str", "surface")
 
     def get_button_has_icon(self, widget: QWidget) -> bool:
         """Check if button has an icon."""
@@ -394,7 +444,7 @@ class ButtonDrawer:
 
     def get_button_style(
         self, widget: QWidget, state: QStyle.StateFlag
-    ) -> dict:
+    ) -> tuple[dict, str]:
         """Get the appropriate style dictionary for the widget's variant and
         state."""
         variant = self.get_button_variant(widget)
@@ -413,7 +463,7 @@ class ButtonDrawer:
 
         style = self.model.get_style("QPushButton", variant, wstate)
 
-        return style
+        return style, wstate
 
     def draw_push_button_bevel(
         self,
@@ -425,7 +475,7 @@ class ButtonDrawer:
         if not isinstance(option, QStyleOptionButton) or widget is None:
             return
 
-        style = self.get_button_style(widget, option.state)
+        style, _ = self.get_button_style(widget, option.state)
         rect = option.rect
 
         painter.save()
@@ -492,7 +542,8 @@ class ButtonDrawer:
         if not isinstance(option, QStyleOptionButton) or widget is None:
             return
 
-        style = self.get_button_style(widget, option.state)  # type: ignore
+        style, wstate = self.get_button_style(widget, option.state)  # type: ignore
+        variant = self.get_button_variant(widget)
 
         # Set up text color
         text_color = QColor(style["color"])
@@ -514,9 +565,9 @@ class ButtonDrawer:
 
         # Draw icon if present
         if option.icon:  # type: ignore
-            icon_color = QColor(getattr(widget, "_icon_color", text_color))
+            # icon_color = QColor(getattr(widget, "_icon_color", text_color))
             icon_rect = QRect(content_rect)
-            if option.text:  # type: ignore
+            if option.text and not style.get("ignore-text", False):  # type: ignore
                 # Icon + text: place icon on the left
                 icon_size = option.iconSize  # type: ignore
                 icon_rect.setSize(icon_size)
@@ -536,7 +587,7 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                option.icon = get_icon(widget._icon, color=icon_color)
+                # option.icon = get_icon(widget._icon, color=icon_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
@@ -556,7 +607,7 @@ class ButtonDrawer:
                         Qt.AlignmentFlag.AlignCenter,
                         option.text,  # type: ignore
                     )
-            else:
+            elif variant != "thumbnail":
                 # Icon only: center the icon
                 mode = QtGui.QIcon.Mode.Normal
                 if not (
@@ -566,17 +617,24 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                option.icon = get_icon(widget._icon, color=icon_color)
+                state = (
+                    QtGui.QIcon.State.On
+                    if wstate == "hover"
+                    else QtGui.QIcon.State.Off
+                )
+
+                # option.icon = get_icon(widget._icon, color=icon_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
                     content_rect,
                     Qt.AlignmentFlag.AlignCenter,
                     mode,
+                    state,
                 )
         else:
             # Text only
-            if option.text:  # type: ignore
+            if option.text and not style.get("ignore-text", False):  # type: ignore
                 painter.drawText(
                     content_rect,
                     Qt.AlignmentFlag.AlignCenter,
@@ -609,7 +667,7 @@ class ButtonDrawer:
                 return QtCore.QSize(100, 30)
 
         # Set up font for text measurement
-        style = self.get_button_style(widget, option.state)  # type: ignore
+        style, _ = self.get_button_style(widget, option.state)  # type: ignore
         font = _style_font(style, widget)
 
         # Create font metrics for accurate text measurement
@@ -634,7 +692,7 @@ class ButtonDrawer:
         # Calculate text dimensions
         text_width = 0
         text_height = 0
-        if option.text:  # type: ignore
+        if option.text and not style.get("ignore-text", False):  # type: ignore
             text_rect = font_metrics.boundingRect(option.text)  # type: ignore
             text_width = text_rect.width()
             text_height = text_rect.height()
@@ -733,7 +791,7 @@ class FrameDrawer:
 
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
-        variant = getattr(w, "variant", "")
+        variant = getattr(w, "_variant_str", "")
         style = self.model.get_style("QFrame", variant)
         # widget override for comment types
         if hasattr(w, "get_bg_color"):
@@ -1002,16 +1060,6 @@ class ComboBoxDrawer:
             ): self.combobox_size,
         }
 
-    # def draw_label(
-    #     self,
-    #     option: QStyleOption,
-    #     painter: QPainter,
-    #     widget: QWidget | None,
-    # ):
-    #     super(AYONStyle, self.style_inst).drawControl(
-    #         QStyle.ControlElement.CE_ComboBoxLabel, option, painter, widget
-    #     )
-
     def draw_box(
         self,
         opt: QtWidgets.QStyleOptionComplex,
@@ -1040,7 +1088,6 @@ class ComboBoxDrawer:
                 # print("NO WIDGET")
                 return
 
-            cb_size = getattr(w, "_size", "full")
             inverted = False
             icon_name = ""
 
@@ -1448,6 +1495,187 @@ class TooltipDrawer:
 # ----------------------------------------------------------------------------
 
 
+class ItemViewItemDrawer:
+    """Drawer for item view items using QStyledItemDelegate."""
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+
+    @property
+    def base_class(self):
+        return {"QStyledItemDelegate": QStyledItemDelegate}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ItemViewItem,
+                "QStyledItemDelegate",
+            ): self.draw_item_view_item,
+        }
+
+    def get_item_view_variant(self, widget: QWidget | None) -> str:
+        """Extract item view variant from widget properties."""
+        if widget is None:
+            return "default"
+        if hasattr(widget, "itemDelegate"):
+            delegate = widget.itemDelegate()
+            if hasattr(delegate, "_variant_str"):
+                return delegate._variant_str
+        return "default"
+
+    def get_item_view_style(
+        self,
+        widget: QWidget | None,
+        option: QStyleOptionViewItem,
+    ) -> tuple[dict, str]:
+        """Get the appropriate style dictionary for the widget's variant
+        and state.
+
+        Args:
+            widget: The parent widget containing the item view.
+            option: The style option containing state flags.
+
+        Returns:
+            A tuple of (style dictionary, state string).
+        """
+        variant = self.get_item_view_variant(widget)
+
+        wstate = "base"
+        is_checked = option.checkState == Qt.CheckState.Checked
+        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+
+        if is_checked:
+            wstate = "checked"
+        elif is_hovered:
+            wstate = "hover"
+
+        style = self.model.get_style("QStyledItemDelegate", variant, wstate)
+
+        return style, wstate
+
+    def draw_item_view_item(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None,
+    ) -> None:
+        """Paint a filter item with checkbox indicator.
+
+        Hover and checked states are handled independently:
+        - Background color comes from hover state when hovered
+        - Checkbox background and text color come from checked state
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # For QStyleOptionViewItem, we need to check different properties
+        if not isinstance(option, QStyleOptionViewItem):
+            painter.restore()
+            return
+
+        # Determine hover and checked states independently
+        is_checked = option.checkState == Qt.CheckState.Checked
+        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        text = option.text
+
+        # Get variant for style lookups
+        variant = self.get_item_view_variant(widget)
+
+        # Get all necessary styles in a single call
+        styles = self.model.get_styles(
+            "QStyledItemDelegate", variant, ["base", "hover", "checked"]
+        )
+        base_style = styles["base"]
+        hover_style = styles["hover"]
+        checked_style = styles["checked"]
+
+        # Constants from base style data
+        checkbox_size = base_style.get("checkbox-size", 16)
+        checkbox_margin = base_style.get("checkbox-margin", 8)
+        text_padding = base_style.get("text-padding", 12)
+        border_radius = base_style.get("border-radius", 2)
+
+        # Background: use hover style if hovered, regardless of checked state
+        if is_hovered:
+            bg_color = QColor(
+                hover_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        else:
+            bg_color = QColor(
+                base_style.get("background-color", "transparent")
+            )
+
+        # Text color: use checked style if checked, else base
+        if is_checked:
+            text_color = QColor(
+                checked_style.get("color", base_style.get("color", "#8b9198"))
+            )
+        else:
+            text_color = QColor(base_style.get("color", "#8b9198"))
+
+        # Checkbox background: use checked style if checked, else base
+        if is_checked:
+            checkbox_bg_color = QColor(
+                checked_style.get(
+                    "checkbox-background-color",
+                    base_style.get("checkbox-background-color", "#424a57"),
+                )
+            )
+        else:
+            checkbox_bg_color = QColor(
+                base_style.get("checkbox-background-color", "#424a57")
+            )
+
+        # Draw background if hovered (transparent check not needed for hover)
+        if is_hovered:
+            painter.setBrush(QBrush(bg_color))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(option.rect)
+
+        # Calculate checkbox rect - positioned on right side
+        cb_rect = QRect(
+            option.rect.right() - checkbox_size - checkbox_margin,
+            option.rect.center().y() - checkbox_size // 2,
+            checkbox_size,
+            checkbox_size,
+        )
+
+        # Draw checkbox background
+        painter.setBrush(QBrush(checkbox_bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(cb_rect, border_radius, border_radius)
+
+        # Draw X mark if checked
+        if is_checked:
+            icon = get_icon("close", color="#000000")
+            icon_rect = cb_rect.adjusted(2, 2, -2, -2)
+            icon.paint(painter, icon_rect)
+
+        # Draw text
+        painter.setPen(QPen(text_color))
+        text_rect = option.rect.adjusted(
+            text_padding,
+            0,
+            -(checkbox_size + checkbox_margin * 2),
+            0,
+        )
+        painter.drawText(
+            text_rect,
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+            text,
+        )
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 W_T = {}
 
 
@@ -1472,6 +1700,7 @@ class AYONStyle(QCommonStyle):
             ComboBoxDrawer(self),
             ScrollBarDrawer(self),
             FrameDrawer(self),
+            ItemViewItemDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -1484,6 +1713,11 @@ class AYONStyle(QCommonStyle):
 
     def widget_key(self, w: QWidget | None) -> str:
         if w:
+            # Handle item view widgets - check parent for delegate
+            if hasattr(w, "itemDelegate"):
+                delegate = w.itemDelegate()
+                if isinstance(delegate, QStyledItemDelegate):
+                    return "QStyledItemDelegate"
             for name, wtype in self.base_classes.items():
                 if issubclass(type(w), wtype):
                     if w.objectName() == "qtooltip_label":
@@ -1741,6 +1975,7 @@ if __name__ == "__main__":
     from .components.text_box import AYTextBox
     from .components.user_image import AYUserImage
     from .tester import Style, test
+    from .variants import QPushButtonVariants
 
     def time_it(func):
         i = time.time()
@@ -1801,7 +2036,7 @@ if __name__ == "__main__":
         # Create and show the test widget
         widget = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="",
+            variant=AYContainer.Variants.Default,
             margin=0,
             layout_spacing=10,
             layout_margin=10,
@@ -1810,20 +2045,22 @@ if __name__ == "__main__":
         container_1 = AYContainer(
             widget,
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
         )
         widget.add_widget(container_1)
 
-        variants = StyleData().widget_variants("QPushButton")
+        variants = [v for v in QPushButtonVariants]
 
         # text buttons
         l1 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):
             b = AYButton(
-                f"{var} button", variant=var, tooltip=f"using variant {var}..."
+                f"{var.value} button",
+                variant=var,
+                tooltip=f"using variant {var.value}...",
             )
             l1.addWidget(b)
         container_1.add_layout(l1)
@@ -1831,13 +2068,13 @@ if __name__ == "__main__":
         # text + icon buttons
         l2 = AYHBoxLayout(margin=0)
         for i, var in enumerate(variants):
-            b = AYButton(f"{var} button", variant=var, icon="add")
+            b = AYButton(f"{var.value} button", variant=var, icon="add")
             l2.addWidget(b)
         container_1.add_layout(l2)
 
         container_2 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
@@ -1853,7 +2090,7 @@ if __name__ == "__main__":
 
         container_3 = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             margin=0,
             layout_margin=10,
             layout_spacing=10,
@@ -1893,7 +2130,7 @@ if __name__ == "__main__":
             AYLabel(
                 "a badge",
                 icon_color="#0088ff",
-                variant="badge",
+                variant=AYLabel.Variants.Badge,
                 tool_tip="a blue badge",
             )
         )

@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 from functools import partial
-from typing import Literal
 
 from qtpy import QtWidgets
 from qtpy.QtCore import (
@@ -30,6 +29,7 @@ from qtpy.QtWidgets import (
 
 from .. import get_ayon_style
 from ..data_models import CommentCategory, ProjectData, User
+from ..variants import QFrameVariants, QTextEditVariants
 from .buttons import AYButton
 from .combo_box import AYComboBox
 from .comment_completion import (
@@ -50,22 +50,22 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYTextEditor(AYTextEdit):
+    Variants = QTextEditVariants
+
     def __init__(
         self,
         *args,
         num_lines: int = 0,
         read_only: bool = False,
         user_list: list[User] | None,
-        variant: Literal[
-            "", "low", "high", "debug-r", "debug-g", "debug-b"
-        ] = "",
+        variant: Variants = Variants.Default,
         **kwargs,
     ):
         # remove our kwargs
         self.num_lines: int = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
-        self.variant = variant
+        self._variant_str: str = variant.value
 
         super().__init__(*args, variant=variant, **kwargs)
         self.setStyle(get_ayon_style())
@@ -137,7 +137,8 @@ class AYTextEditor(AYTextEdit):
             )
             fmt.setFontWeight(new_weight)
 
-            # Apply the format to current selection OR set as current format for next text
+            # Apply the format to current selection OR set as current format
+            # for next text
             if cursor.hasSelection():
                 cursor.setCharFormat(fmt)
             else:
@@ -184,7 +185,9 @@ class AYTextEditor(AYTextEdit):
             if not pw:
                 return
 
-            selected_text = cursor.selectedText() if cursor.hasSelection() else ""
+            selected_text = (
+                cursor.selectedText() if cursor.hasSelection() else ""
+            )
             field = QtWidgets.QLineEdit(selected_text, parent=pw)
 
             def _make_link():
@@ -294,10 +297,14 @@ class AttachmentWidget(QtWidgets.QWidget):
         self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Remove button overlaid on top-right corner
-        self.remove_btn = AYButton("×", variant="nav", parent=container)
+        self.remove_btn = AYButton(
+            "×", variant=AYButton.Variants.Nav, parent=container
+        )
         self.remove_btn.setFixedSize(18, 18)
         self.remove_btn.move(62, 0)  # Position at top-right corner
-        self.remove_btn.clicked.connect(lambda: self.remove_clicked.emit(self.index))
+        self.remove_btn.clicked.connect(
+            lambda: self.remove_clicked.emit(self.index)
+        )
         # Ensure button is on top
         self.remove_btn.raise_()
         # Main layout
@@ -316,16 +323,25 @@ class AttachmentWidget(QtWidgets.QWidget):
         if self.file_path.startswith("data:image"):
             # Base64 encoded image
             import base64
+
             # Extract base64 data
-            base64_data = self.file_path.split(",", 1)[1] if "," in self.file_path else self.file_path
+            base64_data = (
+                self.file_path.split(",", 1)[1]
+                if "," in self.file_path
+                else self.file_path
+            )
             try:
                 image_data = base64.b64decode(base64_data)
                 pixmap = QPixmap()
                 pixmap.loadFromData(image_data)
-                self.thumbnail_label.setPixmap(pixmap.scaled(
-                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                ))
+                self.thumbnail_label.setPixmap(
+                    pixmap.scaled(
+                        80,
+                        60,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
             except Exception as e:
                 logger.error("Failed to load base64 image: %s", e)
                 self.thumbnail_label.setText("Image")
@@ -333,10 +349,14 @@ class AttachmentWidget(QtWidgets.QWidget):
             # File path
             pixmap = QPixmap(self.file_path)
             if not pixmap.isNull():
-                self.thumbnail_label.setPixmap(pixmap.scaled(
-                    80, 60, Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                ))
+                self.thumbnail_label.setPixmap(
+                    pixmap.scaled(
+                        80,
+                        60,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
             else:
                 self.thumbnail_label.setText("Image")
 
@@ -344,7 +364,9 @@ class AttachmentWidget(QtWidgets.QWidget):
         """Update the display with current filename and image"""
         # Update filename label
         self.filename_label.setText(
-            self.filename[:12] + "..." if len(self.filename) > 12 else self.filename
+            self.filename[:12] + "..."
+            if len(self.filename) > 12
+            else self.filename
         )
         # Reload image
         self.load_image()
@@ -357,6 +379,7 @@ class AttachmentWidget(QtWidgets.QWidget):
             self.file_path = file_path
         self.update_display()
 
+
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str, list)  # type: ignore
@@ -364,7 +387,7 @@ class AYTextBoxSignals(QObject):
 
 class AYTextBox(AYContainer):
     signals = AYTextBoxSignals()
-
+    Variants = QFrameVariants
     style_icons = {
         "stl_h1": "format_h1",
         "stl_bold": "format_bold",
@@ -389,12 +412,10 @@ class AYTextBox(AYContainer):
         num_lines=0,
         show_categories=False,
         user_list: list[User] | None = None,
-        variant: Literal[
-            "", "low", "high", "debug-r", "debug-g", "debug-b"
-        ] = "",
+        variant: Variants = Variants.Default,
         **kwargs,
     ):
-        self.variant = variant
+        self._variant_str: str = variant.value
         super().__init__(
             *args,
             layout=AYContainer.Layout.VBox,
@@ -407,7 +428,8 @@ class AYTextBox(AYContainer):
         self.comment_categories: list[dict] = _dict_from_comment_category([])
         self.category = self.comment_categories[0]["text"]
         self._user_list: list[User] = user_list or []
-        self._annotation_attachments: list[dict] = []  # Store image annotation data
+        # Store image annotation data
+        self._annotation_attachments: list[dict] = []
         self._file_attachments: list[str] = []  # Store file paths only
         self._build(num_lines)
 
@@ -424,14 +446,24 @@ class AYTextBox(AYContainer):
         lyt.addStretch()
         # styling buttons
         for var, icn in self.style_icons.items():
-            setattr(self, var, AYButton(self, variant="nav", icon=icn))
+            setattr(
+                self,
+                var,
+                AYButton(self, variant=AYButton.Variants.Nav, icon=icn),
+            )
             lyt.addWidget(getattr(self, var))
         # formatting buttons
         for var, icn in self.format_icons.items():
-            setattr(self, var, AYButton(self, variant="nav", icon=icn))
+            setattr(
+                self,
+                var,
+                AYButton(self, variant=AYButton.Variants.Nav, icon=icn),
+            )
             lyt.addWidget(getattr(self, var))
         lyt.addSpacing(grp_spacing)
-        self.attach_file_btn = AYButton(self, variant="nav", icon="attach_file")
+        self.attach_file_btn = AYButton(
+            self, variant=AYButton.Variants.Nav, icon="attach_file"
+        )
         self.attach_file_btn.clicked.connect(self._on_attach_file_clicked)
         lyt.addWidget(self.attach_file_btn)
         return lyt
@@ -464,7 +496,7 @@ class AYTextBox(AYContainer):
             self,
             num_lines=num_lines,
             user_list=self._user_list,
-            variant=self.variant,
+            variant=AYTextEditor.Variants.Default,
         )
         for var in self.style_icons:
             getattr(self, var).clicked.connect(
@@ -480,16 +512,16 @@ class AYTextBox(AYContainer):
         lyt = AYHBoxLayout(margin=0, spacing=0)
 
         for icn, mention in self.mention_map.items():
-            btn = AYButton(self, variant="nav", icon=icn)
-            btn.clicked.connect(
-                partial(self._add_mention_to_editor, mention)
-            )
+            btn = AYButton(self, variant=AYButton.Variants.Nav, icon=icn)
+            btn.clicked.connect(partial(self._add_mention_to_editor, mention))
             lyt.addWidget(btn)
 
         lyt.addSpacerItem(
             QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
         )
-        self.comment_button = AYButton("Comment", variant="filled")
+        self.comment_button = AYButton(
+            "Comment", variant=AYButton.Variants.Filled
+        )
         self.comment_button.clicked.connect(self._on_comment_clicked)
         lyt.addWidget(self.comment_button)
         return lyt
@@ -520,7 +552,7 @@ class AYTextBox(AYContainer):
             self,
             "Select files to attach",
             "",
-            "Image Files (*.png *.jpeg *.jpg);;All Files (*)"
+            "Image Files (*.png *.jpeg *.jpg);;All Files (*)",
         )
 
         if file_paths:
@@ -529,7 +561,9 @@ class AYTextBox(AYContainer):
     def _on_annotation_attachment_removed(self, index: int) -> None:
         """Handle removal of an image annotation attachment."""
         if 0 <= index < len(self._annotation_attachments):
-            file_path = self._annotation_attachments[index].get("file_path", "")
+            file_path = self._annotation_attachments[index].get(
+                "file_path", ""
+            )
             if os.path.exists(file_path):
                 os.remove(file_path)  # Optionally delete the file
             self._annotation_attachments.pop(index)
@@ -547,7 +581,7 @@ class AYTextBox(AYContainer):
         existing_widgets = {}
         for idx in range(self.attachment_layout.count()):
             item = self.attachment_layout.itemAt(idx)
-            if item and item.widget() and hasattr(item.widget(), 'index'):
+            if item and item.widget() and hasattr(item.widget(), "index"):
                 widget = item.widget()
                 if widget is not None:
                     existing_widgets[widget.index] = widget
@@ -555,16 +589,20 @@ class AYTextBox(AYContainer):
         # Update or create widgets
         if self._annotation_attachments:
             for idx, attachment in enumerate(self._annotation_attachments):
-                logger.info("Displaying attachment: %s with path: %s",
-                            attachment.get("filename"),
-                            attachment.get("file_path"))
+                logger.info(
+                    "Displaying attachment: %s with path: %s",
+                    attachment.get("filename"),
+                    attachment.get("file_path"),
+                )
 
                 if idx in existing_widgets:
                     # Update existing widget
                     widget = existing_widgets[idx]
                     widget.update_content(
-                        filename=attachment.get("filename", f"attachment_{idx}"),
-                        file_path=attachment.get("file_path", "")
+                        filename=attachment.get(
+                            "filename", f"attachment_{idx}"
+                        ),
+                        file_path=attachment.get("file_path", ""),
                     )
                     # Update index if it changed
                     widget.index = idx
@@ -573,10 +611,14 @@ class AYTextBox(AYContainer):
                     widget = AttachmentWidget(
                         parent=self.attachment_container,
                         index=idx,
-                        filename=attachment.get("filename", f"attachment_{idx}"),
-                        file_path=attachment.get("file_path", "")
+                        filename=attachment.get(
+                            "filename", f"attachment_{idx}"
+                        ),
+                        file_path=attachment.get("file_path", ""),
                     )
-                    widget.remove_clicked.connect(self._on_annotation_attachment_removed)
+                    widget.remove_clicked.connect(
+                        self._on_annotation_attachment_removed
+                    )
                     self.attachment_layout.insertWidget(idx, widget)
 
             # Remove any extra widgets that shouldn't be there
@@ -590,8 +632,11 @@ class AYTextBox(AYContainer):
             if self.attachment_layout.count() > 0 and (
                 not isinstance(
                     self.attachment_layout.itemAt(
-                    self.attachment_layout.count()-1).widget(),
-                    type(None))):
+                        self.attachment_layout.count() - 1
+                    ).widget(),
+                    type(None),
+                )
+            ):
                 self.attachment_layout.addStretch()
 
             self.attachment_scroll.show()
@@ -655,10 +700,13 @@ class AYTextBox(AYContainer):
                 file_item_layout.addWidget(file_label)
 
                 # Remove button
-                remove_btn = AYButton("×", variant="nav", parent=file_item)
+                remove_btn = AYButton(
+                    "×", variant=AYButton.Variants.Nav, parent=file_item
+                )
                 remove_btn.setFixedSize(20, 20)
                 remove_btn.clicked.connect(
-                    lambda checked=False, i=idx: self._on_file_attachment_removed(i)
+                    lambda checked=False,
+                    i=idx: self._on_file_attachment_removed(i)
                 )
                 file_item_layout.addWidget(remove_btn)
 
@@ -670,7 +718,6 @@ class AYTextBox(AYContainer):
             self.file_attachment_scroll.hide()
 
         self.file_attachment_container.update()
-
 
     def add_annotation_attachments(self, attachments: list[dict]) -> None:
         """Add multiple image annotation attachments at once.
@@ -691,30 +738,37 @@ class AYTextBox(AYContainer):
 
             # Find existing attachment that matches
             existing_attachments = [
-                existing for existing in self._annotation_attachments
+                existing
+                for existing in self._annotation_attachments
                 if existing.get("file_pattern") == file_pattern
                 and existing.get("current_frame") == current_frame
             ]
             if existing_attachments:
                 # Update the first matching attachment (should be only one)
                 existing = existing_attachments[0]
-                logger.info("Attachment already exists, updating: %s", filename)
-                existing.update({
-                    "file_path": file_path,
-                    "filename": filename,
-                    "timestamp": timestamp
-                })
+                logger.info(
+                    "Attachment already exists, updating: %s", filename
+                )
+                existing.update(
+                    {
+                        "file_path": file_path,
+                        "filename": filename,
+                        "timestamp": timestamp,
+                    }
+                )
                 self._refresh_attachment_display()
 
             else:
                 # Add new attachment
-                self._annotation_attachments.append({
-                    "file_pattern": file_pattern,
-                    "current_frame": current_frame,
-                    "file_path": file_path,
-                    "filename": filename,
-                    "timestamp": timestamp
-                })
+                self._annotation_attachments.append(
+                    {
+                        "file_pattern": file_pattern,
+                        "current_frame": current_frame,
+                        "file_path": file_path,
+                        "filename": filename,
+                        "timestamp": timestamp,
+                    }
+                )
 
         self._refresh_attachment_display()
 
@@ -802,7 +856,7 @@ if __name__ == "__main__":
 
     def build():
         w = AYContainer(layout=AYContainer.Layout.HBox, margin=8)
-        ww = AYTextBox(parent=w, variant="high")
+        ww = AYTextBox(parent=w, variant=AYTextBox.Variants.High)
         ww.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"

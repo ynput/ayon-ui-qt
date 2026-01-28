@@ -37,6 +37,7 @@ from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
+from ..variants import QFrameVariants, QTextEditVariants
 
 # STATUS ---------------------------------------------------------------------
 
@@ -54,7 +55,9 @@ class AYStatusChange(AYFrame):
             kw["text"]: StatusUiModel(**kw)
             for kw in status_definitions or ALL_STATUSES
         }
-        super().__init__(*args, variant="low", margin=0, **kwargs)
+        super().__init__(
+            *args, variant=AYFrame.Variants.Low, margin=0, **kwargs
+        )
         self._build()
 
     @property
@@ -99,7 +102,7 @@ class AYStatusChange(AYFrame):
         self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_spacing=0,
         )
         cntr.add_widget(self.str_1, stretch=0)
@@ -123,7 +126,9 @@ class AYPublish(AYFrame):
         self, *args, data: VersionPublishModel | None = None, **kwargs
     ):
         self._data = data or VersionPublishModel()
-        super().__init__(*args, variant="low", margin=0, **kwargs)
+        super().__init__(
+            *args, variant=AYFrame.Variants.Low, margin=0, **kwargs
+        )
         self._build()
 
     def _build_top_bar(self):
@@ -142,7 +147,7 @@ class AYPublish(AYFrame):
         )
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             layout_spacing=8,
         )
         cntr.setContentsMargins(0, 0, 0, 4)
@@ -180,6 +185,8 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 class AYCommentField(AYTextEdit):
     """Text field for comment display with markdown support."""
 
+    Variants = QTextEditVariants
+
     def __init__(
         self,
         *args,
@@ -188,9 +195,7 @@ class AYCommentField(AYTextEdit):
         num_lines: int = 0,
         user_list: list[User] | None = None,
         model: CommentModel | None = None,
-        variant: Literal[
-            "", "low", "high", "debug-r", "debug-g", "debug-b"
-        ] = "",
+        variant: Variants = Variants.Default,
         **kwargs,
     ) -> None:
         # remove our kwargs
@@ -461,7 +466,7 @@ class AYComment(AYContainer):
         super().__init__(
             *args,
             layout=AYContainer.Layout.VBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             bg_tint="",  # keep neutral
             margin=0,
             layout_spacing=0,
@@ -491,7 +496,7 @@ class AYComment(AYContainer):
         self.date = AYLabel(self._data.short_date, dim=True, rel_text_size=-2)
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="low",
+            variant=AYContainer.Variants.Low,
             margin=0,
             layout_spacing=8,
         )
@@ -505,14 +510,18 @@ class AYComment(AYContainer):
     def _build_editor_toolbar(self):
         lyt = AYHBoxLayout()
         self.reaction = AYButton(
-            variant="nav-small",
+            variant=AYButton.Variants.Nav_Small,
             icon="add_reaction",
             icon_color="#888",
             tooltip="Not Implemented Yet !",
             parent=self,
         )
-        self.cancel_edit = AYButton("Cancel", variant="nav", parent=self)
-        self.save_edit = AYButton("Save", variant="filled", parent=self)
+        self.cancel_edit = AYButton(
+            "Cancel", variant=AYButton.Variants.Nav, parent=self
+        )
+        self.save_edit = AYButton(
+            "Save", variant=AYButton.Variants.Filled, parent=self
+        )
         lyt.addWidget(self.reaction)
         lyt.addStretch(10)
         lyt.addWidget(self.cancel_edit)
@@ -532,11 +541,11 @@ class AYComment(AYContainer):
         )
         bsize = 22
         self.del_button = AYButton(
-            variant="nav-small", icon="delete", parent=self
+            variant=AYButton.Variants.Nav_Small, icon="delete", parent=self
         )
         self.del_button.setFixedSize(bsize, bsize)
         self.edit_button = AYButton(
-            variant="nav-small",
+            variant=AYButton.Variants.Nav_Small,
             icon="edit_square",
             parent=self,
         )
@@ -557,23 +566,23 @@ class AYComment(AYContainer):
             read_only=True,
             user_list=self._user_list,
             model=self._data,
-            variant="high",
+            variant=AYCommentField.Variants.High,
         )
 
         editor_lyt = AYContainer(
             layout=AYContainer.Layout.VBox,
-            variant="high",
+            variant=AYContainer.Variants.High,
             bg_tint=self._data.category_color,
             layout_margin=4,
         )
         self.top_line = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="high",
+            variant=AYContainer.Variants.High,
             bg_tint=self._data.category_color,
         )
         self.images_container = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant="high",
+            variant=AYContainer.Variants.High,
             bg_tint=self._data.category_color,
             layout_spacing=4,
             layout_margin=0,
@@ -710,7 +719,7 @@ class AYComment(AYContainer):
         cat = AYLabel(
             self._data.category,
             icon_color=self._data.category_color,
-            variant="badge",
+            variant=AYLabel.Variants.Badge,
             rel_text_size=-2,
         )
         self.top_line.insert_widget(0, cat)
@@ -744,10 +753,10 @@ if __name__ == "__main__":
 
         w = AYContainer(
             layout=AYContainer.Layout.VBox,
+            variant=AYContainer.Variants.Low,
             # margin=8,
             layout_spacing=8,
             layout_margin=16,
-            variant="low",
         )
 
         w.add_widget(
@@ -783,7 +792,7 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.add_widget(AYTextBox(num_lines=3, variant="high"))
+        w.add_widget(AYTextBox(num_lines=3, variant=AYTextBox.Variants.High))
         return w
 
     test(build, style=Style.AyonStyleOverCSS)

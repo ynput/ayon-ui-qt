@@ -1,27 +1,30 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Union
+from enum import Enum
 
 from qtpy import QtCore, QtGui, QtWidgets
 
 from .. import get_ayon_style
 from ..utils import color_blend
+from ..variants import QFrameVariants
 
 
 class AYFrame(QtWidgets.QFrame):
+    Variants = QFrameVariants
+
     def __init__(
         self,
         *args,
         bg=False,
-        variant: Literal[
-            "", "low", "high", "debug-r", "debug-g", "debug-b"
-        ] = "",
+        variant: Variants = Variants.Default,
         margin=0,
         bg_tint="",
         **kwargs,
     ):
+        # Convert enum to string if needed
         self._bg: bool = bg
-        self.variant = variant
+        self._variant_str = variant.value
         self._bg_tint = bg_tint
         self._bg_color = None
 

@@ -182,11 +182,30 @@
                         "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
-                "thumbnail":
-                {
+                "thumbnail": {
+                    "ignore-text": true,
                     "background-color": "--md-sys-color-surface-container-lowest-dark",
-                    "border-color":     "--md-sys-color-surface-container-highest-dark",
+                    "border-color": "--md-sys-color-surface-container-highest-dark",
                     "border-width": 2
+                },
+                "tag": {
+                    "adjust-color-for-background": true,
+                    "color": "--md-ref-palette-neutral10",
+                    "background-color": "transparent",
+                    "border-radius": 8,
+                    "border-width": 0,
+                    "text-padding": [
+                        0,
+                        0
+                    ],
+                    "icon-padding": [
+                        0,
+                        0
+                    ],
+                    "hover": {
+                        "color": "--md-ref-palette-neutral90",
+                        "background-color": "--md-ref-palette-neutral0"
+                    }
                 }
             }
         },
@@ -194,9 +213,9 @@
             "states": [
                 "checked"
             ],
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
+                "default": {
                     "background-color": "--md-sys-color-surface-container-highest-dark",
                     "color": "--md-sys-color-on-surface-dark",
                     "focus-outline-width": 2,
@@ -240,9 +259,9 @@
             }
         },
         "QComboBox": {
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
+                "default": {
                     "border-radius": 4,
                     "text-padding": [
                         6,
@@ -260,9 +279,9 @@
             }
         },
         "QScrollBar": {
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
+                "default": {
                     "background-color": "--md-sys-color-surface-container-low-dark",
                     "slider-color": "--md-sys-color-surface-container-highest-dark",
                     "slider-hover-color": "--md-sys-color-primary-dark",
@@ -275,9 +294,9 @@
         },
         "QFrame": {
             "states": {},
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
+                "default": {
                     "border-radius": 4,
                     "border-width": 0,
                     "border-color": "--md-sys-color-background-dark",
@@ -288,6 +307,10 @@
                 },
                 "high": {
                     "background-color": "--md-sys-color-surface-container-dark"
+                },
+                "tag": {
+                    "border-radius": 10,
+                    "border-width": 0
                 },
                 "debug-r": {
                     "background-color": "#664444"
@@ -302,10 +325,13 @@
         },
         "QToolTip": {
             "states": {},
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
-                    "padding": [8, 8],
+                "default": {
+                    "padding": [
+                        8,
+                        8
+                    ],
                     "border-radius": 4,
                     "border-width": 1,
                     "border-color": "--md-sys-color-outline-dark",
@@ -314,10 +340,37 @@
             }
         },
         "QLabel": {
-            "default-variant": "",
+            "default-variant": "default",
             "variants": {
-                "": {
+                "default": {
                     "background-color": "transparent"
+                },
+                "tag": {
+                    "adjust-color-for-background": true
+                },
+                "badge": {},
+                "pill": {}
+            }
+        },
+        "QStyledItemDelegate": {
+            "states": ["hover", "checked"],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-outline-dark",
+                    "checkbox-background-color": "--md-sys-color-surface-container-highest-dark",
+                    "checkbox-size": 16,
+                    "checkbox-margin": 8,
+                    "text-padding": 12,
+                    "border-radius": 2,
+                    "hover": {
+                        "background-color": "--md-sys-color-surface-container-high-dark"
+                    },
+                    "checked": {
+                        "color": "--md-sys-color-on-surface-dark",
+                        "checkbox-background-color": "--md-sys-color-primary-dark"
+                    }
                 }
             }
         }
