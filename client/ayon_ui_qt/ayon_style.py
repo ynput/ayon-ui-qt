@@ -1713,10 +1713,14 @@ class AYONStyle(QCommonStyle):
 
     def widget_key(self, w: QWidget | None) -> str:
         if w:
-            # Handle item view widgets - check parent for delegate
+            # Handle item view widgets - check parent for delegate and exclude
+            # ComboBoxItemDelegate
+            # TODO: Can we get rid of ComboBoxItemDelegate and unify all item
+            # views to use QStyledItemDelegate?
             if hasattr(w, "itemDelegate"):
                 delegate = w.itemDelegate()
-                if isinstance(delegate, QStyledItemDelegate):
+                cbd = delegate and isinstance(delegate, ComboBoxItemDelegate)
+                if not cbd:
                     return "QStyledItemDelegate"
             for name, wtype in self.base_classes.items():
                 if issubclass(type(w), wtype):
