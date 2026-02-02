@@ -1688,6 +1688,7 @@ class AYONStyle(QCommonStyle):
     def __init__(self) -> None:
         super().__init__()
         self.model = StyleData()
+        self._in_widget_key = False
         self.drawers = {}
         self.sizers = {}
         self.metrics = {}
@@ -1712,14 +1713,28 @@ class AYONStyle(QCommonStyle):
                 self.metrics.update(obj.register_metrics())
 
     def widget_key(self, w: QWidget | None) -> str:
+        if self._in_widget_key:
+            return ""
+
         if w:
             # Handle item view widgets - check parent for delegate and exclude
             # ComboBoxItemDelegate
             if hasattr(w, "itemDelegate") and not isinstance(w, QComboBox):
-                delegate = w.itemDelegate()
-                cbd = delegate and isinstance(delegate, ComboBoxItemDelegate)
-                if not cbd:
-                    return "QStyledItemDelegate"
+                # Calling itemDelegate() is not a simple getter - it can
+                # trigger Qt's internal operations that call back into the
+                # custom style methods (subElementRect, drawPrimitive,
+                # pixelMetric, etc.), each of which calls widget_key() again,
+                # creating infinite recursion.
+                self._in_widget_key = True
+                try:
+                    delegate = w.itemDelegate()
+                    cbd = delegate and isinstance(
+                        delegate, ComboBoxItemDelegate
+                    )
+                    if not cbd:
+                        return "QStyledItemDelegate"
+                finally:
+                    self._in_widget_key = False
             for name, wtype in self.base_classes.items():
                 if issubclass(type(w), wtype):
                     if w.objectName() == "qtooltip_label":
