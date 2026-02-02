@@ -1715,9 +1715,7 @@ class AYONStyle(QCommonStyle):
         if w:
             # Handle item view widgets - check parent for delegate and exclude
             # ComboBoxItemDelegate
-            # TODO: Can we get rid of ComboBoxItemDelegate and unify all item
-            # views to use QStyledItemDelegate?
-            if hasattr(w, "itemDelegate"):
+            if hasattr(w, "itemDelegate") and not isinstance(w, QComboBox):
                 delegate = w.itemDelegate()
                 cbd = delegate and isinstance(delegate, ComboBoxItemDelegate)
                 if not cbd:
