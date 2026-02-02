@@ -29,6 +29,7 @@ from qtpy.QtWidgets import (
     QToolTip,
     QWidget,
 )
+from qtpy.shiboken import isValid
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
@@ -1713,7 +1714,7 @@ class AYONStyle(QCommonStyle):
                 self.metrics.update(obj.register_metrics())
 
     def widget_key(self, w: QWidget | None) -> str:
-        if self._in_widget_key:
+        if self._in_widget_key or w is None or not isValid(w):
             return ""
 
         if w:
