@@ -62,6 +62,11 @@ class AYLabel(QtWidgets.QLabel):
 
         super().__init__(*args, **kwargs)
         self.setStyle(get_ayon_style())
+
+        # used to be in polish
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        self.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
+
         self._text = self.text()
         self.setToolTip(tool_tip)
 

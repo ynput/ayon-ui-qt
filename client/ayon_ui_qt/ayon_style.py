@@ -1775,10 +1775,6 @@ class AYONStyle(QCommonStyle):
                 widget.setAttribute(
                     Qt.WidgetAttribute.WA_TranslucentBackground, True
                 )
-                # widget.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-                # widget.setWindowFlag(
-                #     Qt.WindowType.NoDropShadowWindowHint, True
-                # )
 
         elif isinstance(widget, QPalette):
             print("YES: QPalette")
