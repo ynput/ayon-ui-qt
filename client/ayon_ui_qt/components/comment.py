@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
 
-from qtpy.QtCore import QEvent, Qt, Signal
-from qtpy.QtGui import QEnterEvent, QPixmap, QTextDocument
+from PySide6.QtGui import QPaintEvent
+from qtpy.QtCore import QEvent, Qt, Signal, QPoint
+from qtpy.QtGui import QColor, QEnterEvent, QPainter, QPixmap, QTextDocument
 from qtpy.QtWidgets import (
     QDialog,
     QLabel,
@@ -22,6 +22,7 @@ from ..data_models import (
     VersionPublishModel,
 )
 from ..utils import color_blend
+from ..variants import QTextEditVariants
 from .buttons import AYButton
 from .combo_box import ALL_STATUSES
 from .comment_completion import (
@@ -33,11 +34,10 @@ from .comment_completion import (
     setup_user_completer,
 )
 from .container import AYContainer, AYFrame
-from .label import AYLabel
+from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
-from ..variants import QFrameVariants, QTextEditVariants
 
 # STATUS ---------------------------------------------------------------------
 
@@ -331,7 +331,7 @@ class AYCommentField(AYTextEdit):
         super().mouseMoveEvent(event)
 
 
-class AYImageAttachment(AYLabel):
+class AYImageAttachment(QLabel):
     """Widget to display an image attachment with thumbnail and full-size preview."""
 
     def __init__(
@@ -357,6 +357,8 @@ class AYImageAttachment(AYLabel):
         # Set tooltip
         self.setToolTip("Click to view full size")
 
+        self._hovered = False
+
         # Load and display thumbnail
         self._load_thumbnail()
 
@@ -380,6 +382,31 @@ class AYImageAttachment(AYLabel):
         )
 
         self.setPixmap(scaled_pixmap)
+
+    def enterEvent(self, event):
+        """Dim the image slightly when mouse enters."""
+        self._hovered = True
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """Restore full opacity when mouse leaves."""
+        self._hovered = False
+        super().leaveEvent(event)
+
+    def paintEvent(self, arg__1: QPaintEvent) -> None:
+        """Draw a semi-transparent overlay with a fullscreen icon when hovered."""
+        super().paintEvent(arg__1)
+        if self._hovered:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(0, 0, 0, 144))
+            painter.drawRect(self.rect())
+            icon = get_icon("open_in_full", color="#eeeeee")
+            painter.drawPixmap(
+                self.rect().center() - QPoint(12, 12), icon.pixmap(24, 24)
+            )
+            painter.end()
 
     def mousePressEvent(self, event):
         """Handle click to show full-size image."""
@@ -619,11 +646,11 @@ class AYComment(AYContainer):
                 continue
             # Check if file has local_path
             if not hasattr(file_model, "local_path"):
-                return
+                continue
 
             # Check if path exists
             if not Path(file_model.local_path).exists():
-                return
+                continue
 
             # Get the text field width to scale images accordingly
             text_field_width = self.text_field.width()
