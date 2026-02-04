@@ -249,11 +249,19 @@ class AYTextEditor(AYTextEdit):
         self.setTextCursor(cursor)
 
 
+NO_CATEGORY = {
+    "text": "Category",
+    "short_text": "Category",
+    "icon": "close_small",
+    "color": "#707070",
+}
+
+
 def _dict_from_comment_category(
     comment_categories: list[CommentCategory],
 ) -> list[dict]:
     if comment_categories:
-        return [
+        return [NO_CATEGORY] + [
             {
                 "text": c.name,
                 "short_text": c.name,
@@ -263,12 +271,19 @@ def _dict_from_comment_category(
             for c in comment_categories
         ]
     return [
+        NO_CATEGORY,
         {
-            "text": "No category",
-            "short_text": "No category",
+            "text": "Director",
+            "short_text": "Director",
             "icon": "crop_square",
-            "color": "#707070",
-        }
+            "color": "#3BDE41",
+        },
+        {
+            "text": "Private",
+            "short_text": "Private",
+            "icon": "crop_square",
+            "color": "#DE4949",
+        },
     ]
 
 
@@ -533,6 +548,7 @@ class AYTextBox(AYContainer):
             markdown_content, self.category, self._file_attachments
         )
         self.edit_field.clear()
+        self.com_cat.setCurrentIndex(0)
         self.clear_annotation_attachment()
         self.clear_file_attachments()
 
@@ -544,7 +560,7 @@ class AYTextBox(AYContainer):
         self.edit_field.setFocus()
 
     def _on_category_changed(self, category: str) -> None:
-        self.category = category
+        self.category = category if category != NO_CATEGORY["text"] else ""
 
     def _on_attach_file_clicked(self) -> None:
         """Handle attach file button click and open file dialog."""
@@ -856,7 +872,9 @@ if __name__ == "__main__":
 
     def build():
         w = AYContainer(layout=AYContainer.Layout.HBox, margin=8)
-        ww = AYTextBox(parent=w, variant=AYTextBox.Variants.High)
+        ww = AYTextBox(
+            parent=w, variant=AYTextBox.Variants.High, show_categories=True
+        )
         ww.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
@@ -886,4 +904,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(build, style=Style.AyonStyleOverCSS)
+    test(build, style=Style.AyonStyle)
