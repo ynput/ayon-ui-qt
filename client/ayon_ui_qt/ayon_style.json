@@ -1,0 +1,553 @@
+{
+    "description": "AYON style data",
+    "version": "1.0.0-a.1",
+    "global": {
+        "font-family": "Nunito Sans",
+        "font-size": 14,
+        "font-weight": 500
+    },
+    "widgets": {
+        "QPushButton": {
+            "states": [
+                "hover",
+                "pressed",
+                "disabled",
+                "checked"
+            ],
+            "default-variant": "surface",
+            "variants": {
+                "surface": {
+                    "border-radius": 4,
+                    "text-padding": [
+                        6,
+                        6
+                    ],
+                    "icon-padding": [
+                        6,
+                        6
+                    ],
+                    "focus-outline-width": 2,
+                    "background-color": "--md-sys-color-surface-container-highest-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-color": "--md-sys-color-on-surface-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-ref-palette-neutral-variant35"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-neutral40"
+                    },
+                    "disabled": {
+                        "background-color": "--md-sys-color-surface-container-highest-dark",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "filled": {
+                    "background-color": "--md-sys-color-primary-dark",
+                    "color": "--md-sys-color-on-primary-dark",
+                    "border-color": "--md-sys-color-on-primary-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "#83c1f1"
+                    },
+                    "pressed": {
+                        "background-color": "#80bcea"
+                    },
+                    "disabled": {
+                        "background-color": "--md-sys-color-primary-dark",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "nav": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-color": "--md-sys-color-shadow-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-sys-color-background-dark"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-secondary20"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "nav-small": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-color": "--md-sys-color-shadow-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "icon-padding": [
+                        2,
+                        2
+                    ],
+                    "hover": {
+                        "background-color": "--md-sys-color-background-dark"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-secondary20"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "danger": {
+                    "background-color": "--md-sys-color-error-container-dark",
+                    "color": "--md-sys-color-on-error-container-dark",
+                    "border-color": "--md-sys-color-on-error-container-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-ref-palette-error25"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-error35"
+                    },
+                    "disabled": {
+                        "background-color": "--md-sys-color-error-container-dark",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "tertiary": {
+                    "background-color": "--md-sys-color-tertiary-dark",
+                    "color": "--md-sys-color-on-tertiary-dark",
+                    "border-color": "--md-sys-color-on-tertiary-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-ref-palette-tertiary70"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-tertiary60"
+                    },
+                    "disabled": {
+                        "background-color": "--md-sys-color-primary-dark",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "text": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-color": "--md-sys-color-on-surface-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-ref-palette-neutral20"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-neutral25"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    }
+                },
+                "checked": {
+                    "background-color": "--md-sys-color-primary-container-dark"
+                },
+                "tonal": {
+                    "background-color": "--md-sys-color-secondary-container-dark",
+                    "color": "--md-sys-color-on-secondary-container-dark",
+                    "border-color": "--md-sys-color-on-secondary-container-dark",
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "hover": {
+                        "background-color": "--md-ref-palette-secondary35"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-secondary40"
+                    },
+                    "disabled": {
+                        "background-color": "--md-sys-color-secondary-container-dark",
+                        "opacity": 0.5
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    }
+                },
+                "thumbnail": {
+                    "ignore-text": true,
+                    "background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "border-color": "--md-sys-color-surface-container-highest-dark",
+                    "border-width": 2
+                },
+                "tag": {
+                    "adjust-color-for-background": true,
+                    "color": "--md-ref-palette-neutral10",
+                    "background-color": "transparent",
+                    "border-radius": 8,
+                    "border-width": 0,
+                    "text-padding": [
+                        0,
+                        0
+                    ],
+                    "icon-padding": [
+                        0,
+                        0
+                    ],
+                    "hover": {
+                        "color": "--md-ref-palette-neutral90",
+                        "background-color": "--md-ref-palette-neutral0"
+                    }
+                }
+            }
+        },
+        "QCheckBox": {
+            "states": [
+                "checked"
+            ],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-highest-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "focus-outline-width": 2,
+                    "checked": {
+                        "color": "--md-sys-color-on-tertiary-dark",
+                        "background-color": "--md-sys-color-tertiary-dark"
+                    }
+                }
+            }
+        },
+        "QTextEdit": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "link-color": "text-color-link",
+                    "border-color": "--md-sys-color-surface-container-dark",
+                    "border-width": 1,
+                    "border-radius": 4,
+                    "padding": [
+                        8,
+                        12
+                    ]
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "high": {
+                    "background-color": "--md-sys-color-surface-container-dark"
+                },
+                "debug-r": {
+                    "background-color": "#664444"
+                },
+                "debug-g": {
+                    "background-color": "#446644"
+                },
+                "debug-b": {
+                    "background-color": "#444466"
+                }
+            }
+        },
+        "QComboBox": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "border-radius": 4,
+                    "text-padding": [
+                        6,
+                        6
+                    ],
+                    "icon-padding": [
+                        6,
+                        6
+                    ],
+                    "focus-outline-width": 2,
+                    "background-color": "--md-sys-color-surface-container-highest-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "menu-background-color": "--md-sys-color-surface-container-low-dark"
+                }
+            }
+        },
+        "QScrollBar": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "slider-color": "--md-sys-color-surface-container-highest-dark",
+                    "slider-hover-color": "--md-sys-color-primary-dark",
+                    "border-width": 10,
+                    "border-radius": 8,
+                    "width": 16,
+                    "min-length": 32
+                }
+            }
+        },
+        "QFrame": {
+            "states": {},
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "border-radius": 4,
+                    "border-width": 0,
+                    "border-color": "--md-sys-color-background-dark",
+                    "background-color": "--md-sys-color-background-dark"
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "high": {
+                    "background-color": "--md-sys-color-surface-container-dark"
+                },
+                "tag": {
+                    "border-radius": 10,
+                    "border-width": 0
+                },
+                "debug-r": {
+                    "background-color": "#664444"
+                },
+                "debug-g": {
+                    "background-color": "#446644"
+                },
+                "debug-b": {
+                    "background-color": "#444466"
+                }
+            }
+        },
+        "QToolTip": {
+            "states": {},
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "padding": [
+                        8,
+                        8
+                    ],
+                    "border-radius": 4,
+                    "border-width": 1,
+                    "border-color": "--md-sys-color-outline-dark",
+                    "background-color": "--md-sys-color-background-lowest-dark"
+                }
+            }
+        },
+        "QLabel": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "transparent"
+                },
+                "tag": {
+                    "adjust-color-for-background": true
+                },
+                "badge": {},
+                "pill": {}
+            }
+        },
+        "QStyledItemDelegate": {
+            "states": ["hover", "checked"],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-outline-dark",
+                    "checkbox-background-color": "--md-sys-color-surface-container-highest-dark",
+                    "checkbox-size": 16,
+                    "checkbox-margin": 8,
+                    "text-padding": 12,
+                    "border-radius": 2,
+                    "hover": {
+                        "background-color": "--md-sys-color-surface-container-high-dark"
+                    },
+                    "checked": {
+                        "color": "--md-sys-color-on-surface-dark",
+                        "checkbox-background-color": "--md-sys-color-primary-dark"
+                    }
+                }
+            }
+        }
+    },
+    "layouts": {},
+    "palette": {
+        "text-color-link": "--md-sys-color-primary-dark",
+        "--md-sys-color-primary-dark": "#8fceff",
+        "--md-sys-color-on-primary-dark": "#00344f",
+        "--md-sys-color-primary-container-dark": "#004b70",
+        "--md-sys-color-on-primary-container-dark": "#ebf5ff",
+        "--md-sys-color-primary-fixed-dark": "#cae6ff",
+        "--md-sys-color-on-primary-fixed-dark": "#001e30",
+        "--md-sys-color-primary-fixed-dim-dark": "#8dcdff",
+        "--md-sys-color-on-primary-fixed-variant-dark": "#004b70",
+        "--md-sys-color-secondary-dark": "#b7c9d9",
+        "--md-sys-color-on-secondary-dark": "#22323f",
+        "--md-sys-color-secondary-container-dark": "#384956",
+        "--md-sys-color-on-secondary-container-dark": "#d3e5f6",
+        "--md-sys-color-secondary-fixed-dark": "#d3e5f6",
+        "--md-sys-color-on-secondary-fixed-dark": "#0c1d29",
+        "--md-sys-color-secondary-fixed-dim-dark": "#b7c9d9",
+        "--md-sys-color-on-secondary-fixed-variant-dark": "#384956",
+        "--md-sys-color-tertiary-dark": "#23e0a9",
+        "--md-sys-color-on-tertiary-dark": "#003827",
+        "--md-sys-color-tertiary-container-dark": "#00513a",
+        "--md-sys-color-on-tertiary-container-dark": "#52fdc3",
+        "--md-sys-color-tertiary-fixed-dark": "#52fdc3",
+        "--md-sys-color-on-tertiary-fixed-dark": "#002115",
+        "--md-sys-color-tertiary-fixed-dim-dark": "#23e0a9",
+        "--md-sys-color-on-tertiary-fixed-variant-dark": "#00513a",
+        "--md-sys-color-error-dark": "#ffb4ab",
+        "--md-sys-color-on-error-dark": "#690005",
+        "--md-sys-color-error-container-dark": "#93000a",
+        "--md-sys-color-on-error-container-dark": "#ffdad6",
+        "--md-sys-color-outline-dark": "#8b9198",
+        "--md-sys-color-background-dark": "#252a31",
+        "--md-sys-color-on-background-dark": "#f2f2f3",
+        "--md-sys-color-surface-dark": "#252b32",
+        "--md-sys-color-on-surface-dark": "#f4f5f5",
+        "--md-sys-color-surface-variant-dark": "#41474d",
+        "--md-sys-color-on-surface-variant-dark": "#c1c7ce",
+        "--md-sys-color-inverse-surface-dark": "#e2e2e5",
+        "--md-sys-color-inverse-on-surface-dark": "#191b1e",
+        "--md-sys-color-inverse-primary-dark": "#006493",
+        "--md-sys-color-shadow-dark": "#000000",
+        "--md-sys-color-surface-tint-dark": "#8dcdff",
+        "--md-sys-color-outline-variant-dark": "#41474d",
+        "--md-sys-color-scrim-dark": "#000000",
+        "--md-sys-color-surface-container-highest-dark": "#424a57",
+        "--md-sys-color-surface-container-high-dark": "#353b46",
+        "--md-sys-color-surface-container-dark": "#272d35",
+        "--md-sys-color-surface-container-low-dark": "#1c2026",
+        "--md-sys-color-surface-container-lowest-dark": "#16191d",
+        "--md-sys-color-surface-bright-dark": "#34383f",
+        "--md-sys-color-surface-dim-dark": "#060709",
+        "--md-custom-color-warning": "#fb9c15",
+        "--md-sys-color-warning-dark": "hsl(25, 100%, 84%)",
+        "--md-sys-color-on-warning-dark": "hsl(25, 100%, 21%)",
+        "--md-sys-color-warning-container-dark": "hsl(25, 100%, 29%)",
+        "--md-sys-color-on-warning-container-dark": "hsl(25, 100%, 92%)",
+        "--md-ref-palette-primary0": "#000000",
+        "--md-ref-palette-primary5": "#001320",
+        "--md-ref-palette-primary10": "#001e30",
+        "--md-ref-palette-primary20": "#00344f",
+        "--md-ref-palette-primary25": "#003f5f",
+        "--md-ref-palette-primary30": "#004b70",
+        "--md-ref-palette-primary35": "#005881",
+        "--md-ref-palette-primary40": "#006493",
+        "--md-ref-palette-primary50": "#007eb8",
+        "--md-ref-palette-primary60": "#0099de",
+        "--md-ref-palette-primary70": "#3db4fc",
+        "--md-ref-palette-primary80": "#8dcdff",
+        "--md-ref-palette-primary90": "#cae6ff",
+        "--md-ref-palette-primary95": "#e6f2ff",
+        "--md-ref-palette-primary98": "#f6f9ff",
+        "--md-ref-palette-primary99": "#fcfcff",
+        "--md-ref-palette-primary100": "#ffffff",
+        "--md-ref-palette-secondary0": "#000000",
+        "--md-ref-palette-secondary5": "#02121e",
+        "--md-ref-palette-secondary10": "#0c1d29",
+        "--md-ref-palette-secondary20": "#22323f",
+        "--md-ref-palette-secondary25": "#2d3d4a",
+        "--md-ref-palette-secondary30": "#384956",
+        "--md-ref-palette-secondary35": "#445462",
+        "--md-ref-palette-secondary40": "#50606e",
+        "--md-ref-palette-secondary50": "#687988",
+        "--md-ref-palette-secondary60": "#8293a2",
+        "--md-ref-palette-secondary70": "#9cadbd",
+        "--md-ref-palette-secondary80": "#b7c9d9",
+        "--md-ref-palette-secondary90": "#d3e5f6",
+        "--md-ref-palette-secondary95": "#e6f2ff",
+        "--md-ref-palette-secondary98": "#f6f9ff",
+        "--md-ref-palette-secondary99": "#fcfcff",
+        "--md-ref-palette-secondary100": "#ffffff",
+        "--md-ref-palette-tertiary0": "#000000",
+        "--md-ref-palette-tertiary5": "#00150c",
+        "--md-ref-palette-tertiary10": "#002115",
+        "--md-ref-palette-tertiary20": "#003827",
+        "--md-ref-palette-tertiary25": "#004531",
+        "--md-ref-palette-tertiary30": "#00513a",
+        "--md-ref-palette-tertiary35": "#005e44",
+        "--md-ref-palette-tertiary40": "#006c4f",
+        "--md-ref-palette-tertiary50": "#008864",
+        "--md-ref-palette-tertiary60": "#00a47a",
+        "--md-ref-palette-tertiary70": "#00c290",
+        "--md-ref-palette-tertiary80": "#23e0a9",
+        "--md-ref-palette-tertiary90": "#52fdc3",
+        "--md-ref-palette-tertiary95": "#bcffe0",
+        "--md-ref-palette-tertiary98": "#e7fff1",
+        "--md-ref-palette-tertiary99": "#f4fff7",
+        "--md-ref-palette-tertiary100": "#ffffff",
+        "--md-ref-palette-error0": "#000000",
+        "--md-ref-palette-error5": "#2d0001",
+        "--md-ref-palette-error10": "#410002",
+        "--md-ref-palette-error20": "#690005",
+        "--md-ref-palette-error25": "#7e0007",
+        "--md-ref-palette-error30": "#93000a",
+        "--md-ref-palette-error35": "#a80710",
+        "--md-ref-palette-error40": "#ba1a1a",
+        "--md-ref-palette-error50": "#de3730",
+        "--md-ref-palette-error60": "#ff5449",
+        "--md-ref-palette-error70": "#ff897d",
+        "--md-ref-palette-error80": "#ffb4ab",
+        "--md-ref-palette-error90": "#ffdad6",
+        "--md-ref-palette-error95": "#ffedea",
+        "--md-ref-palette-error98": "#fff8f7",
+        "--md-ref-palette-error99": "#fffbff",
+        "--md-ref-palette-error100": "#ffffff",
+        "--md-ref-palette-neutral0": "#000000",
+        "--md-ref-palette-neutral5": "#0f1113",
+        "--md-ref-palette-neutral10": "#191c1e",
+        "--md-ref-palette-neutral20": "#2e3133",
+        "--md-ref-palette-neutral25": "#393c3e",
+        "--md-ref-palette-neutral30": "#454749",
+        "--md-ref-palette-neutral35": "#515355",
+        "--md-ref-palette-neutral40": "#5d5e61",
+        "--md-ref-palette-neutral50": "#75777a",
+        "--md-ref-palette-neutral60": "#8f9193",
+        "--md-ref-palette-neutral70": "#aaabae",
+        "--md-ref-palette-neutral80": "#c5c6c9",
+        "--md-ref-palette-neutral90": "#e2e2e5",
+        "--md-ref-palette-neutral95": "#f0f0f3",
+        "--md-ref-palette-neutral98": "#f9f9fc",
+        "--md-ref-palette-neutral99": "#fcfcff",
+        "--md-ref-palette-neutral100": "#ffffff",
+        "--md-ref-palette-neutral-variant0": "#000000",
+        "--md-ref-palette-neutral-variant5": "#0b1216",
+        "--md-ref-palette-neutral-variant10": "#161c21",
+        "--md-ref-palette-neutral-variant20": "#2b3137",
+        "--md-ref-palette-neutral-variant25": "#363c42",
+        "--md-ref-palette-neutral-variant30": "#41474d",
+        "--md-ref-palette-neutral-variant35": "#4d5359",
+        "--md-ref-palette-neutral-variant40": "#595f65",
+        "--md-ref-palette-neutral-variant50": "#71787e",
+        "--md-ref-palette-neutral-variant60": "#8b9198",
+        "--md-ref-palette-neutral-variant70": "#a6acb3",
+        "--md-ref-palette-neutral-variant80": "#c1c7ce",
+        "--md-ref-palette-neutral-variant90": "#dde3ea",
+        "--md-ref-palette-neutral-variant95": "#ebf1f8",
+        "--md-ref-palette-neutral-variant98": "#f6faff",
+        "--md-ref-palette-neutral-variant99": "#fcfcff",
+        "--md-ref-palette-neutral-variant100": "#ffffff",
+        "qt-active-window": "--md-sys-color-background-dark",
+        "qt-active-window-text": "--md-sys-color-on-surface-dark",
+        "qt-active-base": "--md-sys-color-surface-container-dark",
+        "qt-active-text": "--md-sys-color-on-surface-dark",
+        "qt-active-link": "text-color-link",
+        "qt-active-button": "-md-sys-color-surface-container-highest-dark",
+        "qt-active-button-text": "--md-sys-color-on-surface-dark",
+        "qt-active-placeholder-text": "--md-ref-palette-neutral-variant50",
+        "qt-active-highlight": "--md-sys-color-primary-dark",
+        "qt-active-highlight-text": "--md-sys-color-on-primary-dark",
+        "qt-active-light": "--md-sys-color-surface-container-highest-dark",
+        "qt-active-midlight": "--md-sys-color-surface-container-high-dark",
+        "qt-active-dark": "--md-sys-color-surface-container-dark",
+        "qt-active-mid": "--md-sys-color-surface-container-low-dark",
+        "qt-active-shadow": "--md-sys-color-surface-container-lowest-dark"
+    }
+}

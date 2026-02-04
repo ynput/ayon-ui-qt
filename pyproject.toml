@@ -1,0 +1,25 @@
+[project]
+name = "ayon-ui-qt"
+version = "0.1.0"
+description = "AYON Qt Widget Library Addon - UI components mimicking AYON frontend"
+readme = "README.md"
+requires-python = ">=3.9.1,<3.10"
+dependencies = ["pyside6>=6.7.1", "qtpy>=2.3.1", "ruff>=0.11.4"]
+
+[build-system]
+requires = ["poetry-core", "setuptools"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "client/ayon_ui_qt/**/*" }]
+include = [
+    { path = "client/ayon_ui_qt/*.json", format = [
+        "sdist",
+        "wheel",
+    ] },
+    { path = "client/ayon_ui_qt/vendor/resources/*.*", format = [
+        "sdist",
+        "wheel",
+    ] },
+]
+exclude = ["client/ayon_ui_qt/old"]
