@@ -278,6 +278,10 @@ class AYLabel(QtWidgets.QLabel):
         else:
             self._paint_text_only()
 
+    def setText(self, arg__1: str) -> None:
+        super().setText(arg__1)
+        self._text = self.text()
+
 
 if __name__ == "__main__":
     from ayon_ui_qt.tester import Style, test
