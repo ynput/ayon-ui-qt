@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QPaintEvent
-from qtpy.QtCore import QEvent, Qt, Signal, QPoint
-from qtpy.QtGui import QColor, QEnterEvent, QPainter, QPixmap, QTextDocument
+from qtpy.QtCore import QEvent, QPoint, Qt, Signal
+from qtpy.QtGui import (
+    QColor,
+    QEnterEvent,
+    QPainter,
+    QPaintEvent,
+    QPixmap,
+    QTextDocument,
+)
 from qtpy.QtWidgets import (
     QDialog,
     QLabel,
