@@ -60,6 +60,7 @@ def process_activity_data(
         return []
 
     users = {d.short_name: d for d in project_data.users}
+    category_colors = {c.name: c.color for c in project_data.comment_category}
 
     ui_data = []
     nothing = "Not available"
@@ -83,6 +84,7 @@ def process_activity_data(
         if activity_type == "comment":
             annotation_models = _parse_annotations(act_data, nothing)
             file_models = _parse_files(act, nothing)
+            category = act_data.get("category", "")
             ui_data.append(
                 CommentModel(
                     activity_id=activity_id,
@@ -90,6 +92,8 @@ def process_activity_data(
                     user_name=user_name,
                     comment=act.get("body", nothing),
                     comment_date=date,
+                    category=category,
+                    category_color=category_colors.get(category, ""),
                     files=file_models,
                     annotations=annotation_models,
                 )
