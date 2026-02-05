@@ -2,6 +2,7 @@
 
 This module provides the client-side addon integration with AYON.
 """
+
 from __future__ import annotations
 
 import os
@@ -10,6 +11,9 @@ from typing import Any
 from ayon_core.addon import AYONAddon, IPluginPaths
 
 from .version import __version__
+
+
+AYON_UI_QT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class UIQtAddon(AYONAddon, IPluginPaths):
@@ -43,6 +47,20 @@ class UIQtAddon(AYONAddon, IPluginPaths):
         """
         return {}
 
+    def get_launch_hook_paths(self, app) -> list[str]:
+        """Return paths to launch hook directories.
+
+        Returns:
+            List of paths containing launch hook scripts.
+        """
+        if app.host_name != self.host_name:
+            return []
+
+        print(
+            f"Getting AYON_UI_QT hook paths: {os.path.join(self.get_addon_dir(), 'hooks')}"
+        )
+        return [os.path.join(AYON_UI_QT_DIR, "hooks")]
+
     @classmethod
     def get_addon_dir(cls) -> str:
         """Return path to addon directory.
@@ -50,7 +68,8 @@ class UIQtAddon(AYONAddon, IPluginPaths):
         Returns:
             Absolute path to addon directory.
         """
-        return os.path.dirname(os.path.abspath(__file__))
+        print("AYON_UI_QT: get_addon_dir()")
+        return AYON_UI_QT_DIR
 
     @classmethod
     def get_resources_dir(cls) -> str:
