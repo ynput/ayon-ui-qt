@@ -217,7 +217,13 @@ class AYCommentField(AYTextEdit):
         self.set_markdown(text)
 
         # configure
-        if num_lines:
+        if self._read_only:
+            # Auto-size to content for read-only fields
+            self.document().contentsChanged.connect(
+                self._adjust_height_to_content
+            )
+            self._adjust_height_to_content()
+        elif num_lines:
             height = int(self.fontMetrics().lineSpacing()) * num_lines + 8 + 8
             self.setFixedHeight(height)
 
@@ -270,6 +276,9 @@ class AYCommentField(AYTextEdit):
             # Use standard markdown
             self.document().setMarkdown(md, MD_DIALECT)
 
+        if self._read_only:
+            self._adjust_height_to_content()
+
     def set_web_markdown(self, md: str, styles: dict | None = None) -> None:
         """Set markdown from web data with formatting.
 
@@ -292,6 +301,34 @@ class AYCommentField(AYTextEdit):
     def _on_completer_activated(self, text: str) -> None:
         """Handle completer selection."""
         on_completer_activated(self, text)
+
+    def _adjust_height_to_content(self) -> None:
+        """Adjust widget height to fit document content (read-only mode only)."""
+        if not self._read_only:
+            return
+
+        # Get document height
+        doc = self.document()
+        doc.setTextWidth(self.viewport().width())
+        doc_height = doc.size().height()
+
+        # Add frame margins (top + bottom)
+        frame_width = self.frameWidth()
+        margins = self.contentsMargins()
+        total_height = (
+            int(doc_height)
+            + frame_width * 2
+            + margins.top()
+            + margins.bottom()
+        )
+
+        self.setFixedHeight(total_height)
+
+    def resizeEvent(self, event) -> None:
+        """Recalculate height when width changes (affects text wrapping)."""
+        super().resizeEvent(event)
+        if self._read_only:
+            self._adjust_height_to_content()
 
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
@@ -791,6 +828,8 @@ if __name__ == "__main__":
             layout_spacing=8,
             layout_margin=16,
         )
+
+        w.addStretch()
 
         w.add_widget(
             AYComment(
