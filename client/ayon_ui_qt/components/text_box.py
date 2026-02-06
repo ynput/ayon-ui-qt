@@ -19,12 +19,14 @@ from qtpy.QtGui import (
     QTextCursor,
     QTextDocument,
     QTextFrameFormat,
+    QKeySequence
 )
 from qtpy.QtWidgets import (
     QLabel,
     QScrollArea,
     QSizePolicy,
     QTextEdit,
+    QShortcut
 )
 
 from .. import get_ayon_style
@@ -51,6 +53,8 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 class AYTextEditor(AYTextEdit):
     Variants = QTextEditVariants
+
+    submitted = Signal()  # Signal emitted when Ctrl+Enter is pressed
 
     def __init__(
         self,
@@ -99,6 +103,7 @@ class AYTextEditor(AYTextEdit):
             self._on_completer_activated,
             self._on_text_changed,
         )
+
         self.document().contentsChanged.connect(
             lambda: format_comment_on_change(self)
         )
@@ -116,6 +121,13 @@ class AYTextEditor(AYTextEdit):
         if on_completer_key_press(self, event):
             event.accept()
             return
+
+        if (
+            event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            self.submitted.emit()
+
         super().keyPressEvent(event)
 
     def set_style(self, style):
@@ -507,6 +519,9 @@ class AYTextBox(AYContainer):
             getattr(self, var).clicked.connect(
                 partial(self.edit_field.set_format, var)
             )
+
+        self.edit_field.submitted.connect(self._on_comment_clicked)
+
         return self.edit_field
 
     def _build_lower_bar(self):
