@@ -270,21 +270,7 @@ def _dict_from_comment_category(
             }
             for c in comment_categories
         ]
-    return [
-        NO_CATEGORY,
-        {
-            "text": "Director",
-            "short_text": "Director",
-            "icon": "crop_square",
-            "color": "#3BDE41",
-        },
-        {
-            "text": "Private",
-            "short_text": "Private",
-            "icon": "crop_square",
-            "color": "#DE4949",
-        },
-    ]
+    return [NO_CATEGORY]
 
 
 class AttachmentWidget(QtWidgets.QWidget):

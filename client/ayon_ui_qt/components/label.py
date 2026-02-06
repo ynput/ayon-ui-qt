@@ -35,6 +35,7 @@ class AYLabel(QtWidgets.QLabel):
         icon_color: str = "",
         icon_size: int = 20,
         icon_text_spacing=6,
+        text_color: str = "",
         rel_text_size: int = 0,
         bold: bool = False,
         tool_tip="",
@@ -48,6 +49,7 @@ class AYLabel(QtWidgets.QLabel):
         self._icon_size = icon_size
         self._icon_text_spacing = icon_text_spacing
         self._rel_text_size = rel_text_size
+        self._text_color = text_color
         self._bold = bold
         self._variant_str: str = variant.value
         self._text_setup_done = False
@@ -253,6 +255,11 @@ class AYLabel(QtWidgets.QLabel):
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self._text_color:
+            # p.setPen(QPen(QColor(self._text_color)))
+            pal = self.palette()
+            pal.setColor(self.foregroundRole(), QColor(self._text_color))
+            self.setPalette(pal)
 
         self.style().drawItemText(
             p,
@@ -275,6 +282,8 @@ class AYLabel(QtWidgets.QLabel):
             self._paint_badge_or_pill()
         elif self._text and self._icon:
             self._paint_icon_and_text()
+        elif self._icon and not self._text:
+            super().paintEvent(arg__1)
         else:
             self._paint_text_only()
 
@@ -351,6 +360,9 @@ if __name__ == "__main__":
                 rel_text_size=-3,
             )
             w.add_widget(badge, stretch=0)
+
+        l8 = AYLabel("colored text", text_color="#55aef7")
+        w.add_widget(l8, stretch=0)
 
         w.addStretch()
         return w

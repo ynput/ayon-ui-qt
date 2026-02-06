@@ -56,7 +56,7 @@ class AYButton(QtWidgets.QPushButton):
         # compute a readable icon hover color
         self._icon_hover_color = self._icon_color
         icon_hover_bg = style_dict.get("hover", {}).get("background-color")
-        if isinstance(icon_hover_bg, str):
+        if isinstance(icon_hover_bg, str) and self._icon_color.isValid():
             self._icon_hover_color = compute_color_for_contrast(
                 QtGui.QColor(icon_hover_bg).toTuple(),
                 self._icon_color.toTuple(),
@@ -100,8 +100,11 @@ class AYButton(QtWidgets.QPushButton):
             self.initStyleOption(option)
             # override rect set by stylesheet
             size = self.sizeHint()
-            self.setFixedSize(size)
-            option.rect = QtCore.QRect(0, 0, size.width(), size.height())
+            if self._variant_str == QPushButtonVariants.Tag_Menu.value:
+                self.setFixedHeight(size.height())
+            else:
+                self.setFixedSize(size)
+                option.rect = QtCore.QRect(0, 0, size.width(), size.height())
             # draw
             return get_ayon_style().drawControl(
                 QtWidgets.QStyle.ControlElement.CE_PushButton, option, p, self

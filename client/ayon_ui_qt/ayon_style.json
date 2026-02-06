@@ -206,6 +206,26 @@
                         "color": "--md-ref-palette-neutral90",
                         "background-color": "--md-ref-palette-neutral0"
                     }
+                },
+                "tag-menu": {
+                    "text-padding": [
+                        8,
+                        8
+                    ],
+                    "color": "@tag_color",
+                    "background-color": "transparent",
+                    "border-radius": 0,
+                    "border-width": 0,
+                    "hover": {
+                        "background-color": "--md-ref-palette-neutral-variant10"
+                    },
+                    "checked": {
+                        "background-color": "--md-sys-color-primary-container-dark"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    }
                 }
             }
         },
@@ -258,6 +278,32 @@
                 }
             }
         },
+        "QLineEdit": {
+            "states": [
+                "disabled"
+            ],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "placeholder-color": "--md-ref-palette-neutral-variant50",
+                    "border-color": "--md-sys-color-outline-variant-dark",
+                    "border-width": 1,
+                    "border-radius": 2,
+                    "focus-outline-width": 2,
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "padding": [
+                        8,
+                        12
+                    ],
+                    "disabled": {
+                        "background-color": "--md-sys-color-surface-container-dark",
+                        "opacity": 0.5
+                    }
+                }
+            }
+        },
         "QComboBox": {
             "default-variant": "default",
             "variants": {
@@ -304,6 +350,11 @@
                 },
                 "low": {
                     "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "low-framed": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "border-width": 2,
+                    "border-color": "--md-sys-color-outline-variant-dark"
                 },
                 "high": {
                     "background-color": "--md-sys-color-surface-container-dark"
@@ -353,7 +404,10 @@
             }
         },
         "QStyledItemDelegate": {
-            "states": ["hover", "checked"],
+            "states": [
+                "hover",
+                "checked"
+            ],
             "default-variant": "default",
             "variants": {
                 "default": {
@@ -380,7 +434,7 @@
         "text-color-link": "--md-sys-color-primary-dark",
         "--md-sys-color-primary-dark": "#8fceff",
         "--md-sys-color-on-primary-dark": "#00344f",
-        "--md-sys-color-primary-container-dark": "#004b70",
+        "--md-sys-color-primary-container-dark": "#1c4154",
         "--md-sys-color-on-primary-container-dark": "#ebf5ff",
         "--md-sys-color-primary-fixed-dark": "#cae6ff",
         "--md-sys-color-on-primary-fixed-dark": "#001e30",

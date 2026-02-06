@@ -16,6 +16,7 @@ class QPushButtonVariants(Enum):
     Tonal = "tonal"
     Thumbnail = "thumbnail"
     Tag = "tag"
+    Tag_Menu = "tag-menu"
 
 
 class QCheckBoxVariants(Enum):
@@ -31,6 +32,10 @@ class QTextEditVariants(Enum):
     Debug_B = "debug-b"
 
 
+class QLineEditVariants(Enum):
+    Default = "default"
+
+
 class QComboBoxVariants(Enum):
     Default = "default"
 
@@ -42,6 +47,7 @@ class QScrollBarVariants(Enum):
 class QFrameVariants(Enum):
     Default = "default"
     Low = "low"
+    Low_Framed = "low-framed"
     High = "high"
     Tag = "tag"
     Debug_R = "debug-r"

@@ -53,10 +53,31 @@ class AYFrame(QtWidgets.QFrame):
                 self._bg_color = color_blend(base_color, self._bg_tint, 0.1)
         return self._bg_color
 
-    def get_bg(self) -> bool:
-        return self._bg
+    # def get_bg(self) -> bool:
+    #     return self._bg
 
-    def set_bg(self, value):
-        pass
+    # def set_bg(self, value):
+    #     pass
 
-    bg = QtCore.Property(bool, get_bg, set_bg)  # type: ignore
+    # bg = QtCore.Property(bool, get_bg, set_bg)  # type: ignore
+
+
+if __name__ == "__main__":
+    from .layouts import AYVBoxLayout
+    from ..tester import test, Style
+
+    def _build():
+        """All frame variants."""
+        w = QtWidgets.QWidget()
+        w.setMinimumWidth(300)
+        lyt = AYVBoxLayout(w, margin=8, spacing=8)
+
+        for variant in AYFrame.Variants:
+            frame = AYFrame(variant=variant)
+            frame.setFixedHeight(40)
+            frame.setToolTip(variant.value)
+            lyt.addWidget(frame)
+
+        return w
+
+    test(_build, style=Style.AyonStyleOverCSS)

@@ -257,7 +257,7 @@ class StyleData:
             # all states. That way, we can directly use "background-color" without
             # checking the widget's state.
             to_be_removed = []
-            for key, val in d.items():
+            for key, val in list(d.items()):
                 if isinstance(val, dict):
                     if key == state:
                         for kk, vv in val.items():
@@ -267,6 +267,7 @@ class StyleData:
                     pass
                 else:
                     d[key] = pal.get(val, val)
+            # remove states
             for k in to_be_removed:
                 d.pop(k)
 
@@ -313,6 +314,26 @@ class StyleData:
 
     def current_style(self):
         return self._cache[self.last_key]
+
+    def get_color(self, color_name: str, style: dict, w: QWidget) -> QColor:
+        """Process color definitions referencing a widget attribute/property
+        using the @ syntax.
+
+        Args:
+            color_name: The color name to retrieve.
+            style: The style dictionary.
+            w: The widget to get the color from.
+        Returns:
+            The color.
+        """
+        color = style[color_name]
+        if isinstance(color, str) and color.startswith("@"):
+            color = getattr(
+                w,
+                color[1:],
+                w.palette().color(QPalette.ColorRole.ButtonText),
+            )
+        return QColor(color)
 
 
 # ----------------------------------------------------------------------------
@@ -547,7 +568,7 @@ class ButtonDrawer:
         variant = self.get_button_variant(widget)
 
         # Set up text color
-        text_color = QColor(style["color"])
+        text_color = self.model.get_color("color", style, widget)
         if not (option.state & QStyle.StateFlag.State_Enabled):  # type: ignore
             # Apply some opacity to disabled text
             text_color.setAlpha(int(255 * 0.5))
@@ -794,11 +815,14 @@ class FrameDrawer:
         # get style
         variant = getattr(w, "_variant_str", "")
         style = self.model.get_style("QFrame", variant)
+
         # widget override for comment types
+        border_width = style.get("border-width", 0)
         if hasattr(w, "get_bg_color"):
             bgc: QColor = w.get_bg_color(style["background-color"])
             style = dict(style)
-            style["border-color"] = bgc
+            if border_width == 0:
+                style["border-color"] = bgc
             style["background-color"] = bgc
             # set background color of QTextEdit widgets
             try:
@@ -812,7 +836,6 @@ class FrameDrawer:
 
         # pen setup
         border_color = QColor(style["border-color"])
-        border_width = style.get("border-width", 0)
         pen = QPen(border_color)
         pen.setWidth(border_width)
         pen.setStyle(
@@ -826,10 +849,19 @@ class FrameDrawer:
         painter.setPen(pen)
         painter.setBrush(brush)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # Inset rect by half border width to keep stroke within bounds
+        draw_rect = option.rect
+        if border_width > 0:
+            half_width = border_width / 2.0
+            draw_rect = QRectF(option.rect).adjusted(
+                half_width, half_width, -half_width, -half_width
+            )
+
         if radius:
-            painter.drawRoundedRect(option.rect, radius, radius)
+            painter.drawRoundedRect(draw_rect, radius, radius)
         else:
-            painter.drawRect(option.rect)
+            painter.drawRect(draw_rect)
 
 
 # ----------------------------------------------------------------------------
