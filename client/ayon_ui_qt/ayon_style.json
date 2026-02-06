@@ -217,7 +217,7 @@
                     "border-radius": 0,
                     "border-width": 0,
                     "hover": {
-                        "background-color": "--md-ref-palette-neutral-variant10"
+                        "background-color": "--md-sys-color-background-dark"
                     },
                     "checked": {
                         "background-color": "--md-sys-color-primary-container-dark"
@@ -350,6 +350,10 @@
                 },
                 "low": {
                     "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "low-square": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "border-radius": 0
                 },
                 "low-framed": {
                     "background-color": "--md-sys-color-surface-container-low-dark",

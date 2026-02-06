@@ -47,6 +47,7 @@ class QScrollBarVariants(Enum):
 class QFrameVariants(Enum):
     Default = "default"
     Low = "low"
+    Low_Square = "low-square"
     Low_Framed = "low-framed"
     High = "high"
     Tag = "tag"

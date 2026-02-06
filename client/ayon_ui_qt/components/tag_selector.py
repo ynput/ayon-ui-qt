@@ -168,7 +168,7 @@ class TagDropdown(AYContainer):
         # Search field with icon
         search_container = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variants.Low,
+            variant=AYFrame.Variants.Low_Square,
             layout_margin=6,
             layout_spacing=6,
         )
