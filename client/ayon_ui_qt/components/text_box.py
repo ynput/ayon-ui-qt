@@ -19,7 +19,6 @@ from qtpy.QtGui import (
     QTextCursor,
     QTextDocument,
     QTextFrameFormat,
-    QKeySequence
 )
 from qtpy.QtWidgets import (
     QLabel,
