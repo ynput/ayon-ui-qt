@@ -26,7 +26,6 @@ from qtpy.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QTextEdit,
-    QShortcut
 )
 
 from .. import get_ayon_style
