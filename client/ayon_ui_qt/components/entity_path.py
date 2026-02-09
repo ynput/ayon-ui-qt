@@ -34,7 +34,7 @@ class AYEntityPath(QtWidgets.QWidget):
         self._entity_id = None
         self.setLayout(AYHBoxLayout(self))
 
-        self.entity_path = "Project/assets/characters/robot/Render"
+        self.entity_path = "-/-/-"
 
     @property
     def entity_path(self):

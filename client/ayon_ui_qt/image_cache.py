@@ -168,7 +168,7 @@ class ImageCache:
                     return str(cached_path)
                 else:
                     # File was deleted, remove from cache
-                    logger.warning(
+                    logger.debug(
                         f"Cached file missing for key '{key}': {cached_path}"
                     )
                     del self._metadata[key]
@@ -209,7 +209,7 @@ class ImageCache:
             # Check cache size and evict if necessary
             self._evict_if_needed()
 
-            logger.info(f"Cached file for key '{key}': {cached_path}")
+            logger.debug(f"Cached file for key '{key}': {cached_path}")
             return str(cached_path)
 
     def _generate_cache_filename(self, key: str, source_path: Path) -> str:

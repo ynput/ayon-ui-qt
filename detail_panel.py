@@ -235,7 +235,7 @@ class AYDetailPanel(AYContainer):
     @block_signals("status")
     def _update_status(self):
         current_status = self._version_data.status
-        print(f"current_status = {current_status}")
+        # print(f"current_status = {current_status}")
         if current_status:
             self.status.setCurrentText(current_status)
 

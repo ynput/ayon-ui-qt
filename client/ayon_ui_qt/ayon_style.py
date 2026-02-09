@@ -1808,8 +1808,8 @@ class AYONStyle(QCommonStyle):
                     Qt.WidgetAttribute.WA_TranslucentBackground, True
                 )
 
-        elif isinstance(widget, QPalette):
-            print("YES: QPalette")
+        # elif isinstance(widget, QPalette):
+        #     print("YES: QPalette")
 
         elif isinstance(widget, QApplication):
             super().polish(widget)

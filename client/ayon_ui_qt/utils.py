@@ -114,7 +114,7 @@ def process_activity_data(
                 )
             )
         elif activity_type == "status.change":
-            print(act.get("activityData", {}).get("oldValue", nothing))
+            # print(act.get("activityData", {}).get("oldValue", nothing))
             ui_data.append(
                 StatusChangeModel(
                     activity_id=activity_id,
