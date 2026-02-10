@@ -96,6 +96,7 @@ class FileModel:
     mime: str
     local_path: str = ""
     thumb_local_path: str = ""
+    frame: int = 0
 
 
 @dataclass(unsafe_hash=True)

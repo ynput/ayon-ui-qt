@@ -82,8 +82,8 @@ def process_activity_data(
         date = act.get("updatedAt", nothing)
 
         if activity_type == "comment":
-            annotation_models = _parse_annotations(act_data, nothing)
-            file_models = _parse_files(act, nothing)
+            annotation_models, ranges = _parse_annotations(act_data, nothing)
+            file_models = _parse_files(act, ranges, nothing)
             category = act_data.get("category", "")
             ui_data.append(
                 CommentModel(
@@ -131,15 +131,17 @@ def process_activity_data(
     return ui_data
 
 
-def _parse_files(act, nothing):
+def _parse_files(act, ranges, nothing):
     """Attached files to comment activities."""
     files = act.get("files", [])
     file_models = []
     for file_info in files:
+        fid = file_info.get("id", nothing)
         file_models.append(
             FileModel(
-                id=file_info.get("id", nothing),
+                id=fid,
                 mime=file_info.get("mime", nothing),
+                frame=ranges.get(fid, (-1, -1))[0],
             )
         )
     return file_models
@@ -147,6 +149,7 @@ def _parse_files(act, nothing):
 
 def _parse_annotations(act_data, nothing):
     """Attached annotations to comment activities."""
+    ranges = {}
     annotation_models = []
     annotations = act_data.get("annotations", [])
     for annotation in annotations:
@@ -158,7 +161,9 @@ def _parse_annotations(act_data, nothing):
                 transparent=annotation.get("transparent", nothing),
             )
         )
-    return annotation_models
+        ranges[annotation.get("composite")] = annotation.get("range")
+        ranges[annotation.get("transparent")] = annotation.get("range")
+    return annotation_models, ranges
 
 
 def clear_layout(layout):

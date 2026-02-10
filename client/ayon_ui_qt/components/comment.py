@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qtpy.QtCore import QEvent, QPoint, Qt, Signal
+from qtpy.QtCore import QEvent, QPoint, Qt, Signal, QSize, QRect
 from qtpy.QtGui import (
     QColor,
     QEnterEvent,
@@ -384,16 +384,18 @@ class AYImageAttachment(QLabel):
         thumb_path: str = "",
         max_width: int = 400,
         max_height: int = 300,
+        frame: int = 0,
     ):
         super().__init__(parent)
         self._image_path = image_path
         self._thumb_path = thumb_path or image_path
         self._max_width = max_width
         self._max_height = max_height
+        self._frame = frame
 
         self.setScaledContents(False)
         self.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
         )
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -401,9 +403,11 @@ class AYImageAttachment(QLabel):
         self.setToolTip("Click to view full size")
 
         self._hovered = False
+        self._label_height = 16
 
         # Load and display thumbnail
         self._load_thumbnail()
+        self._draw_icon = get_icon("draw", color="#eeeeee")
 
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
@@ -426,6 +430,10 @@ class AYImageAttachment(QLabel):
 
         self.setPixmap(scaled_pixmap)
 
+        self.setFixedSize(
+            scaled_pixmap.width(), scaled_pixmap.height() + self._label_height
+        )
+
     def enterEvent(self, event):
         """Dim the image slightly when mouse enters."""
         self._hovered = True
@@ -439,17 +447,43 @@ class AYImageAttachment(QLabel):
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         """Draw a semi-transparent overlay with a fullscreen icon when hovered."""
         super().paintEvent(arg__1)
+        # setup painter
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+
         if self._hovered:
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(Qt.PenStyle.NoPen)
+            img_rect = self.rect().adjusted(0, 0, 0, -self._label_height)
             painter.setBrush(QColor(0, 0, 0, 144))
-            painter.drawRect(self.rect())
+            painter.drawRect(img_rect)
             icon = get_icon("open_in_full", color="#eeeeee")
             painter.drawPixmap(
-                self.rect().center() - QPoint(12, 12), icon.pixmap(24, 24)
+                img_rect.center() - QPoint(12, 12), icon.pixmap(24, 24)
             )
-            painter.end()
+
+        # draw label background
+        lrect = QRect(
+            0,
+            self.height() - self._label_height,
+            self.width(),
+            self._label_height,
+        )
+        painter.setBrush(QColor("#1c2026"))
+        painter.drawRect(lrect)
+        # draw icon on the left side
+        painter.drawPixmap(
+            lrect.left() + 3, lrect.top() + 3, self._draw_icon.pixmap(10, 10)
+        )
+        # draw text on the right side
+        painter.setPen(QColor("#eeeeee"))
+        font = painter.font()
+        font.setPointSize(10)
+        painter.setFont(font)
+        painter.drawText(
+            lrect.adjusted(16 + 4, 0, 0, 0),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            str(self._frame),
+        )
 
     def mousePressEvent(self, event):
         """Handle click to show full-size image."""
@@ -725,6 +759,7 @@ class AYComment(AYContainer):
                 thumb_path=thumb_path,
                 max_width=max_image_width,
                 max_height=800,
+                frame=file_model.frame,
             )
 
             # Set fixed width to prevent expanding
