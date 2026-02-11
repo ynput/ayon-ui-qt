@@ -35,7 +35,7 @@ class ImageCache:
 
     @classmethod
     def get_instance(
-        cls, cache_path: str | Path | None = None, max_size_in_MB: int = 50
+        cls, cache_path: str | Path | None = None, max_size_in_MB: int = 500
     ) -> ImageCache:
         """Get or create the singleton cache instance.
 
