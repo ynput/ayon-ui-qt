@@ -176,7 +176,7 @@ class AYPublish(AYFrame):
             bg_tint="#707070",
         )
         self.text_field = AYCommentField(
-            text=f"**{self._data.product}**\n\n{self._data.version}",
+            text=f"**{self._data.product}**\n{self._data.version}",
             num_lines=3,
             read_only=True,
         )
