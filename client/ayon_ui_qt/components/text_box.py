@@ -409,12 +409,15 @@ class AYTextBox(AYContainer):
     format_icons = {
         "fmt_number": "format_list_numbered",
         "fmt_bullet": "format_list_bulleted",
-        "fmt_checklist": "checklist",
+        # TODO: Implement checklist editing and visualizing before enabling
+        # "fmt_checklist": "checklist",
     }
     mention_map = {
         "person": "@",
-        "layers": "@@",
-        "check_circle": "@@@",
+        # TODO: Implement support for version and task mentions in completer
+        #  before enabling these
+        # "layers": "@@",
+        # "check_circle": "@@@",
     }
 
     def __init__(
