@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 
 from qtpy.QtCore import QEvent, QPoint, Qt, Signal, QSize, QRect
 from qtpy.QtGui import (
@@ -44,6 +45,7 @@ from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
+from ..image_cache import ImageCache
 
 # STATUS ---------------------------------------------------------------------
 
@@ -415,24 +417,40 @@ class AYImageAttachment(QLabel):
             self.setText("Image not available")
             return
 
-        pixmap = QPixmap(self._thumb_path)
-        if pixmap.isNull():
-            self.setText("Failed to load image")
-            return
+        thumb_path = Path(self._thumb_path)
 
-        # Scale pixmap to fit within max dimensions while maintaining aspect ratio
-        scaled_pixmap = pixmap.scaled(
-            self._max_width,
-            self._max_height,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+        def _thumbnail_cacher() -> Path:
+            """Cache the scaled-down thumbnail image."""
+            # print(f"Caching thumbnail for {thumb_path}")
+            pixmap = QPixmap(self._thumb_path)
+            if pixmap.isNull():
+                self.setText("Failed to load image")
+                return Path()
+
+            # Scale pixmap to fit within max dimensions while maintaining
+            # aspect ratio.
+            scaled_pixmap = pixmap.scaled(
+                self._max_width,
+                self._max_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            tmp_dir = Path(tempfile.mkdtemp())
+            tmp_file_path = (
+                tmp_dir / f"{thumb_path.name}.thumb.png"
+            )
+            scaled_pixmap.save(str(tmp_file_path), quality=75)
+            return tmp_file_path
+
+        ic = ImageCache.get_instance()
+        pxm = QPixmap(
+            ic.get(
+                f"{thumb_path.name}_{self._max_width}_{self._max_height}",
+                _thumbnail_cacher,
+            )
         )
-
-        self.setPixmap(scaled_pixmap)
-
-        self.setFixedSize(
-            scaled_pixmap.width(), scaled_pixmap.height() + self._label_height
-        )
+        self.setPixmap(pxm)
+        self.setFixedSize(pxm.width(), pxm.height() + self._label_height)
 
     def enterEvent(self, event):
         """Dim the image slightly when mouse enters."""
