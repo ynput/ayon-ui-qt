@@ -169,12 +169,20 @@ class AYPublish(AYFrame):
     def _build(self):
         lyt = AYVBoxLayout(self, margin=0, spacing=0)
         lyt.addWidget(self._build_top_bar(), stretch=0)
+
+        cntr = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.Low,
+            bg_tint="#707070",
+        )
         self.text_field = AYCommentField(
-            text=f"{self._data.product}\n\n{self._data.version}",
+            text=f"**{self._data.product}**\n\n{self._data.version}",
             num_lines=3,
             read_only=True,
         )
-        lyt.addWidget(self.text_field, stretch=0)
+        cntr.add_widget(self.text_field, stretch=0)
+
+        lyt.addWidget(cntr, stretch=0)
 
     def update_params(self, model: CommentModel):
         if self._data:
