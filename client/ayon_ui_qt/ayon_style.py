@@ -65,12 +65,12 @@ def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
     pt_size = w.font().pointSizeF() if w else style["font-size"]
     font.setPointSizeF(pt_size)
     font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
-    log.debug(
-        "FONT: %s, %g pts, w=%d",
-        font.family(),
-        font.pointSizeF(),
-        font.weight(),
-    )
+    # log.debug(
+    #     "FONT: %s, %g pts, w=%d",
+    #     font.family(),
+    #     font.pointSizeF(),
+    #     font.weight(),
+    # )
     return font
 
 
