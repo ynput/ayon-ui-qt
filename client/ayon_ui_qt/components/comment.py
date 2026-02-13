@@ -172,8 +172,7 @@ class AYPublish(AYFrame):
 
         cntr = AYContainer(
             layout=AYContainer.Layout.HBox,
-            variant=AYContainer.Variants.Low,
-            bg_tint="#707070",
+            variant=AYContainer.Variants.High,
         )
         self.text_field = AYCommentField(
             text=f"**{self._data.product}**\n{self._data.version}",
