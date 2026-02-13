@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from qtpy.QtCore import QEvent, QPoint, Qt, Signal, QSize, QRect
+from qtpy.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QEnterEvent,
     QPainter,
     QPaintEvent,
     QPixmap,
+    QTextCursor,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
@@ -28,9 +29,11 @@ from ..data_models import (
     User,
     VersionPublishModel,
 )
+from ..image_cache import ImageCache
 from ..utils import color_blend
 from ..variants import QTextEditVariants
 from .buttons import AYButton
+from .checkbox_handler import CHECKBOX_FORMAT_TYPE, CheckboxHandler
 from .combo_box import ALL_STATUSES
 from .comment_completion import (
     apply_web_markdown_formatting,
@@ -45,7 +48,6 @@ from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
-from ..image_cache import ImageCache
 
 # STATUS ---------------------------------------------------------------------
 
@@ -191,9 +193,17 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYCommentField(AYTextEdit):
-    """Text field for comment display with markdown support."""
+    """Text field for comment display with markdown and checkbox support.
+
+    Supports GitHub-flavored markdown checkboxes (- [ ] and - [x]) that
+    render with Material icons and can be toggled even in read-only mode.
+
+    Signals:
+        checklist_changed: Emitted when a checkbox state changes.
+    """
 
     Variants = QTextEditVariants
+    checklist_changed = Signal()
 
     def __init__(
         self,
@@ -212,10 +222,14 @@ class AYCommentField(AYTextEdit):
         self._user_list: list[User] = user_list or []
         self._data = model
         self._bg_color = None
+        self._checkbox_handler: CheckboxHandler | None = None
 
         super().__init__(*args, variant=variant, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
         self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
+        # Enable mouse tracking on viewport to receive mouseMoveEvent
+        # self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
         self.set_markdown(text)
 
         # configure
@@ -257,15 +271,26 @@ class AYCommentField(AYTextEdit):
         return self._bg_color
 
     def set_markdown(self, md: str) -> None:
-        """Set markdown content, supporting both standard markdown and web markdown.
+        """Set markdown content with checkbox and web markdown support.
 
-        If text contains web markdown syntax (text\\n----, **bold**, _italic_, [link](url), `code`),
-        it will be parsed and formatted accordingly with syntax removed.
-        Otherwise, uses standard QTextDocument markdown.
+        Supports:
+        - GitHub-flavored markdown checkboxes (- [ ] and - [x])
+        - Web markdown syntax (text\\n----, **bold**, _italic_, [link](url))
+        - Standard QTextDocument markdown
 
         Args:
             md: Markdown text to display
         """
+        # Check for checkboxes first
+        if CheckboxHandler.contains_checkboxes(md):
+            self._setup_checkbox_handler()
+            # Handler is guaranteed to exist after _setup_checkbox_handler
+            assert self._checkbox_handler is not None
+            self._checkbox_handler.parse_and_render(md)
+            if self._read_only:
+                self._adjust_height_to_content()
+            return
+
         # Check if text contains web markdown syntax
         has_web_markdown = any(
             pattern in md for pattern in ["\n----", "**", "_", "[", "`"]
@@ -278,6 +303,20 @@ class AYCommentField(AYTextEdit):
             # Use standard markdown
             self.document().setMarkdown(md, MD_DIALECT)
 
+        if self._read_only:
+            self._adjust_height_to_content()
+
+    def _setup_checkbox_handler(self) -> None:
+        """Initialize checkbox handler if not already done."""
+        if self._checkbox_handler is None:
+            self._checkbox_handler = CheckboxHandler(self)
+            self._checkbox_handler.checklist_changed.connect(
+                self._on_checklist_changed
+            )
+
+    def _on_checklist_changed(self) -> None:
+        """Handle checkbox state changes."""
+        self.checklist_changed.emit()
         if self._read_only:
             self._adjust_height_to_content()
 
@@ -294,6 +333,16 @@ class AYCommentField(AYTextEdit):
         self.setReadOnly(self._read_only)
 
     def as_markdown(self) -> str:
+        """Get the content as GitHub-flavored markdown.
+
+        If the field contains checkboxes, returns the markdown with
+        checkbox syntax (- [ ] and - [x]) reflecting current state.
+
+        Returns:
+            Markdown string.
+        """
+        if self._checkbox_handler and self._checkbox_handler.has_checkboxes():
+            return self._checkbox_handler.to_markdown()
         return self.document().toMarkdown(MD_DIALECT)
 
     def _on_text_changed(self) -> None:
@@ -339,14 +388,55 @@ class AYCommentField(AYTextEdit):
             return
         super().keyPressEvent(event)
 
-    def mousePressEvent(self, event) -> None:
-        """Handle mouse press events to open links only in read-only mode."""
-        # Only handle link clicks in read-only mode (display comments)
-        if self.isReadOnly():
-            # Get the character at the click position
-            cursor = self.cursorForPosition(event.pos())
-            char_format = cursor.charFormat()
+    def _is_checkbox_at_cursor(self, cursor) -> tuple[bool, int | None]:
+        """Check if a checkbox is at or adjacent to the cursor position.
 
+        Args:
+            cursor: QTextCursor from cursorForPosition.
+
+        Returns:
+            Tuple of (is_checkbox, document_position_of_checkbox).
+        """
+        doc = self.document()
+        pos = cursor.position()
+        for check_pos in (pos, pos - 1, pos + 1):
+            if not (0 <= check_pos < doc.characterCount()):
+                continue
+            tmp = QTextCursor(doc)
+            tmp.setPosition(check_pos)
+            tmp.setPosition(check_pos - 1, QTextCursor.MoveMode.KeepAnchor)
+            if tmp.charFormat().objectType() == CHECKBOX_FORMAT_TYPE:
+                return True, check_pos
+        return False, None
+
+    def mousePressEvent(self, event) -> None:
+        """Handle mouse press events for checkboxes and links.
+
+        Checkboxes can be toggled even in read-only mode.
+        Links are opened only in read-only mode.
+        """
+        # Get the character at the click position
+        cursor = self.cursorForPosition(event.pos())
+        char_format = cursor.charFormat()
+
+        # Check if clicked on a checkbox (works in both modes)
+        is_cb, _ = self._is_checkbox_at_cursor(cursor)
+        # if char_format.objectType() == CHECKBOX_FORMAT_TYPE:
+        if is_cb:
+            if self._checkbox_handler:
+                # Get cursor position to find which checkbox
+                pos = cursor.position()
+                checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
+                    pos
+                )
+                if checkbox_idx is not None:
+                    self._checkbox_handler.toggle_checkbox(checkbox_idx)
+                    self.viewport().update()
+                    event.accept()
+                    return
+
+        # Handle link clicks only in read-only mode (display comments)
+        if self.isReadOnly():
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
                 import webbrowser
@@ -359,19 +449,25 @@ class AYCommentField(AYTextEdit):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
-        """Change cursor to hand when hovering over links in read-only mode."""
-        # Only show hand cursor in read-only mode (display comments)
-        if self.isReadOnly():
-            cursor = self.cursorForPosition(event.pos())
-            char_format = cursor.charFormat()
+        """Change cursor to arrow when hovering over checkboxes, hand for links."""
+        cursor = self.cursorForPosition(event.pos())
+        char_format = cursor.charFormat()
+        # print(char_format.objectType())
 
-            # Show hand cursor only for actual links with href
+        # Show arrow cursor for checkboxes (in any mode)
+        if char_format.objectType() == CHECKBOX_FORMAT_TYPE:
+            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+            super().mouseMoveEvent(event)
+            return
+
+        # Show hand cursor for links (only in read-only mode)
+        if self.isReadOnly():
             if char_format.isAnchor() and char_format.anchorHref():
-                self.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
             else:
-                self.setCursor(Qt.CursorShape.IBeamCursor)
+                self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
         else:
-            self.setCursor(Qt.CursorShape.IBeamCursor)
+            self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
 
         super().mouseMoveEvent(event)
 
@@ -436,9 +532,7 @@ class AYImageAttachment(QLabel):
                 Qt.TransformationMode.SmoothTransformation,
             )
             tmp_dir = Path(tempfile.mkdtemp())
-            tmp_file_path = (
-                tmp_dir / f"{thumb_path.name}.thumb.png"
-            )
+            tmp_file_path = tmp_dir / f"{thumb_path.name}.thumb.png"
             scaled_pixmap.save(str(tmp_file_path), quality=75)
             return tmp_file_path
 
@@ -917,6 +1011,31 @@ if __name__ == "__main__":
                 )
             )
         )
+
+        # Test checkbox functionality
+        checklist_comment = AYComment(
+            data=CommentModel(
+                user_full_name="Task Manager",
+                comment=(
+                    "Review checklist:\n"
+                    "- [x] Check animation timing\n"
+                    "- [ ] Review color grading\n"
+                    "- [ ] Verify audio sync\n"
+                    "- [x] Approve final render"
+                ),
+                category="Checklist",
+                category_color="#5599ff",
+            )
+        )
+        # Connect to log checkbox changes
+        checklist_comment.text_field.checklist_changed.connect(
+            lambda: print(
+                "Checkbox changed! New markdown:\n"
+                + checklist_comment.text_field.as_markdown()
+            )
+        )
+        w.add_widget(checklist_comment)
+
         w.add_widget(AYTextBox(num_lines=3, variant=AYTextBox.Variants.High))
         return w
 
