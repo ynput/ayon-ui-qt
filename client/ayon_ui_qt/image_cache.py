@@ -25,6 +25,13 @@ class ImageCache:
     size limits. It maintains metadata in JSON format and ensures thread-safe
     access through locking mechanisms.
 
+    Environment variables:
+        AYON_IMG_CACHE_DIR: Override directory in which the AYON_IMG_CACHE dir
+                            will be created, otherwise use a stable tmp
+                            location.
+        AYON_IMG_CACHE_SIZE: Override default cache size in MB.
+        AYON_IMG_CACHE_CLEAR_ON_STARTUP: Always clear cache on startup.
+
     Attributes:
         cache_path (Path): Directory where cached files are stored.
         max_size_in_MB (int): Maximum cache size in megabytes.
@@ -61,13 +68,13 @@ class ImageCache:
             return cls._instance
 
     def _get_tmp_dir(self) -> Path:
-        tmp = Path(tempfile.gettempdir())
+        tmp = Path(os.environ.get("AYON_IMG_CACHE_DIR", tempfile.gettempdir()))
         tmp = tmp / "AYON_IMG_CACHE"
         # make tmp writable and readable to the user only
         tmp.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             os.chmod(tmp, 0o700)
-        logger.info(f"image cache: {tmp} ({self.max_size_in_MB} MB)")
+        logger.info(f"AYON image cache: {tmp} ({self.max_size_in_MB} MB)")
         return tmp
 
     def _initialize(
@@ -79,7 +86,9 @@ class ImageCache:
             cache_path: Directory path for storing cached files.
             max_size_in_MB: Maximum cache size in megabytes.
         """
-        self.max_size_in_MB = max_size_in_MB
+        self.max_size_in_MB = os.environ.get(
+            "AYON_IMG_CACHE_SIZE", max_size_in_MB
+        )
         self.max_size_bytes = max_size_in_MB * 1024 * 1024
         self.cache_path = (
             Path(cache_path) if cache_path else self._get_tmp_dir()
@@ -90,6 +99,13 @@ class ImageCache:
 
         # Create cache directory if it doesn't exist
         self.cache_path.mkdir(parents=True, exist_ok=True)
+
+        if "AYON_IMG_CACHE_CLEAR_ON_STARTUP" in os.environ:
+            i = 0
+            for i, f in enumerate(os.scandir(self.cache_path)):
+                if f.is_file():
+                    os.remove(self.cache_path / f.path)
+            print(f"AYON image cache: cleared ({i} files removed)")
 
         # Load existing metadata and validate files
         self._load_metadata()
@@ -212,6 +228,26 @@ class ImageCache:
             logger.debug(f"Cached file for key '{key}': {cached_path}")
             return str(cached_path)
 
+    def has(self, key: str) -> bool:
+        """Check if a key exists in cache without loading."""
+        with self._access_lock:
+            if key in self._metadata:
+                cached = Path(self._metadata[key]["file_path"])
+                return cached.exists()
+            return False
+
+    def get_path(self, key: str) -> str | None:
+        """Return cached path if it exists, else None."""
+        with self._access_lock:
+            if key in self._metadata:
+                cached = Path(self._metadata[key]["file_path"])
+                if cached.exists():
+                    entry = self._metadata[key]
+                    entry["access_count"] += 1
+                    entry["last_accessed"] = time.time()
+                    return str(cached)
+            return None
+
     def _generate_cache_filename(self, key: str, source_path: Path) -> str:
         """Generate a cache filename from the key hash.
 
@@ -283,8 +319,9 @@ class ImageCache:
     def _save_metadata(self) -> None:
         """Save cache metadata to JSON file."""
         try:
-            with open(self._metadata_file, "w") as fw:
-                json.dump(self._metadata, fw, indent=4)
+            with self._access_lock:
+                with open(self._metadata_file, "w") as fw:
+                    json.dump(self._metadata, fw, indent=4)
             logger.info("Cache metadata saved")
         except IOError as e:
             logger.error(f"Failed to save cache metadata: {e}")
