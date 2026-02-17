@@ -93,7 +93,6 @@ class CheckboxTextObject(QPyTextObject):
         """
         font = doc.defaultFont()
         size = max(font.pointSize() * 1.4, 14)
-        # print(f"size = {size}")
         return QSizeF(size, size)
 
     def drawObject(

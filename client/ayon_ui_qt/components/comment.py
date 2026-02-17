@@ -469,6 +469,14 @@ class AYCommentField(AYTextEdit):
 
         return False, None
 
+    def mouseDoubleClickEvent(self, event) -> None:
+        """Prevent text selection when double-clicking checkboxes."""
+        is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
+        if is_cb and cb_pos is not None:
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def mousePressEvent(self, event) -> None:
         """Handle mouse press events for checkboxes and links.
 
