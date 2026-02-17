@@ -3,7 +3,15 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from qtpy.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
+from qtpy.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRect,
+    QRectF,
+    Qt,
+    Signal,
+)
 from qtpy.QtGui import (
     QColor,
     QEnterEvent,
@@ -388,6 +396,21 @@ class AYCommentField(AYTextEdit):
         if self._read_only:
             self._adjust_height_to_content()
 
+    def contentOffset(self) -> QPointF:
+        """Compute content offset (QPlainTextEdit compatibility).
+
+        Returns the offset from viewport coordinates to document coordinates.
+        This method provides compatibility with QPlainTextEdit for checkbox
+        hit-testing in _is_checkbox_at_cursor.
+
+        Returns:
+            QPointF offset where viewport origin corresponds to document coords.
+        """
+        return QPointF(
+            -self.horizontalScrollBar().value(),
+            -self.verticalScrollBar().value(),
+        )
+
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
         if on_completer_key_press(self, event):
@@ -395,25 +418,55 @@ class AYCommentField(AYTextEdit):
             return
         super().keyPressEvent(event)
 
-    def _is_checkbox_at_cursor(self, cursor) -> tuple[bool, int | None]:
-        """Check if a checkbox is at or adjacent to the cursor position.
+    def _is_checkbox_at_cursor(
+        self, click_pos: QPoint
+    ) -> tuple[bool, int | None]:
+        """Check if a click position hits a checkbox bounding rect.
 
         Args:
-            cursor: QTextCursor from cursorForPosition.
+            click_pos: QPoint from event.pos(), viewport coords.
 
         Returns:
-            Tuple of (is_checkbox, document_position_of_checkbox).
+            Tuple of (is_checkbox, document_position_for_lookup).
         """
+        if not self._checkbox_handler:
+            return False, None
+
         doc = self.document()
-        pos = cursor.position()
-        for check_pos in (pos, pos - 1, pos + 1):
-            if not (0 <= check_pos < doc.characterCount()):
-                continue
-            tmp = QTextCursor(doc)
-            tmp.setPosition(check_pos)
-            tmp.setPosition(check_pos - 1, QTextCursor.MoveMode.KeepAnchor)
-            if tmp.charFormat().objectType() == CHECKBOX_FORMAT_TYPE:
-                return True, check_pos
+        text = doc.toPlainText()
+        content_offset = self.contentOffset()
+
+        offset = 0
+        while True:
+            pos = text.find("\ufffc", offset)
+            if pos == -1:
+                break
+
+            cursor = QTextCursor(doc)
+            cursor.setPosition(pos)
+            block = cursor.block()
+            block_layout = block.layout()
+
+            if block_layout:
+                rel_pos = pos - block.position()
+                line = block_layout.lineForTextPosition(rel_pos)
+                if line.isValid():
+                    x1 = line.cursorToX(rel_pos)[0]
+                    x2 = line.cursorToX(rel_pos + 1)[0]
+                    y = line.y() + block_layout.position().y()
+                    h = line.height()
+
+                    rect = QRectF(
+                        x1 + content_offset.x(),
+                        y + content_offset.y(),
+                        x2 - x1,
+                        h,
+                    )
+                    if rect.contains(QPointF(click_pos)):
+                        return True, pos + 1
+
+            offset = pos + 1
+
         return False, None
 
     def mousePressEvent(self, event) -> None:
@@ -427,14 +480,11 @@ class AYCommentField(AYTextEdit):
         char_format = cursor.charFormat()
 
         # Check if clicked on a checkbox (works in both modes)
-        is_cb, _ = self._is_checkbox_at_cursor(cursor)
-        # if char_format.objectType() == CHECKBOX_FORMAT_TYPE:
-        if is_cb:
+        is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
+        if is_cb and cb_pos is not None:
             if self._checkbox_handler:
-                # Get cursor position to find which checkbox
-                pos = cursor.position()
                 checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
-                    pos
+                    cb_pos
                 )
                 if checkbox_idx is not None:
                     self._checkbox_handler.toggle_checkbox(checkbox_idx)
@@ -958,7 +1008,9 @@ class AYComment(AYContainer):
         if isinstance(image_attachment, AYImageAttachment):
             if not image_attachment._thumb_path:
                 ic = ImageCache.get_instance()
-                image_attachment._thumb_path = ic.get_path(f"act_thumb_{file_id}")
+                image_attachment._thumb_path = ic.get_path(
+                    f"act_thumb_{file_id}"
+                )
             if not image_attachment._image_path:
                 ic = ImageCache.get_instance()
                 image_attachment._image_path = ic.get_path(f"act_{file_id}")

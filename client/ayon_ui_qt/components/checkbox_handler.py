@@ -275,8 +275,9 @@ class CheckboxHandler(QObject):
         cursor = QTextCursor(doc)
         cursor.setPosition(pos)
         fmt = cursor.charFormat()
+        fmt_type = fmt.objectType()
 
-        if fmt.objectType() == CHECKBOX_FORMAT_TYPE:
+        if fmt_type == CHECKBOX_FORMAT_TYPE:
             return fmt.property(CHECKBOX_INDEX_PROP)
         return None
 
