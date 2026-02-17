@@ -386,6 +386,8 @@ class AYCommentField(AYTextEdit):
 class AYImageAttachment(QLabel):
     """Widget to display an image attachment with thumbnail and full-size preview."""
 
+    no_img = get_icon("panorama", color="#666666")
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -425,7 +427,7 @@ class AYImageAttachment(QLabel):
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
         if not self._thumb_path or not Path(self._thumb_path).exists():
-            self.setText("Image not available")
+            self.setPixmap(self.no_img.pixmap(32, 32))
             return
 
         thumb_path = Path(self._thumb_path)
