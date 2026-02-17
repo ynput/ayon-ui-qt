@@ -105,7 +105,7 @@ class ImageCache:
             for i, f in enumerate(os.scandir(self.cache_path)):
                 if f.is_file():
                     os.remove(self.cache_path / f.path)
-            print(f"AYON image cache: cleared ({i} files removed)")
+            logger.info(f"AYON image cache: cleared ({i} files removed)")
 
         # Load existing metadata and validate files
         self._load_metadata()
@@ -120,7 +120,7 @@ class ImageCache:
             try:
                 with open(self._metadata_file, "r") as f:
                     self._metadata = json.load(f)
-                logger.info(
+                logger.debug(
                     f"Loaded cache metadata with {len(self._metadata)} entries"
                 )
             except (json.JSONDecodeError, IOError) as e:
@@ -149,7 +149,7 @@ class ImageCache:
             del self._metadata[key]
 
         if invalid_keys:
-            logger.info(f"Removed {len(invalid_keys)} invalid cache entries")
+            logger.debug(f"Removed {len(invalid_keys)} invalid cache entries")
 
     def get(self, key: str, file_closure: Callable) -> str:
         """Get a cached file or load it using the provided file_closure.
@@ -322,7 +322,7 @@ class ImageCache:
             with self._access_lock:
                 with open(self._metadata_file, "w") as fw:
                     json.dump(self._metadata, fw, indent=4)
-            logger.info("Cache metadata saved")
+            logger.debug("Cache metadata saved")
         except IOError as e:
             logger.error(f"Failed to save cache metadata: {e}")
 
