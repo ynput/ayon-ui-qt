@@ -3,13 +3,13 @@ from __future__ import annotations
 from os.path import normpath
 from typing import Optional
 
-from qtpy import QtCore, QtWidgets
+from PySide6.QtCore import Qt
+from qtpy.QtWidgets import QWidget
 
-from ..utils import clear_layout
 from .. import get_ayon_style
-from .layouts import AYHBoxLayout
-from ..variants import QLabelVariants
+from ..utils import clear_layout
 from .label import AYLabel
+from .layouts import AYHBoxLayout
 
 
 class AYEntityPathSegment(AYLabel):
@@ -18,15 +18,20 @@ class AYEntityPathSegment(AYLabel):
         text,
         parent=None,
         variant: AYLabel.Variants = AYLabel.Variants.Default,
-        dim=True,
-        rel_text_size=-2,
     ):
-        super().__init__(text, parent=parent)
+        super().__init__(text, dim=True, rel_text_size=-2, parent=parent)
+        self.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self._variant_str: str = variant.value
+        self._ensure_font_setup()
+        self.setFixedSize(
+            self._font_metrics.size(self.alignment(), self.text()),
+        )
 
 
-class AYEntityPath(QtWidgets.QWidget):
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+class AYEntityPath(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setStyle(get_ayon_style())
         self._path = ""

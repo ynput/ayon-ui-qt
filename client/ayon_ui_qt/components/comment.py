@@ -171,12 +171,19 @@ class AYPublish(AYFrame):
     def _build(self):
         lyt = AYVBoxLayout(self, margin=0, spacing=0)
         lyt.addWidget(self._build_top_bar(), stretch=0)
+
+        cntr = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.High,
+        )
         self.text_field = AYCommentField(
-            text=f"{self._data.product}\n\n{self._data.version}",
+            text=f"**{self._data.product}**\n{self._data.version}",
             num_lines=3,
             read_only=True,
         )
-        lyt.addWidget(self.text_field, stretch=0)
+        cntr.add_widget(self.text_field, stretch=0)
+
+        lyt.addWidget(cntr, stretch=0)
 
     def update_params(self, model: CommentModel):
         if self._data:
@@ -475,13 +482,15 @@ class AYCommentField(AYTextEdit):
 class AYImageAttachment(QLabel):
     """Widget to display an image attachment with thumbnail and full-size preview."""
 
+    no_img = get_icon("panorama", color="#666666")
+
     def __init__(
         self,
         parent: QWidget | None = None,
         image_path: str = "",
         thumb_path: str = "",
-        max_width: int = 400,
-        max_height: int = 300,
+        max_width: int = 100,
+        max_height: int = 47,
         frame: int = 0,
     ):
         super().__init__(parent)
@@ -503,6 +512,10 @@ class AYImageAttachment(QLabel):
         self._hovered = False
         self._label_height = 16
 
+        self.setFixedSize(
+            self._max_width, self._max_height + self._label_height
+        )
+
         # Load and display thumbnail
         self._load_thumbnail()
         self._draw_icon = get_icon("draw", color="#eeeeee")
@@ -510,7 +523,7 @@ class AYImageAttachment(QLabel):
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
         if not self._thumb_path or not Path(self._thumb_path).exists():
-            self.setText("Image not available")
+            self.setPixmap(self.no_img.pixmap(32, 32))
             return
 
         thumb_path = Path(self._thumb_path)
@@ -558,6 +571,7 @@ class AYImageAttachment(QLabel):
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         """Draw a semi-transparent overlay with a fullscreen icon when hovered."""
+        # draw image
         super().paintEvent(arg__1)
         # setup painter
         painter = QPainter(self)
@@ -678,6 +692,7 @@ class AYComment(AYContainer):
         self._data = data if data else CommentModel()
         self._user_list: list[User] = user_list or []
         self._bg_color = None
+        self._image_widgets = {}
 
         super().__init__(
             *args,
@@ -797,7 +812,7 @@ class AYComment(AYContainer):
             bg_tint=self._data.category_color,
         )
         self.images_container = AYContainer(
-            layout=AYContainer.Layout.HBox,
+            layout=AYContainer.Layout.Flow,
             variant=AYContainer.Variants.High,
             bg_tint=self._data.category_color,
             layout_spacing=4,
@@ -841,26 +856,8 @@ class AYComment(AYContainer):
             if not Path(file_model.local_path).exists():
                 continue
 
-            # Get the text field width to scale images accordingly
-            text_field_width = self.text_field.width()
-            # Account for margins/padding and spacing between multiple images
-            # Calculate how many images we'll have (not transparent)
-            image_count = sum(
-                1
-                for file in self._data.files
-                if not any(
-                    file.id == annotation.transparent
-                    for annotation in (self._data.annotations or [])
-                )
-            )
-            # Each image spacing is 4px (from layout_spacing)
-            spacing_total = (image_count - 1) * 4
-            max_image_width = max(
-                int((text_field_width - spacing_total) / image_count)
-                if image_count > 0
-                else 400,
-                100,  # Minimum width for images
-            )
+            max_image_width = 100
+            max_image_height = 47
 
             thumb_path = getattr(file_model, "thumb_local_path", None)
 
@@ -870,21 +867,20 @@ class AYComment(AYContainer):
                 image_path=file_model.local_path,
                 thumb_path=thumb_path,
                 max_width=max_image_width,
-                max_height=800,
+                max_height=max_image_height,
                 frame=file_model.frame,
             )
 
-            # Set fixed width to prevent expanding
-            image_widget.setFixedWidth(max_image_width)
-            # Set maximum height to maintain aspect ratio
-            image_widget.setMaximumHeight(800)
+            # # Set fixed width to prevent expanding
+            # image_widget.setFixedWidth(max_image_width)
+            # # Set maximum height to maintain aspect ratio
+            # image_widget.setMaximumHeight(800)
 
-            self.images_container.add_widget(
-                image_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignLeft
-            )
+            self.images_container.add_widget(image_widget)
+            self._image_widgets[file_model.id] = image_widget
 
-        # Add stretch to push images to the left
-        self.images_container.addStretch()
+        # # Add stretch to push images to the left
+        # self.images_container.addStretch()
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
@@ -956,6 +952,18 @@ class AYComment(AYContainer):
             )
             self.user_name.setText(self._data.user_name)
             self.date.setText(self._data.short_date)
+
+    def refresh_image(self, file_id, filepath):
+        image_attachment = self._image_widgets.get(file_id)
+        if isinstance(image_attachment, AYImageAttachment):
+            if not image_attachment._thumb_path:
+                ic = ImageCache.get_instance()
+                image_attachment._thumb_path = ic.get_path(f"act_thumb_{file_id}")
+            if not image_attachment._image_path:
+                ic = ImageCache.get_instance()
+                image_attachment._image_path = ic.get_path(f"act_{file_id}")
+            if image_attachment:
+                image_attachment._load_thumbnail()
 
 
 if __name__ == "__main__":
