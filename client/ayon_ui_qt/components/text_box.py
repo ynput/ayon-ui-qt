@@ -551,6 +551,31 @@ class AYTextEditor(AYTextEdit):
         self.setTextCursor(cursor)
         self.setFocus()
 
+    def paintEvent(self, event) -> None:
+        """Override paintEvent to make sure the placeholder text is not
+        displayed when an empty list is added to an empty document."""
+        if (
+            self.placeholderText()
+            and self.document().isEmpty()
+            and self._has_list_block()
+        ):
+            self._suppress_formatting = True
+            saved = self.placeholderText()
+            super().setPlaceholderText("")
+            super().paintEvent(event)
+            super().setPlaceholderText(saved)
+            self._suppress_formatting = False
+            return
+        super().paintEvent(event)
+
+    def _has_list_block(self) -> bool:
+        block = self.document().begin()
+        while block.isValid():
+            if block.textList() is not None:
+                return True
+            block = block.next()
+        return False
+
 
 NO_CATEGORY = {
     "text": "Category",
