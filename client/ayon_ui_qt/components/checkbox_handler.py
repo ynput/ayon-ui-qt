@@ -5,12 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Tuple, Union
 
-from qtpy.QtCore import QObject, QRectF, QSizeF, Qt, Signal, QPoint
-from typing import Union
-
-from qtpy.QtCore import QRect
+from qtpy.QtCore import QObject, QPoint, QPointF, QRect, QRectF, QSizeF, Signal
 from qtpy.QtGui import (
     QPainter,
     QPixmap,
@@ -54,6 +51,8 @@ class CheckboxItem:
         text: Text following the checkbox.
         line_number: Line number in the original markdown.
         prefix: Characters before the checkbox (e.g., "- ", "* ").
+        doc_position: Character position of the \\ufffc object in the
+            document, or -1 if not yet placed.
     """
 
     index: int
@@ -61,6 +60,7 @@ class CheckboxItem:
     text: str
     line_number: int
     prefix: str = "- "
+    doc_position: int = field(default=-1)
 
 
 class CheckboxTextObject(QPyTextObject):
@@ -198,7 +198,7 @@ class CheckboxHandler(QObject):
                 text = match.group(3)
                 is_checked = checked_char.lower() == "x"
 
-                # Store checkbox info
+                # Store checkbox info (doc_position filled after insertion)
                 self._checkboxes.append(
                     CheckboxItem(
                         index=checkbox_index,
@@ -239,7 +239,7 @@ class CheckboxHandler(QObject):
             # Find the placeholder character (OBJECT REPLACEMENT CHARACTER)
             pos = text.find("\ufffc", offset)
             if pos == -1:
-                log.warning(f"Could not find placeholder for checkbox {i}")
+                log.warning("Could not find placeholder for checkbox %d", i)
                 continue
 
             # Create format for the checkbox
@@ -256,6 +256,9 @@ class CheckboxHandler(QObject):
             cursor.setPosition(pos + 1, QTextCursor.MoveMode.KeepAnchor)
             cursor.insertText("\ufffc", fmt)
 
+            # Store the document position for fast hit-testing
+            cb.doc_position = pos
+
             offset = pos + 1
 
         cursor.endEditBlock()
@@ -265,7 +268,7 @@ class CheckboxHandler(QObject):
         """Get the checkbox index at the given document position.
 
         Args:
-            pos: Position in the document.
+            pos: Position in the document (one past the \\ufffc char).
 
         Returns:
             Checkbox index if found, None otherwise.
@@ -279,6 +282,60 @@ class CheckboxHandler(QObject):
         if fmt_type == CHECKBOX_FORMAT_TYPE:
             return fmt.property(CHECKBOX_INDEX_PROP)
         return None
+
+    def find_checkbox_at_click(
+        self, click_pos: "QPoint", content_offset: "QPoint | None" = None
+    ) -> Optional[Tuple[bool, Optional[int]]]:
+        """Find the checkbox hit by a viewport click using stored positions.
+
+        Uses the cached ``doc_position`` on each :class:`CheckboxItem`
+        instead of scanning the full document text, making hit-testing O(n)
+        in the number of checkboxes rather than O(len(document)).
+
+        Args:
+            click_pos: Click position in viewport coordinates.
+            content_offset: Optional scroll offset (x, y) as a QPoint.
+                Defaults to (0, 0) when not provided.
+
+        Returns:
+            ``(True, doc_position + 1)`` when the click lands on a checkbox,
+            ``(False, None)`` otherwise.
+        """
+        if not self._checkboxes:
+            return False, None
+
+        doc = self._text_edit.document()
+        ox = content_offset.x() if content_offset else 0
+        oy = content_offset.y() if content_offset else 0
+
+        for cb in self._checkboxes:
+            pos = cb.doc_position
+            if pos < 0:
+                continue
+
+            cursor = QTextCursor(doc)
+            cursor.setPosition(pos)
+            block = cursor.block()
+            block_layout = block.layout()
+
+            if not block_layout:
+                continue
+
+            rel_pos = pos - block.position()
+            line = block_layout.lineForTextPosition(rel_pos)
+            if not line.isValid():
+                continue
+
+            x1 = line.cursorToX(rel_pos)[0]  # type: ignore[index]
+            x2 = line.cursorToX(rel_pos + 1)[0]  # type: ignore[index]
+            y = line.y() + block_layout.position().y()
+            h = line.height()
+
+            rect = QRectF(x1 + ox, y + oy, x2 - x1, h)
+            if rect.contains(QPointF(click_pos)):
+                return True, pos + 1
+
+        return False, None
 
     def toggle_checkbox(self, index: int) -> bool:
         """Toggle a checkbox by its index.
@@ -316,34 +373,88 @@ class CheckboxHandler(QObject):
         doc.blockSignals(True)
 
         try:
-            # Find the checkbox in the document
+            pos = cb.doc_position
+            if pos < 0:
+                # Fall back to scanning if position is unknown
+                text = doc.toPlainText()
+                count = 0
+                for i, char in enumerate(text):
+                    if char == "\ufffc":
+                        if count == index:
+                            pos = i
+                            break
+                        count += 1
+
+            if pos < 0:
+                log.warning(
+                    "Cannot find document position for checkbox %d", index
+                )
+                return
+
             cursor = QTextCursor(doc)
-            text = doc.toPlainText()
+            cursor.setPosition(pos)
+            cursor.setPosition(pos + 1, QTextCursor.MoveMode.KeepAnchor)
 
-            # Count object replacement characters to find the right one
-            count = 0
-            for i, char in enumerate(text):
-                if char == "\ufffc":
-                    if count == index:
-                        # Found it - update the format
-                        cursor.setPosition(i)
-                        cursor.setPosition(
-                            i + 1, QTextCursor.MoveMode.KeepAnchor
-                        )
+            fmt = QTextCharFormat()
+            fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
+            fmt.setProperty(CHECKBOX_CHECKED_PROP, cb.checked)
+            fmt.setProperty(CHECKBOX_INDEX_PROP, cb.index)
+            fmt.setVerticalAlignment(
+                QTextCharFormat.VerticalAlignment.AlignBaseline
+            )
 
-                        fmt = QTextCharFormat()
-                        fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
-                        fmt.setProperty(CHECKBOX_CHECKED_PROP, cb.checked)
-                        fmt.setProperty(CHECKBOX_INDEX_PROP, cb.index)
-                        fmt.setVerticalAlignment(
-                            QTextCharFormat.VerticalAlignment.AlignBaseline
-                        )
-
-                        cursor.setCharFormat(fmt)
-                        break
-                    count += 1
+            cursor.setCharFormat(fmt)
         finally:
             doc.blockSignals(False)
+
+    def add_checkbox(
+        self,
+        checked: bool = False,
+        prefix: str = "- ",
+        doc_position: int = -1,
+    ) -> CheckboxItem:
+        """Append a new checkbox to the tracked list.
+
+        This is the public API for adding a checkbox programmatically
+        (e.g. when the user presses Enter on a checkbox line or clicks
+        the checklist toolbar button).  The caller is responsible for
+        inserting the actual ``\\ufffc`` character into the document and
+        then updating :attr:`CheckboxItem.doc_position`.
+
+        Args:
+            checked: Initial checked state.
+            prefix: Markdown list prefix (e.g. ``"- "``).
+            doc_position: Document character position of the ``\\ufffc``
+                object, or ``-1`` if not yet known.
+
+        Returns:
+            The newly created :class:`CheckboxItem`.
+        """
+        new_index = len(self._checkboxes)
+        item = CheckboxItem(
+            index=new_index,
+            checked=checked,
+            text="",
+            line_number=-1,
+            prefix=prefix,
+            doc_position=doc_position,
+        )
+        self._checkboxes.append(item)
+        return item
+
+    def remove_last_checkbox(self) -> bool:
+        """Remove the last checkbox from the tracked list.
+
+        Used when the user presses Enter on an empty checkbox line to
+        terminate the list.
+
+        Returns:
+            True if a checkbox was removed, False if the list was empty.
+        """
+        if not self._checkboxes:
+            return False
+        self._checkboxes.pop()
+        return True
 
     def to_markdown(self) -> str:
         """Reconstruct markdown with current checkbox states.
@@ -352,22 +463,33 @@ class CheckboxHandler(QObject):
             GitHub-flavored markdown string with checkbox syntax.
         """
         if not self._checkboxes:
-            return self._text_edit.toPlainText()
+            return self._text_edit.toMarkdown()
 
         # Get current text and replace placeholders with checkbox syntax
-        text = self._text_edit.toPlainText()
+        # we use toMarkdown() to make sure the other formatted items have
+        # already been dealt with.
+        text = self._text_edit.toMarkdown()
         lines = text.split("\n")
         result_lines: List[str] = []
 
         checkbox_iter = iter(self._checkboxes)
         current_cb = next(checkbox_iter, None)
+        prev_line_had_checkbox = False
 
         for line in lines:
+            if prev_line_had_checkbox and not line.strip():
+                # Empty line after checkbox: skip
+                prev_line_had_checkbox = False
+                continue
             if "\ufffc" in line and current_cb:
-                # Replace placeholder with checkbox syntax
+                # Replace "  \ufffc " with prefix + checkbox syntax
                 checked_char = "x" if current_cb.checked else " "
-                line = line.replace("\ufffc", f"[{checked_char}]", 1)
+                # Remove the two spaces before \ufffc and add the proper prefix
+                line = line.replace(
+                    "  \ufffc ", f"{current_cb.prefix}[{checked_char}] ", 1
+                )
                 current_cb = next(checkbox_iter, None)
+                prev_line_had_checkbox = True
             result_lines.append(line)
 
         return "\n".join(result_lines)
@@ -387,7 +509,7 @@ class CheckboxHandler(QObject):
         Returns:
             True if there are checkboxes, False otherwise.
         """
-        return len(self._checkboxes) > 0
+        return bool(self._checkboxes)
 
     @staticmethod
     def contains_checkboxes(markdown: str) -> bool:

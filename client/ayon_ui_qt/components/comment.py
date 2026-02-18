@@ -8,7 +8,6 @@ from qtpy.QtCore import (
     QPoint,
     QPointF,
     QRect,
-    QRectF,
     Qt,
     Signal,
 )
@@ -18,7 +17,6 @@ from qtpy.QtGui import (
     QPainter,
     QPaintEvent,
     QPixmap,
-    QTextCursor,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
@@ -49,6 +47,7 @@ from .comment_completion import (
     on_completer_activated,
     on_completer_key_press,
     on_completer_text_changed,
+    parse_markdown_from_web,
     setup_user_completer,
 )
 from .container import AYContainer, AYFrame
@@ -238,6 +237,8 @@ class AYCommentField(AYTextEdit):
         self._data = model
         self._bg_color = None
         self._checkbox_handler: CheckboxHandler | None = None
+        # Guard flag: when True, format_comment_on_change is a no-op.
+        self._suppress_formatting: bool = False
 
         super().__init__(*args, variant=variant, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
@@ -272,9 +273,17 @@ class AYCommentField(AYTextEdit):
         )
 
         # Connect text changed signal to format mentions
-        self.document().contentsChanged.connect(
-            lambda: format_comment_on_change(self)
-        )
+        self.document().contentsChanged.connect(self._on_contents_changed)
+
+    def _on_contents_changed(self) -> None:
+        """Forward contentsChanged to format_comment_on_change.
+
+        Skipped when ``_suppress_formatting`` is True so that checkbox
+        insertion code can mutate the document without triggering a
+        full re-format pass.
+        """
+        if not self._suppress_formatting:
+            format_comment_on_change(self)
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:
@@ -307,9 +316,7 @@ class AYCommentField(AYTextEdit):
             return
 
         # Check if text contains web markdown syntax
-        has_web_markdown = any(
-            pattern in md for pattern in ["\n----", "**", "_", "[", "`"]
-        )
+        has_web_markdown = bool(parse_markdown_from_web(md))
 
         if has_web_markdown:
             # Use web markdown formatting (removes syntax, applies formatting)
@@ -423,6 +430,9 @@ class AYCommentField(AYTextEdit):
     ) -> tuple[bool, int | None]:
         """Check if a click position hits a checkbox bounding rect.
 
+        Delegates to `CheckboxHandler.find_checkbox_at_click` which
+        uses stored document positions instead of scanning the full text.
+
         Args:
             click_pos: QPoint from event.pos(), viewport coords.
 
@@ -432,42 +442,12 @@ class AYCommentField(AYTextEdit):
         if not self._checkbox_handler:
             return False, None
 
-        doc = self.document()
-        text = doc.toPlainText()
-        content_offset = self.contentOffset()
-
-        offset = 0
-        while True:
-            pos = text.find("\ufffc", offset)
-            if pos == -1:
-                break
-
-            cursor = QTextCursor(doc)
-            cursor.setPosition(pos)
-            block = cursor.block()
-            block_layout = block.layout()
-
-            if block_layout:
-                rel_pos = pos - block.position()
-                line = block_layout.lineForTextPosition(rel_pos)
-                if line.isValid():
-                    x1 = line.cursorToX(rel_pos)[0]
-                    x2 = line.cursorToX(rel_pos + 1)[0]
-                    y = line.y() + block_layout.position().y()
-                    h = line.height()
-
-                    rect = QRectF(
-                        x1 + content_offset.x(),
-                        y + content_offset.y(),
-                        x2 - x1,
-                        h,
-                    )
-                    if rect.contains(QPointF(click_pos)):
-                        return True, pos + 1
-
-            offset = pos + 1
-
-        return False, None
+        result = self._checkbox_handler.find_checkbox_at_click(
+            click_pos, self.contentOffset().toPoint()
+        )
+        if result is None:
+            return False, None
+        return result
 
     def mouseDoubleClickEvent(self, event) -> None:
         """Prevent text selection when double-clicking checkboxes."""
@@ -490,15 +470,15 @@ class AYCommentField(AYTextEdit):
         # Check if clicked on a checkbox (works in both modes)
         is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
         if is_cb and cb_pos is not None:
-            if self._checkbox_handler:
-                checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
-                    cb_pos
-                )
-                if checkbox_idx is not None:
-                    self._checkbox_handler.toggle_checkbox(checkbox_idx)
-                    self.viewport().update()
-                    event.accept()
-                    return
+            assert self._checkbox_handler is not None  # implied by is_cb==True
+            checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
+                cb_pos
+            )
+            if checkbox_idx is not None:
+                self._checkbox_handler.toggle_checkbox(checkbox_idx)
+                self.viewport().update()
+                event.accept()
+                return
 
         # Handle link clicks only in read-only mode (display comments)
         if self.isReadOnly():
@@ -517,7 +497,6 @@ class AYCommentField(AYTextEdit):
         """Change cursor to arrow when hovering over checkboxes, hand for links."""
         cursor = self.cursorForPosition(event.pos())
         char_format = cursor.charFormat()
-        # print(char_format.objectType())
 
         # Show arrow cursor for checkboxes (in any mode)
         if char_format.objectType() == CHECKBOX_FORMAT_TYPE:
@@ -1044,8 +1023,6 @@ if __name__ == "__main__":
             layout_margin=16,
         )
 
-        w.addStretch()
-
         w.add_widget(
             AYComment(
                 data=CommentModel(
@@ -1104,7 +1081,20 @@ if __name__ == "__main__":
         )
         w.add_widget(checklist_comment)
 
-        w.add_widget(AYTextBox(num_lines=3, variant=AYTextBox.Variants.High))
+        tb = AYTextBox(num_lines=10, variant=AYTextBox.Variants.High)
+        w.add_widget(tb)
+        tb.signals.comment_submitted.connect(
+            lambda *args: print(
+                f"Comment submitted: {'=' * (80 - len('Comment submitted: '))}\n",
+                f"{args[0]}",
+                f"{'-' * 80}\n",
+                f"   markdown: {args[0]!r}\n",
+                f"   category: {args[1]!r}\n",
+                f"attachments: {args[2]}\n",
+                f"{'-' * 80}\n",
+            )
+        )
+
         return w
 
     test(build, style=Style.AyonStyleOverCSS)

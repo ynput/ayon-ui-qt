@@ -313,49 +313,59 @@ def parse_markdown_from_web(text: str) -> list[dict]:
 
     # Pattern for H1 (text followed by newline and dashes)
     for match in re.finditer(r"^(.+?)\n-{2,}$", text, re.MULTILINE):
-        formats.append({
-            "type": "h1",
-            "start": match.start(),
-            "end": match.end(),
-            "content": match.group(1),
-        })
+        formats.append(
+            {
+                "type": "h1",
+                "start": match.start(),
+                "end": match.end(),
+                "content": match.group(1),
+            }
+        )
 
     # Pattern for **bold**
     for match in re.finditer(r"\*\*(.+?)\*\*", text):
-        formats.append({
-            "type": "bold",
-            "start": match.start(),
-            "end": match.end(),
-            "content": match.group(1),
-        })
+        formats.append(
+            {
+                "type": "bold",
+                "start": match.start(),
+                "end": match.end(),
+                "content": match.group(1),
+            }
+        )
 
     # Pattern for _italic_
-    for match in re.finditer(r'_(.+?)_', text):
-        formats.append({
-            "type": "italic",
-            "start": match.start(),
-            "end": match.end(),
-            "content": match.group(1),
-        })
+    for match in re.finditer(r"_(.+?)_", text):
+        formats.append(
+            {
+                "type": "italic",
+                "start": match.start(),
+                "end": match.end(),
+                "content": match.group(1),
+            }
+        )
 
     # Pattern for [link](url)
     for match in re.finditer(r"\[(.+?)\]\((.+?)\)", text):
-        formats.append({
-            "type": "link",
-            "start": match.start(),
-            "end": match.end(),
-            "content": match.group(1),
-            "url": match.group(2),
-        })
+        formats.append(
+            {
+                "type": "link",
+                "start": match.start(),
+                "end": match.end(),
+                "content": match.group(1),
+                "url": match.group(2),
+            }
+        )
 
     # Pattern for `code`
     for match in re.finditer(r"`(.+?)`", text):
-        formats.append({
-            "type": "code",
-            "start": match.start(),
-            "end": match.end(),
-            "content": match.group(1),
-        })
+        formats.append(
+            {
+                "type": "code",
+                "start": match.start(),
+                "end": match.end(),
+                "content": match.group(1),
+            }
+        )
 
     return formats
 
@@ -439,28 +449,43 @@ def apply_web_markdown_formatting(
             # H1 syntax: text\n---- the match.end() already includes the dashes
             # So the syntax_len is the difference between match end and content
             syntax_len = end - start - len(content)
-            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            offset_map[start] = (
+                start - current_offset,
+                start - current_offset + len(content),
+            )
             current_offset += syntax_len
         elif fmt_type == "bold":
             syntax_len = len(f"**{content}**") - len(content)
-            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            offset_map[start] = (
+                start - current_offset,
+                start - current_offset + len(content),
+            )
             current_offset += syntax_len
         elif fmt_type == "italic":
             syntax_len = len(f"_{content}_") - len(content)
-            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            offset_map[start] = (
+                start - current_offset,
+                start - current_offset + len(content),
+            )
             current_offset += syntax_len
         elif fmt_type == "link":
             syntax_len = len(fmt["content"] + fmt.get("url", "")) + 4
-            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            offset_map[start] = (
+                start - current_offset,
+                start - current_offset + len(content),
+            )
             current_offset += syntax_len
         elif fmt_type == "code":
             syntax_len = len(f"`{content}`") - len(content)
-            offset_map[start] = (start - current_offset, start - current_offset + len(content))
+            offset_map[start] = (
+                start - current_offset,
+                start - current_offset + len(content),
+            )
             current_offset += syntax_len
 
     # Now apply formatting in correct order (forward iteration)
     formats_sorted = parse_markdown_from_web(text)
-    formats_sorted.sort(key=lambda x: x['start'])
+    formats_sorted.sort(key=lambda x: x["start"])
 
     # Create a list to accumulate offset changes
     cumulative_offset = 0
@@ -476,7 +501,9 @@ def apply_web_markdown_formatting(
             # H1: text\n---- becomes just text
             end = start + len(content)
             # The cumulative offset is the difference between original end and new end
-            original_syntax_len = fmt["end"] - fmt["start"] - len(fmt["content"])
+            original_syntax_len = (
+                fmt["end"] - fmt["start"] - len(fmt["content"])
+            )
             cumulative_offset += original_syntax_len
         elif fmt_type == "bold":
             end = start + len(content)
@@ -555,23 +582,28 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
     """Format QTextDocument to highlight mentions starting with @.
 
     Any word starting with @ will be formatted in red.
+    Preserves checkbox formatting (CHECKBOX_FORMAT_TYPE).
     """
+    # Import here to avoid circular dependency
+    from .checkbox_handler import CHECKBOX_FORMAT_TYPE
+
     text_edit.document().blockSignals(True)
 
     pal = get_ayon_style().model.base_palette
     document = text_edit.document()
     cursor = text_edit.textCursor()
-    fmt = cursor.charFormat()
 
-    # Create a format for red text
-    user_format = QTextCharFormat(fmt)
+    # Create minimal mention/link formats — only mention-specific properties
+    # are set so that mergeCharFormat preserves user styles (bold, italic, etc.)
+    user_format = QTextCharFormat()
     user_format.setForeground(pal.link())
-    url_format = QTextCharFormat(fmt)
+    url_format = QTextCharFormat()
     url_format.setForeground(pal.link())
     url_format.setFontUnderline(True)
 
-    # Create a format for normal text
-    normal_format = QTextCharFormat()
+    # Track link colour and default text brush for selective clearing
+    link_color = pal.link().color()
+    default_text_brush = pal.text()
 
     # Get all text from document
     md = document.toMarkdown()
@@ -587,9 +619,31 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
     p_all = f"{p_user}|{p_version}|{p_task}|{p_link}|{p_raw_link}"
     matches = list(re.finditer(p_all, md))
 
-    # Clear all formatting first
-    cursor.select(QTextCursor.SelectionType.Document)
-    cursor.setCharFormat(normal_format)
+    # Clear only mention/link-related formatting so that user-applied styles
+    # (bold, italic, heading, code, background, font family, etc.) are
+    # preserved across keystrokes.
+    text = document.toPlainText()
+    for i in range(len(text)):
+        cursor.setPosition(i)
+        cursor.setPosition(i + 1, QTextCursor.MoveMode.KeepAnchor)
+        char_fmt = cursor.charFormat()
+        # Skip checkbox objects — preserve their formatting entirely
+        if char_fmt.objectType() == CHECKBOX_FORMAT_TYPE:
+            continue
+        # Only reset properties that were set by mention/link formatting
+        has_mention_fmt = (
+            char_fmt.isAnchor()
+            or char_fmt.fontUnderline()
+            or char_fmt.foreground().color() == link_color
+        )
+        if has_mention_fmt:
+            clear_fmt = QTextCharFormat()
+            clear_fmt.setAnchor(False)
+            clear_fmt.setAnchorHref("")
+            clear_fmt.setFontUnderline(False)
+            if char_fmt.foreground().color() == link_color:
+                clear_fmt.setForeground(default_text_brush)
+            cursor.mergeCharFormat(clear_fmt)
 
     # We parsed the markdown but the cursor if using the plain text, so we
     # need to keep track of the number of extra markdown characters to keep
@@ -611,25 +665,25 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
                         QTextCursor.MoveMode.KeepAnchor,
                     )
 
-                cursor.setCharFormat(user_format)
+                cursor.mergeCharFormat(user_format)
             elif key == "version":
                 cursor.setPosition(match.start())
                 cursor.setPosition(
                     match.end(), QTextCursor.MoveMode.KeepAnchor
                 )
-                cursor.setCharFormat(user_format)
+                cursor.mergeCharFormat(user_format)
             elif key == "task":
                 cursor.setPosition(match.start())
                 cursor.setPosition(
                     match.end(), QTextCursor.MoveMode.KeepAnchor
                 )
-                cursor.setCharFormat(user_format)
+                cursor.mergeCharFormat(user_format)
             if key == "raw_link":
                 cursor.setPosition(match.start())
                 cursor.setPosition(
                     match.end(), QTextCursor.MoveMode.KeepAnchor
                 )
-                cursor.setCharFormat(user_format)
+                cursor.mergeCharFormat(user_format)
             elif key == "link":
                 p0 = match.start() - xtra
                 cursor.setPosition(p0)
@@ -637,7 +691,7 @@ def format_comment_on_change(text_edit: QTextEdit) -> None:
                 p1 = (match.start() - xtra) + len(link_name)
                 cursor.setPosition(p1, QTextCursor.MoveMode.KeepAnchor)
                 xtra += len(val) - len(link_name) + 1
-                cursor.setCharFormat(url_format)
+                cursor.mergeCharFormat(url_format)
 
     # Restore original cursor position
     text_edit.document().blockSignals(False)
