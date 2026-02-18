@@ -751,6 +751,8 @@ class AYComment(AYContainer):
             self.set_comment_category()
             self._build_image_attachments()
 
+        self.text_field.checklist_changed.connect(self._on_checklist_changed)
+
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
             parent=self,
@@ -1003,6 +1005,11 @@ class AYComment(AYContainer):
                 image_attachment._image_path = ic.get_path(f"act_{file_id}")
             if image_attachment:
                 image_attachment._load_thumbnail()
+
+    def _on_checklist_changed(self):
+        md = self.text_field.as_markdown()
+        self._data.comment = md
+        self.comment_edited.emit(self._data)
 
 
 if __name__ == "__main__":
