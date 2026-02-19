@@ -5,9 +5,10 @@ from enum import Enum
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 
+from ..utils import clear_layout
+from ..variants import QFrameVariants
 from .frame import AYFrame
 from .layouts import AYFlowLayout, AYGridLayout, AYHBoxLayout, AYVBoxLayout
-from ..variants import QFrameVariants
 
 
 class AYContainer(AYFrame):
@@ -113,6 +114,9 @@ class AYContainer(AYFrame):
         if isinstance(self._layout, AYGridLayout):
             raise NotImplementedError
         return self._layout.itemAt(index)  # type: ignore
+
+    def clear(self):
+        clear_layout(self._layout)
 
 
 if __name__ == "__main__":
