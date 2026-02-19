@@ -42,12 +42,11 @@ from .buttons import AYButton
 from .checkbox_handler import CHECKBOX_FORMAT_TYPE, CheckboxHandler
 from .combo_box import ALL_STATUSES
 from .comment_completion import (
-    apply_web_markdown_formatting,
+    apply_code_block_backgrounds,
     format_comment_on_change,
     on_completer_activated,
     on_completer_key_press,
     on_completer_text_changed,
-    parse_markdown_from_web,
     setup_user_completer,
 )
 from .container import AYContainer, AYFrame
@@ -243,6 +242,7 @@ class AYCommentField(AYTextEdit):
         super().__init__(*args, variant=variant, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
         self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
+        self.document().setIndentWidth(22)
         # Enable mouse tracking on viewport to receive mouseMoveEvent
         # self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
@@ -284,6 +284,7 @@ class AYCommentField(AYTextEdit):
         """
         if not self._suppress_formatting:
             format_comment_on_change(self)
+            apply_code_block_backgrounds(self)
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:
@@ -315,15 +316,8 @@ class AYCommentField(AYTextEdit):
                 self._adjust_height_to_content()
             return
 
-        # Check if text contains web markdown syntax
-        has_web_markdown = bool(parse_markdown_from_web(md))
-
-        if has_web_markdown:
-            # Use web markdown formatting (removes syntax, applies formatting)
-            self.set_web_markdown(md)
-        else:
-            # Use standard markdown
-            self.document().setMarkdown(md, MD_DIALECT)
+        self.document().setMarkdown(md, MD_DIALECT)
+        apply_code_block_backgrounds(self)
 
         if self._read_only:
             self._adjust_height_to_content()
@@ -341,18 +335,6 @@ class AYCommentField(AYTextEdit):
         self.checklist_changed.emit()
         if self._read_only:
             self._adjust_height_to_content()
-
-    def set_web_markdown(self, md: str, styles: dict | None = None) -> None:
-        """Set markdown from web data with formatting.
-
-        Removes markdown syntax (**text** becomes text with bold formatting).
-
-        Args:
-            md: Markdown text from web (**bold**, _italic_, [link](url), `code`)
-            styles: Optional custom styles for formatting
-        """
-        apply_web_markdown_formatting(self, md, styles=styles)
-        self.setReadOnly(self._read_only)
 
     def as_markdown(self) -> str:
         """Get the content as GitHub-flavored markdown.
@@ -1035,7 +1017,16 @@ if __name__ == "__main__":
                 data=CommentModel(
                     user_src=str(av1),
                     user_full_name="Bob Morane",
-                    comment="This is great !",
+                    comment=(
+                        "Text Styling\n"
+                        "------------\n"
+                        "regular, **bold**, *italic*, ***bold italic*** and `some code` text.\n\n"
+                        "```\n"
+                        "# A code fragment\n"
+                        "print('Hello World')\n"
+                        "```\n\n"
+                        "Is it all working ?\n"
+                    ),
                 )
             )
         )

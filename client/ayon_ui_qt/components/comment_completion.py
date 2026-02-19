@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import re
+import logging
 
 from qtpy.QtCore import QSize, Qt
 from qtpy.QtGui import (
-    QFont,
+    QColor,
     QPainter,
     QStandardItem,
     QStandardItemModel,
+    QSyntaxHighlighter,
+    QTextBlockFormat,
     QTextCharFormat,
     QTextCursor,
 )
@@ -22,6 +25,13 @@ from qtpy.QtWidgets import (
 from .. import get_ayon_style
 from ..data_models import User
 from .user_image import AYUserImage
+
+# Background colour used for both character-level (inline code) and
+# block-level (fenced code block) highlighting.  Defined once here so
+# that both the highlighter and ``apply_code_block_backgrounds()`` always
+# use the same value.
+CODE_BG: QColor = QColor("#1e1e1e")
+CODE_FG: QColor = QColor("#eeeeee")
 
 
 class UserCompleterDelegate(QStyledItemDelegate):
@@ -297,401 +307,298 @@ def on_completer_key_press(
     return False
 
 
-def parse_markdown_from_web(text: str) -> list[dict]:
-    """Parse web markdown syntax and return format information.
+class MentionHighlighter(QSyntaxHighlighter):
+    """Syntax highlighter for @mentions, raw URLs, and code spans.
 
-    Identifies H1 (text\n----), **bold**, _italic_, [link](url),
-    and `code` patterns.
+    Operates on block-local plain text so positions are always correct
+    regardless of any rich-text formatting already present in the document
+    (bold, italic, headings, code spans, etc.).
 
-    Args:
-        text: Markdown text containing web syntax
+    Patterns highlighted:
 
-    Returns:
-        List of dicts with keys: 'type', 'start', 'end', 'content', 'url'
-    """
-    formats = []
-
-    # Pattern for H1 (text followed by newline and dashes)
-    for match in re.finditer(r"^(.+?)\n-{2,}$", text, re.MULTILINE):
-        formats.append(
-            {
-                "type": "h1",
-                "start": match.start(),
-                "end": match.end(),
-                "content": match.group(1),
-            }
-        )
-
-    # Pattern for **bold**
-    for match in re.finditer(r"\*\*(.+?)\*\*", text):
-        formats.append(
-            {
-                "type": "bold",
-                "start": match.start(),
-                "end": match.end(),
-                "content": match.group(1),
-            }
-        )
-
-    # Pattern for _italic_
-    for match in re.finditer(r"_(.+?)_", text):
-        formats.append(
-            {
-                "type": "italic",
-                "start": match.start(),
-                "end": match.end(),
-                "content": match.group(1),
-            }
-        )
-
-    # Pattern for [link](url)
-    for match in re.finditer(r"\[(.+?)\]\((.+?)\)", text):
-        formats.append(
-            {
-                "type": "link",
-                "start": match.start(),
-                "end": match.end(),
-                "content": match.group(1),
-                "url": match.group(2),
-            }
-        )
-
-    # Pattern for `code`
-    for match in re.finditer(r"`(.+?)`", text):
-        formats.append(
-            {
-                "type": "code",
-                "start": match.start(),
-                "end": match.end(),
-                "content": match.group(1),
-            }
-        )
-
-    return formats
-
-
-def apply_web_markdown_formatting(
-    text_edit: QTextEdit,
-    text: str,
-    styles: dict | None = None,
-) -> None:
-    """Apply web markdown formatting to text, removing syntax.
-
-    Removes markdown syntax while preserving formatting
-    (**bold** becomes bold text, _italic_ becomes italic text, etc).
+    - Fenced code blocks (```\\`\\`\\` ... \\`\\`\\```) spanning multiple lines —
+      black background, white monospace text.  Block state ``1`` tracks
+      whether the current block is inside a fence.
+    - Qt-rendered code blocks (from ``setMarkdown()``) — detected via
+      ``nonBreakableLines`` on the block format.
+    - Qt-rendered inline code spans (from ``setMarkdown()``) — detected via
+      ``fontFixedPitch`` on individual text fragments.
+    - Inline code spans (`` \\`code\\` ``) in raw (un-rendered) text — same
+      style, detected by backtick regex.
+    - ``@@@word`` — task mention
+    - ``@@word``  — version mention
+    - ``@word``   — user mention (only the first word if the full name is not
+      in the known user list; both words when it is)
+    - ``https?://…`` — raw URL
 
     Args:
-        text_edit: QTextEdit widget to apply formatting to
-        text: Markdown text from web
-        styles: Optional custom styles dict with keys: "bold", "italic", "link", "code"
+        document: The QTextDocument to attach to.
+        user_list: Live list of :class:`~..data_models.User` objects used to
+            decide whether a two-word mention should be highlighted in full.
     """
-    pal = get_ayon_style().model.base_palette
 
-    # Parse markdown to find all format positions
-    formats = parse_markdown_from_web(text)
+    # Compiled patterns — order matters: longer prefixes first so that
+    # ``@@@`` is matched before ``@@`` and ``@@`` before ``@``.
+    _P_TASK = re.compile(r"@@@\w+( \w+)?")
+    _P_VERSION = re.compile(r"@@(?!@)\w+( \w+)?")
+    _P_USER = re.compile(r"@(?!@)\w+( \w+)?")
+    _P_RAW_LINK = re.compile(r"https?://\S+")
+    # Inline code: single backtick pair on the same line.
+    _P_CODE_INLINE = re.compile(r"`[^`\n]+`")
 
-    # Sort by start position (reverse order for proper offset calculation)
-    formats.sort(key=lambda x: x["start"], reverse=True)
+    def __init__(self, document, user_list: list) -> None:
+        super().__init__(document)
+        self._user_list = user_list
+        pal = get_ayon_style().model.base_palette
+        self._mention_fmt = QTextCharFormat()
+        self._mention_fmt.setForeground(pal.link())
+        self._code_fmt = QTextCharFormat()
+        self._code_fmt.setFontFixedPitch(True)
+        self._code_fmt.setFontFamilies(
+            ["Courier New", "Menlo", "Monaco", "monospace"]
+        )
+        self._code_fmt.setBackground(CODE_BG)
+        self._code_fmt.setForeground(CODE_FG)
 
-    # Build plain text by removing syntax and track position mappings
-    plain_text = text
-    position_map = {}  # Maps original positions to new positions
+    def update_user_list(self, user_list: list) -> None:
+        """Replace the user list and trigger a full rehighlight.
 
-    for fmt in formats:
-        start = fmt["start"]
-        end = fmt["end"]
-        content = fmt["content"]
-        fmt_type = fmt["type"]
+        Args:
+            user_list: Updated list of User objects.
+        """
+        self._user_list = user_list
+        self.rehighlight()
 
-        # Calculate what to remove based on format type
-        if fmt_type == "h1":
-            plain_text = plain_text[:start] + content + plain_text[end:]
-            position_map[fmt_type] = (start, start + len(content))
-        elif fmt_type == "bold":
-            plain_text = plain_text[:start] + content + plain_text[end:]
-            position_map[fmt_type] = (start, start + len(content))
-        elif fmt_type == "italic":
-            plain_text = plain_text[:start] + content + plain_text[end:]
-            position_map[fmt_type] = (start, start + len(content))
-        elif fmt_type == "link":
-            link_text = fmt["content"]
-            plain_text = plain_text[:start] + link_text + plain_text[end:]
-            position_map[fmt_type] = (start, start + len(link_text))
-        elif fmt_type == "code":
-            plain_text = plain_text[:start] + content + plain_text[end:]
-            position_map[fmt_type] = (start, start + len(content))
+    def highlightBlock(self, text: str) -> None:
+        """Apply code, mention, and URL highlighting to a single block.
 
-    # Set plain text
-    text_edit.setPlainText(plain_text)
+        Two detection strategies are combined so that code is styled in both
+        *edit mode* (raw markdown typed by the user) and *display mode*
+        (rich text rendered via ``document().setMarkdown()``):
 
-    # Block signals and start edit block for performance
-    text_edit.document().blockSignals(True)
-    cursor = text_edit.textCursor()
-    cursor.beginEditBlock()
+        **Edit mode — raw fence markers:**
+        Uses block state ``1`` to track multi-line fenced code blocks. A line
+        starting with *```* opens or closes a fence; every line inside the
+        fence is styled with :attr:`_code_fmt`.  A line that both opens and
+        closes a fence on the same line (e.g. ``\\`\\`\\`code\\`\\`\\```) is
+        treated as a single-line code block with no state change.
 
-    # Re-parse to get all formats with their new positions
-    formats = parse_markdown_from_web(text)
-    formats.sort(key=lambda x: x["start"], reverse=True)
+        **Display mode — Qt-rendered char formats:**
+        After ``setMarkdown()`` Qt strips the fence markers and stores rich
+        text character formats.  Fenced code blocks have
+        ``nonBreakableLines=True`` set on the block format (``fontFixedPitch``
+        stays ``False`` on the block-level char format).  Inline code spans
+        set ``fontFixedPitch=True`` on individual text *fragments* within a
+        paragraph.  Both are detected here and styled with :attr:`_code_fmt`.
 
-    # Build mapping of original to plain text positions
-    plain_text = text
-    offset_map = {}
-    current_offset = 0
+        Inline code spans from raw backtick syntax (`` \\`code\\` ``) are also
+        detected via :attr:`_P_CODE_INLINE` for live-typed backtick spans.
 
-    for fmt in formats:
-        start = fmt["start"]
-        end = fmt["end"]
-        content = fmt["content"]
-        fmt_type = fmt["type"]
+        Code formatting is applied *after* mention/URL patterns so that it
+        takes precedence over any mention highlight inside a code span.
 
-        # Track the offset and new position
-        if fmt_type == "h1":
-            # H1 syntax: text\n---- the match.end() already includes the dashes
-            # So the syntax_len is the difference between match end and content
-            syntax_len = end - start - len(content)
-            offset_map[start] = (
-                start - current_offset,
-                start - current_offset + len(content),
-            )
-            current_offset += syntax_len
-        elif fmt_type == "bold":
-            syntax_len = len(f"**{content}**") - len(content)
-            offset_map[start] = (
-                start - current_offset,
-                start - current_offset + len(content),
-            )
-            current_offset += syntax_len
-        elif fmt_type == "italic":
-            syntax_len = len(f"_{content}_") - len(content)
-            offset_map[start] = (
-                start - current_offset,
-                start - current_offset + len(content),
-            )
-            current_offset += syntax_len
-        elif fmt_type == "link":
-            syntax_len = len(fmt["content"] + fmt.get("url", "")) + 4
-            offset_map[start] = (
-                start - current_offset,
-                start - current_offset + len(content),
-            )
-            current_offset += syntax_len
-        elif fmt_type == "code":
-            syntax_len = len(f"`{content}`") - len(content)
-            offset_map[start] = (
-                start - current_offset,
-                start - current_offset + len(content),
-            )
-            current_offset += syntax_len
+        Called automatically by Qt whenever the block changes.
 
-    # Now apply formatting in correct order (forward iteration)
-    formats_sorted = parse_markdown_from_web(text)
-    formats_sorted.sort(key=lambda x: x["start"])
+        Args:
+            text: Plain text content of the current block.
+        """
+        block = self.currentBlock()
+        in_fence = self.previousBlockState() == 1
 
-    # Create a list to accumulate offset changes
-    cumulative_offset = 0
-    format_list = []
+        # ── Edit mode: raw fence markers ─────────────────────────────────
+        if in_fence:
+            # The entire line belongs to the open fenced block.
+            self.setFormat(0, len(text), self._code_fmt)
+            # A line starting with ``` closes the fence.
+            if text.startswith("```"):
+                self.setCurrentBlockState(0)
+            else:
+                self.setCurrentBlockState(1)
+            return
 
-    for fmt in formats_sorted:
-        start = fmt["start"] - cumulative_offset
-        content = fmt["content"]
-        fmt_type = fmt["type"]
-        url = fmt.get("url", "")
+        if text.startswith("```"):
+            self.setFormat(0, len(text), self._code_fmt)
+            rest = text[3:]
+            # Closing ``` on the same line → single-line block, no state.
+            if "```" in rest:
+                self.setCurrentBlockState(0)
+            else:
+                self.setCurrentBlockState(1)
+            return
 
-        if fmt_type == "h1":
-            # H1: text\n---- becomes just text
-            end = start + len(content)
-            # The cumulative offset is the difference between original end and new end
-            original_syntax_len = (
-                fmt["end"] - fmt["start"] - len(fmt["content"])
-            )
-            cumulative_offset += original_syntax_len
-        elif fmt_type == "bold":
-            end = start + len(content)
-            cumulative_offset += len(f"**{content}**") - len(content)
-        elif fmt_type == "italic":
-            end = start + len(content)
-            cumulative_offset += len(f"_{content}_") - len(content)
-        elif fmt_type == "link":
-            end = start + len(content)
-            cumulative_offset += len(fmt["content"] + fmt.get("url", "")) + 4
-        elif fmt_type == "code":
-            end = start + len(content)
-            cumulative_offset += len(f"`{content}`") - len(content)
+        self.setCurrentBlockState(0)
 
-        format_list.append((fmt_type, start, end, url))
+        # ── Display mode: Qt-rendered whole-block code ───────────────────
+        # After setMarkdown(), Qt marks fenced code block lines with
+        # nonBreakableLines=True on the block format.  The char format
+        # carries fontFamilies=['monospace'] but fontFixedPitch stays False.
+        # Style the whole line and skip mention/URL patterns — they don't
+        # belong inside code.
+        if block.blockFormat().nonBreakableLines():
+            self.setFormat(0, len(text), self._code_fmt)
+            return
 
-    # Apply formats from the accumulated list
-    for fmt_type, start, end, url in format_list:
-        char_fmt = QTextCharFormat()
+        # ── Mentions and URLs (applied before inline code) ───────────────
+        users = {u.full_name for u in self._user_list}
 
-        if fmt_type == "h1":
-            # Get base font size and apply H1 styling (1.5x larger, bold)
-            # Try multiple sources for font size
-            base_size = text_edit.font().pointSize()
-            if base_size <= 0:
-                base_size = text_edit.document().defaultFont().pointSize()
-            if base_size <= 0:
-                base_size = text_edit.fontInfo().pointSize()
-            if base_size <= 0:
-                base_size = 12  # Fallback
+        # Task mentions (@@@)
+        for m in self._P_TASK.finditer(text):
+            self.setFormat(m.start(), m.end() - m.start(), self._mention_fmt)
 
-            char_fmt.setFontPointSize(int(base_size * 1.5))
-            char_fmt.setFontWeight(QFont.Weight.Bold)
-            if styles and "h1" in styles and "color" in styles["h1"]:
-                char_fmt.setForeground(styles["h1"]["color"])
-        elif fmt_type == "bold":
-            char_fmt.setFontWeight(QFont.Weight.Bold)
-            if styles and "bold" in styles and "color" in styles["bold"]:
-                char_fmt.setForeground(styles["bold"]["color"])
-        elif fmt_type == "italic":
-            char_fmt.setFontItalic(True)
-            if styles and "italic" in styles and "color" in styles["italic"]:
-                char_fmt.setForeground(styles["italic"]["color"])
-        elif fmt_type == "link":
-            char_fmt.setForeground(pal.link())
-            char_fmt.setFontUnderline(True)
-            # Set anchor href for link
-            char_fmt.setAnchor(True)
-            char_fmt.setAnchorHref(url)
-            if styles and "link" in styles and "color" in styles["link"]:
-                char_fmt.setForeground(styles["link"]["color"])
-        elif fmt_type == "code":
-            code_font = QFont()
-            code_font.setFixedPitch(True)
-            char_fmt.setFont(code_font)
-            char_fmt.setForeground(pal.light())
-            if styles and "code" in styles and "color" in styles["code"]:
-                char_fmt.setForeground(styles["code"]["color"])
+        # Version mentions (@@)
+        for m in self._P_VERSION.finditer(text):
+            self.setFormat(m.start(), m.end() - m.start(), self._mention_fmt)
 
-        # Apply format to the range
-        cursor.setPosition(start)
-        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
-        cursor.setCharFormat(char_fmt)
+        # User mentions (@) — highlight only the first word unless the full
+        # two-word name is in the known user list.
+        for m in self._P_USER.finditer(text):
+            full_match = m.group(0)
+            mention_name = full_match[1:]  # strip leading @
+            if mention_name in users:
+                length = len(full_match)
+            else:
+                # Highlight only up to the first word (no trailing space+word)
+                length = len(full_match.split()[0])
+            self.setFormat(m.start(), length, self._mention_fmt)
 
-    # End edit block and unblock signals
-    cursor.endEditBlock()
-    text_edit.document().blockSignals(False)
+        # Raw URLs
+        for m in self._P_RAW_LINK.finditer(text):
+            self.setFormat(m.start(), m.end() - m.start(), self._mention_fmt)
 
-    # Clear selection and place cursor at end
-    cursor.clearSelection()
-    cursor.movePosition(QTextCursor.MoveOperation.End)
-    text_edit.setTextCursor(cursor)
+        # ── Inline code (applied last, overrides mention formatting) ─────
+
+        # Raw backtick syntax `code` — detected in plain text for live
+        # editing where backtick characters are still present:
+        for m in self._P_CODE_INLINE.finditer(text):
+            self.setFormat(m.start(), m.end() - m.start(), self._code_fmt)
+
+        # Qt-rendered inline code spans — after setMarkdown() the backticks
+        # are consumed and individual fragments carry fontFixedPitch=True:
+        it = block.begin()
+        while not it.atEnd():
+            fragment = it.fragment()
+            if fragment.isValid() and fragment.charFormat().fontFixedPitch():
+                frag_start = fragment.position() - block.position()
+                self.setFormat(frag_start, fragment.length(), self._code_fmt)
+            it += 1
 
 
 def format_comment_on_change(text_edit: QTextEdit) -> None:
-    """Format QTextDocument to highlight mentions starting with @.
+    """Ensure a :class:`MentionHighlighter` is installed on *text_edit*.
 
-    Any word starting with @ will be formatted in red.
-    Preserves checkbox formatting (CHECKBOX_FORMAT_TYPE).
+    Idempotent: safe to call on every ``contentsChanged`` signal.  The
+    highlighter is created once and attached to the document.  Subsequent
+    calls only call :meth:`MentionHighlighter.update_user_list` when the
+    ``_user_list`` reference on *text_edit* has been replaced (e.g. after a
+    server refresh), which avoids triggering an unnecessary ``rehighlight``
+    — and the infinite-recursion that would follow — on every keystroke.
+
+    Args:
+        text_edit: The QTextEdit whose document should have mention
+            highlighting applied.
     """
-    # Import here to avoid circular dependency
-    from .checkbox_handler import CHECKBOX_FORMAT_TYPE
+    highlighter: MentionHighlighter | None = getattr(
+        text_edit, "_mention_highlighter", None
+    )
+    user_list = getattr(text_edit, "_user_list", [])
 
-    text_edit.document().blockSignals(True)
+    if highlighter is None:
+        highlighter = MentionHighlighter(text_edit.document(), user_list)
+        text_edit._mention_highlighter = highlighter  # type: ignore[attr-defined]
+    elif highlighter._user_list is not user_list:
+        # The list object was replaced (e.g. after a user-list refresh).
+        # update_user_list() calls rehighlight() which is safe here because
+        # this branch is only reached when _suppress_formatting is False and
+        # the list identity has changed — not on every keystroke.
+        highlighter.update_user_list(user_list)
 
-    pal = get_ayon_style().model.base_palette
-    document = text_edit.document()
-    cursor = text_edit.textCursor()
 
-    # Create minimal mention/link formats — only mention-specific properties
-    # are set so that mergeCharFormat preserves user styles (bold, italic, etc.)
-    user_format = QTextCharFormat()
-    user_format.setForeground(pal.link())
-    url_format = QTextCharFormat()
-    url_format.setForeground(pal.link())
-    url_format.setFontUnderline(True)
+def apply_code_block_backgrounds(text_edit: QTextEdit) -> None:
+    """Apply a full-width background colour to every fenced code block.
 
-    # Track link colour and default text brush for selective clearing
-    link_color = pal.link().color()
-    default_text_brush = pal.text()
+    ``QSyntaxHighlighter.setFormat()`` only paints behind individual
+    text characters, so the end of a short line keeps the regular widget
+    background.  Setting ``QTextBlockFormat.background`` instead causes
+    Qt's own layout engine to paint the background across the *entire*
+    width of the block before any characters are drawn.
 
-    # Get all text from document
-    md = document.toMarkdown()
+    This function is intentionally separate from
+    :class:`MentionHighlighter` because Qt's documentation forbids
+    modifying the document from inside ``highlightBlock()``.
 
-    users = [u.full_name for u in text_edit._user_list]
+    Two detection strategies are combined so that code blocks are
+    recognised in both scenarios:
 
-    # Find all words starting with @, @@, or @@@
-    p_user = r"(?P<user>@(?!@)\w+( \w+)?)"
-    p_version = r"(?P<version>@@(?!@)\w+( \w+)?)"
-    p_task = r"(?P<task>@@@\w+( \w+)?)"
-    p_link = r"(?P<link>\[[\w\s]+\]\(.+\))"
-    p_raw_link = r"(?P<raw_link>https?://)"
-    p_all = f"{p_user}|{p_version}|{p_task}|{p_link}|{p_raw_link}"
-    matches = list(re.finditer(p_all, md))
+    - **Display mode** (after ``document().setMarkdown()``): Qt marks
+      fenced code block lines with ``nonBreakableLines=True`` on the
+      block format.
+    - **Edit mode** (raw typing): Lines inside a ``\\`\\`\\`…\\`\\`\\```` fence
+      are detected by tracking an open-fence flag while iterating from
+      the first block of the document.
 
-    # Clear only mention/link-related formatting so that user-applied styles
-    # (bold, italic, heading, code, background, font family, etc.) are
-    # preserved across keystrokes.
-    text = document.toPlainText()
-    for i in range(len(text)):
-        cursor.setPosition(i)
-        cursor.setPosition(i + 1, QTextCursor.MoveMode.KeepAnchor)
-        char_fmt = cursor.charFormat()
-        # Skip checkbox objects — preserve their formatting entirely
-        if char_fmt.objectType() == CHECKBOX_FORMAT_TYPE:
-            continue
-        # Only reset properties that were set by mention/link formatting
-        has_mention_fmt = (
-            char_fmt.isAnchor()
-            or char_fmt.fontUnderline()
-            or char_fmt.foreground().color() == link_color
-        )
-        if has_mention_fmt:
-            clear_fmt = QTextCharFormat()
-            clear_fmt.setAnchor(False)
-            clear_fmt.setAnchorHref("")
-            clear_fmt.setFontUnderline(False)
-            if char_fmt.foreground().color() == link_color:
-                clear_fmt.setForeground(default_text_brush)
-            cursor.mergeCharFormat(clear_fmt)
+    The function is guarded by the ``_suppress_formatting`` attribute on
+    *text_edit* to prevent infinite recursion: writing block formats
+    emits ``contentsChanged``, which would otherwise re-enter this
+    function.
 
-    # We parsed the markdown but the cursor if using the plain text, so we
-    # need to keep track of the number of extra markdown characters to keep
-    # things aligned.
-    xtra = 0
-    for match in matches:
-        for key, val in match.groupdict().items():
-            if val is None:
-                continue
-            if key == "user":
-                cursor.setPosition(match.start())
-                if val[1:] in users:
-                    cursor.setPosition(
-                        match.end(), QTextCursor.MoveMode.KeepAnchor
-                    )
-                else:
-                    cursor.setPosition(
-                        match.end() - len(val.split()[-1]),
-                        QTextCursor.MoveMode.KeepAnchor,
-                    )
+    Args:
+        text_edit: The QTextEdit whose document should have fenced code
+            block backgrounds applied.
+    """
+    if getattr(text_edit, "_suppress_formatting", False):
+        return
 
-                cursor.mergeCharFormat(user_format)
-            elif key == "version":
-                cursor.setPosition(match.start())
-                cursor.setPosition(
-                    match.end(), QTextCursor.MoveMode.KeepAnchor
-                )
-                cursor.mergeCharFormat(user_format)
-            elif key == "task":
-                cursor.setPosition(match.start())
-                cursor.setPosition(
-                    match.end(), QTextCursor.MoveMode.KeepAnchor
-                )
-                cursor.mergeCharFormat(user_format)
-            if key == "raw_link":
-                cursor.setPosition(match.start())
-                cursor.setPosition(
-                    match.end(), QTextCursor.MoveMode.KeepAnchor
-                )
-                cursor.mergeCharFormat(user_format)
-            elif key == "link":
-                p0 = match.start() - xtra
-                cursor.setPosition(p0)
-                link_name = re.search(r"\[(.+)\]", val).group(1)
-                p1 = (match.start() - xtra) + len(link_name)
-                cursor.setPosition(p1, QTextCursor.MoveMode.KeepAnchor)
-                xtra += len(val) - len(link_name) + 1
-                cursor.mergeCharFormat(url_format)
+    doc = text_edit.document()
+    setattr(text_edit, "_suppress_formatting", True)
 
-    # Restore original cursor position
-    text_edit.document().blockSignals(False)
+    cursor = QTextCursor(doc)
+    cursor.beginEditBlock()
+
+    try:
+        in_fence = False
+        block = doc.begin()
+        while block.isValid():
+            text = block.text()
+            is_code = False
+
+            # Display mode: Qt-rendered fenced code block.
+            if block.blockFormat().nonBreakableLines():
+                is_code = True
+            else:
+                # Edit mode: raw ``` fence markers.
+                if in_fence:
+                    is_code = True
+                    if text.startswith("```"):
+                        in_fence = False  # closing fence line — still code
+                elif text.startswith("```"):
+                    is_code = True
+                    rest = text[3:]
+                    if "```" not in rest:
+                        in_fence = True  # opening fence
+                    # else: single-line ```…``` — is_code=True, no state change
+
+            bg_brush = block.blockFormat().background()
+            has_code_bg = (
+                bg_brush.style() != Qt.BrushStyle.NoBrush
+                and bg_brush.color().rgb() == CODE_BG.rgb()
+            )
+
+            if is_code and not has_code_bg:
+                cursor.setPosition(block.position())
+                new_fmt = QTextBlockFormat()
+                new_fmt.setBackground(CODE_BG)
+                cursor.mergeBlockFormat(new_fmt)
+            elif not is_code and has_code_bg:
+                # Remove the previously applied code background.
+                cursor.setPosition(block.position())
+                restored = QTextBlockFormat(block.blockFormat())
+                restored.clearBackground()
+                cursor.setBlockFormat(restored)
+
+            block = block.next()
+    except Exception as e:
+        logging.info(f"Error in apply_code_block_backgrounds: {e}")
+    finally:
+        # Ensure we always end the edit block and reset the flag
+        cursor.endEditBlock()
+        setattr(text_edit, "_suppress_formatting", False)

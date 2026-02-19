@@ -42,12 +42,15 @@ from .checkbox_handler import (
 )
 from .combo_box import AYComboBox
 from .comment_completion import (
+    apply_code_block_backgrounds,
     format_comment_on_change,
     on_completer_activated,
     on_completer_key_press,
     on_completer_text_changed,
     on_users_updated,
     setup_user_completer,
+    CODE_FG,
+    CODE_BG
 )
 from .container import AYContainer
 from .layouts import AYHBoxLayout, AYVBoxLayout
@@ -139,6 +142,7 @@ class AYTextEditor(AYTextEdit):
         """
         if not self._suppress_formatting:
             format_comment_on_change(self)
+            apply_code_block_backgrounds(self)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
@@ -260,6 +264,7 @@ class AYTextEditor(AYTextEdit):
             self._checkbox_handler.parse_and_render(md)
         else:
             self.document().setMarkdown(md, MD_DIALECT)
+        apply_code_block_backgrounds(self)
 
     def as_markdown(self) -> str:
         """Get the content as GitHub-flavored markdown.
@@ -456,8 +461,8 @@ class AYTextEditor(AYTextEdit):
                 fmt.setFontFamilies(
                     ["Courier New", "Menlo", "Monaco", "monospace"]
                 )
-                fmt.setBackground(QColor("#1e1e1e"))
-                fmt.setForeground(QColor("#d4d4d4"))
+                fmt.setBackground(CODE_BG)
+                fmt.setForeground(CODE_FG)
 
             if cursor.hasSelection():
                 cursor.mergeCharFormat(fmt)

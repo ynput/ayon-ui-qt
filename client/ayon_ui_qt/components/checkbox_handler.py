@@ -17,6 +17,7 @@ from qtpy.QtGui import (
     QTextDocument,
     QTextFormat,
     QFontMetrics,
+    QTextListFormat,
 )
 from qtpy.QtWidgets import QTextEdit
 
@@ -39,6 +40,10 @@ UNCHECKED_ICON = "radio_button_unchecked"
 UNCHECKED_COLOR = "#FFFFFF"
 CHECKED_ICON = "check_circle"
 CHECKED_COLOR = "#4CAF50"
+
+MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+
+_PH_RE = re.compile(r"^\s*\ufffc ")  # place holder regex
 
 
 @dataclass
@@ -211,17 +216,37 @@ class CheckboxHandler(QObject):
 
                 # Replace checkbox syntax with placeholder
                 # We'll insert the actual object after setting plain text
-                processed_lines.append(f"  \ufffc {text}")
+                processed_lines.append(f"{prefix}\ufffc {text}")
                 checkbox_index += 1
             else:
                 processed_lines.append(line)
 
         # Set the processed text
         processed_text = "\n".join(processed_lines)
-        self._text_edit.setPlainText(processed_text)
+        self._text_edit.setMarkdown(processed_text)
+        self._remove_list_bullets()
 
         # Now insert checkbox objects at placeholder positions
         self._insert_checkbox_objects()
+
+    def _remove_list_bullets(self) -> None:
+        """Remove bullet markers from list blocks containing checkboxes and
+        correct the indentation to match front-end."""
+        doc = self._text_edit.document()
+        processed_lists: set[int] = set()
+
+        block = doc.begin()
+        while block.isValid():
+            text_list = block.textList()
+            if text_list and id(text_list) not in processed_lists:
+                list_key = text_list.item(0).position()
+                if "\ufffc" in block.text():
+                    fmt = text_list.format()
+                    fmt.setStyle(QTextListFormat.Style.ListStyleUndefined)
+                    fmt.setIndent(0)
+                    text_list.setFormat(fmt)
+                    processed_lists.add(list_key)
+            block = block.next()
 
     def _insert_checkbox_objects(self) -> None:
         """Insert checkbox custom objects at placeholder positions."""
@@ -463,33 +488,27 @@ class CheckboxHandler(QObject):
             GitHub-flavored markdown string with checkbox syntax.
         """
         if not self._checkboxes:
-            return self._text_edit.toMarkdown()
+            return self._text_edit.toMarkdown(MD_DIALECT)
 
         # Get current text and replace placeholders with checkbox syntax
         # we use toMarkdown() to make sure the other formatted items have
         # already been dealt with.
-        text = self._text_edit.toMarkdown()
+        text = self._text_edit.toMarkdown(MD_DIALECT)
         lines = text.split("\n")
         result_lines: List[str] = []
 
         checkbox_iter = iter(self._checkboxes)
         current_cb = next(checkbox_iter, None)
-        prev_line_had_checkbox = False
 
         for line in lines:
-            if prev_line_had_checkbox and not line.strip():
-                # Empty line after checkbox: skip
-                prev_line_had_checkbox = False
-                continue
             if "\ufffc" in line and current_cb:
                 # Replace "  \ufffc " with prefix + checkbox syntax
                 checked_char = "x" if current_cb.checked else " "
-                # Remove the two spaces before \ufffc and add the proper prefix
-                line = line.replace(
-                    "  \ufffc ", f"{current_cb.prefix}[{checked_char}] ", 1
+                # Remove the spaces before \ufffc and add the proper prefix
+                line = _PH_RE.sub(
+                    f"{current_cb.prefix}[{checked_char}] ", line, count=1
                 )
                 current_cb = next(checkbox_iter, None)
-                prev_line_had_checkbox = True
             result_lines.append(line)
 
         return "\n".join(result_lines)
