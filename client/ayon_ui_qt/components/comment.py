@@ -712,6 +712,7 @@ class AYComment(AYContainer):
         self._user_list: list[User] = user_list or []
         self._bg_color = None
         self._image_widgets = {}
+        self._attachments_built = False
 
         super().__init__(
             *args,
@@ -728,12 +729,20 @@ class AYComment(AYContainer):
 
         # configure
         if self._data:
-            self.text_field.set_markdown(self._data.comment)
-            self.date.setText(self._data.short_date)
-            self.set_comment_category()
-            self._build_image_attachments()
+            self.update_comment()
 
         self.text_field.checklist_changed.connect(self._on_checklist_changed)
+
+    def update_comment(self, data: CommentModel | None = None):
+        prev_data = self._data
+        if data:
+            self._data = data
+        self.text_field.set_markdown(self._data.comment)
+        self.date.setText(self._data.short_date)
+        self.set_comment_category()
+        if not self._attachments_built or prev_data.files != self._data.files:
+            self.images_container.clear()
+            self._build_image_attachments()
 
     def _build_top_bar(self):
         self.user_icon = AYUserImage(
@@ -892,16 +901,11 @@ class AYComment(AYContainer):
                 frame=file_model.frame,
             )
 
-            # # Set fixed width to prevent expanding
-            # image_widget.setFixedWidth(max_image_width)
-            # # Set maximum height to maintain aspect ratio
-            # image_widget.setMaximumHeight(800)
-
             self.images_container.add_widget(image_widget)
             self._image_widgets[file_model.id] = image_widget
 
-        # # Add stretch to push images to the left
-        # self.images_container.addStretch()
+        # mark as built to avoid rebuilding on every update
+        self._attachments_built = True
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
@@ -1021,10 +1025,14 @@ if __name__ == "__main__":
                         "Text Styling\n"
                         "------------\n"
                         "regular, **bold**, *italic*, ***bold italic*** and `some code` text.\n\n"
+                        "[A link](https://www.google.com)\n\n"
                         "```\n"
                         "# A code fragment\n"
                         "print('Hello World')\n"
                         "```\n\n"
+                        "1. First item\n"
+                        "2. Second item\n"
+                        "3. Third item\n\n"
                         "Is it all working ?\n"
                     ),
                 )
