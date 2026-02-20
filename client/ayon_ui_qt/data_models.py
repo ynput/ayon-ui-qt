@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Flag, auto
 from typing import Any, List, Optional
-from enum import IntEnum, auto
+
+RE_HAS_CHECKLIST = re.compile(r"\s*[-*+]\s+\[[xX ]\]\s*")
 
 
-class ActivityCategory(IntEnum):
-    ALL = auto()
-    COMMENT = auto()
+class ActivityCategory(Flag):
+    COMMENT = 1
     STATUS_CHANGE = auto()
     VERSION_PUBLISH = auto()
     CHECKLIST = auto()
     DETAILS = auto()
+    ALL = COMMENT | STATUS_CHANGE | VERSION_PUBLISH | CHECKLIST
 
 
 def short_date(date_str: str) -> str:
@@ -120,7 +123,7 @@ class CommentModel:
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
-    comment: str = ""
+    comment: str = ""  # type: ignore
     category: str = ""
     category_color: str = ""
     comment_date: str = ""
@@ -132,6 +135,7 @@ class CommentModel:
     annotations: list[AnnotationModel] = field(
         default_factory=list, hash=False
     )
+    _comment: str = field(init=False, repr=False)
 
     def __post_init__(self):
         """Set the date if not set and compute the short date."""
@@ -139,6 +143,17 @@ class CommentModel:
             self.comment_date = datetime.now(timezone.utc).isoformat()
 
         self.short_date = short_date(self.comment_date)
+
+    @property
+    def comment(self):  # noqa: F811
+        return self._comment
+
+    @comment.setter
+    def comment(self, value: str):
+        """Check if the comment contains a checklist."""
+        if re.search(RE_HAS_CHECKLIST, str(value)):
+            self.type = ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+        self._comment = value
 
 
 # -----------------------------------------------------------------------------
@@ -258,3 +273,44 @@ if __name__ == "__main__":
     print(f"v ={v}  hash(v) = {hash(v)}")
     s = StatusChangeModel()
     print(f"s ={s}  hash(s) = {hash(s)}")
+    #  test checkbox detection
+    print()
+    comment = "This contains a checklist\n\n- [ ] do this\n- [x] done this\n"
+    c = CommentModel(comment=comment)
+    print(f"checklist test:\n - comment: {c.comment!r}\n - type: {c.type!r}")
+    comment = "This does not contains a checklist\n\n"
+    c = CommentModel(comment=comment)
+    print(f"checklist test:\n - comment: {c.comment!r}\n - type: {c.type!r}")
+    print()
+    s = ActivityCategory.COMMENT
+    print(f"s = {s!r}")
+    print(f"s == ActivityCategory.COMMENT -> {s == ActivityCategory.COMMENT}")
+    print(
+        f"s == ActivityCategory.CHECKLIST -> {s == ActivityCategory.CHECKLIST}"
+    )
+    ch = ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+    print(f"ch = {ch!r}")
+    print(
+        f"ch == ActivityCategory.COMMENT -> {ch == ActivityCategory.COMMENT}"
+    )
+    print(
+        f"ch == ActivityCategory.CHECKLIST -> {ch == ActivityCategory.CHECKLIST}"
+    )
+    print(
+        f"ch & ActivityCategory.CHECKLIST -> {ch & ActivityCategory.CHECKLIST}"
+    )
+    print(f"ch & ActivityCategory.COMMENT -> {ch & ActivityCategory.COMMENT}")
+    print(
+        f"ch & ActivityCategory.VERSION_PUBLISH -> {ch & ActivityCategory.VERSION_PUBLISH}"
+    )
+    print()
+    for filter in list(ActivityCategory) + [
+        ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+    ]:
+        print(f"filter = {filter!r} -----------------------------------------")
+        for cat in ActivityCategory:
+            # print(f"{cat.name} -> {cat.value}")
+            print(
+                f"bool({cat.name} & filter) -> {bool(cat & filter)}"
+            )
+            # print(f"filter & {cat.name}  == {cat.name} -> {filter & cat == cat}")
