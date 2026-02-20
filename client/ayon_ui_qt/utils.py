@@ -63,7 +63,7 @@ def process_activity_data(
     category_colors = {c.name: c.color for c in project_data.comment_category}
 
     ui_data = []
-    nothing = "Not available"
+    nothing = "n/a"
     for act in activities:
         act_data = act.get("activityData", {})
         if isinstance(act_data, str):
@@ -114,14 +114,19 @@ def process_activity_data(
                 )
             )
         elif activity_type == "status.change":
-            # print(act.get("activityData", {}).get("oldValue", nothing))
+            version = act_data.get("origin", {}).get("name", nothing)
+            parents: list[dict] = act_data.get("parents", {})
+            product = next(
+                (p["name"] for p in parents if p["type"] == "product"),
+                nothing,
+            )
             ui_data.append(
                 StatusChangeModel(
                     activity_id=activity_id,
                     user_full_name=user_full_name,
                     user_name=user_name,
-                    product=nothing,
-                    version=nothing,
+                    product=product,
+                    version=version,
                     old_status=str(act_data.get("oldValue", nothing)),
                     new_status=str(act_data.get("newValue", nothing)),
                     date=date,
