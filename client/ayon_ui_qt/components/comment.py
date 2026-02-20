@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from qtpy.QtGui import (
     QPainter,
     QPaintEvent,
     QPixmap,
+    QTextCharFormat,
+    QTextCursor,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
@@ -39,7 +42,12 @@ from ..image_cache import ImageCache
 from ..utils import color_blend
 from ..variants import QTextEditVariants
 from .buttons import AYButton
-from .checkbox_handler import CHECKBOX_FORMAT_TYPE, CheckboxHandler
+from .checkbox_handler import (
+    CHECKBOX_CHECKED_PROP,
+    CHECKBOX_FORMAT_TYPE,
+    CHECKBOX_INDEX_PROP,
+    CheckboxHandler,
+)
 from .combo_box import ALL_STATUSES
 from .comment_completion import (
     apply_code_block_backgrounds,
@@ -400,11 +408,100 @@ class AYCommentField(AYTextEdit):
             -self.verticalScrollBar().value(),
         )
 
+    def _insert_checkbox_at_cursor(self, cursor: QTextCursor) -> None:
+        """Insert a new unchecked checkbox object at the cursor position.
+
+        Inserts the custom checkbox object character (``\\ufffc``), and a
+        trailing space, then records the document position on the
+        :class:`CheckboxItem` for fast hit-testing.
+        The checkbox handler must already be initialised via
+        :meth:`_setup_checkbox_handler`.
+
+        Args:
+            cursor: Cursor at the insertion point; advanced past the
+                inserted characters on return.
+        """
+        assert self._checkbox_handler is not None
+        new_item = self._checkbox_handler.add_checkbox()
+        fmt = QTextCharFormat()
+        fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
+        fmt.setProperty(CHECKBOX_CHECKED_PROP, False)
+        fmt.setProperty(CHECKBOX_INDEX_PROP, new_item.index)
+        fmt.setVerticalAlignment(
+            QTextCharFormat.VerticalAlignment.AlignBaseline
+        )
+        new_item.doc_position = cursor.position()
+        cursor.insertText("\ufffc", fmt)
+        cursor.insertText(" ")
+
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
         if on_completer_key_press(self, event):
             event.accept()
             return
+
+        # Auto-continue checkbox on Enter
+        if (
+            event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+            and self._checkbox_handler
+            and self._checkbox_handler.has_checkboxes()
+        ):
+            cursor = self.textCursor()
+            block_text = cursor.block().text()
+
+            if "\ufffc" in block_text:
+                # Extract text after the checkbox object char
+                parts = block_text.split("\ufffc", 1)
+                after_checkbox = parts[1].strip() if len(parts) > 1 else ""
+                position_in_block = cursor.positionInBlock()
+                token_pos_in_block = block_text.index("\ufffc")
+                token_pos = (
+                    cursor.position() - position_in_block + token_pos_in_block
+                )
+                cb_index = self._checkbox_handler.get_checkbox_at_position(
+                    token_pos
+                )
+
+                if not after_checkbox:
+                    self._suppress_formatting = True
+                    try:
+                        # Empty checkbox line → end the list
+                        # Remove the checkbox content from current block
+                        cursor.movePosition(
+                            QTextCursor.MoveOperation.StartOfBlock,
+                            QTextCursor.MoveMode.MoveAnchor,
+                        )
+                        cursor.movePosition(
+                            QTextCursor.MoveOperation.EndOfBlock,
+                            QTextCursor.MoveMode.KeepAnchor,
+                        )
+                        cursor.removeSelectedText()
+                        # Remove the last checkbox from handler
+                        if cb_index is not None:
+                            self._checkbox_handler.remove_checkbox(cb_index)
+                    finally:
+                        self._suppress_formatting = False
+                    # Insert a plain newline
+                    super().keyPressEvent(event)
+                    return
+
+                # Non-empty checkbox line → insert new checkbox
+                event.accept()
+                self._suppress_formatting = True
+
+                try:
+                    cursor.beginEditBlock()
+                    cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+                    cursor.insertBlock()
+                    self._insert_checkbox_at_cursor(cursor)
+                    cursor.endEditBlock()
+                except Exception as err:
+                    logging.debug("Error inserting checkbox: %s", err)
+                finally:
+                    self._suppress_formatting = False
+                self.setTextCursor(cursor)
+                return
+
         super().keyPressEvent(event)
 
     def _is_checkbox_at_cursor(

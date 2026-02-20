@@ -467,6 +467,18 @@ class CheckboxHandler(QObject):
         self._checkboxes.append(item)
         return item
 
+    def remove_checkbox(self, index: int) -> None:
+        """Remove a checkbox from the tracked list.
+
+        Args:
+            index: The index of the checkbox to remove.
+        """
+        if 0 <= index < len(self._checkboxes):
+            self._checkboxes.pop(index)
+            # Update indices of remaining checkboxes
+            for i, cb in enumerate(self._checkboxes[index:], start=index):
+                cb.index = i
+
     def remove_last_checkbox(self) -> bool:
         """Remove the last checkbox from the tracked list.
 
