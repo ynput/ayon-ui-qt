@@ -3,6 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Optional
+from enum import IntEnum, auto
+
+
+class ActivityCategory(IntEnum):
+    ALL = auto()
+    COMMENT = auto()
+    STATUS_CHANGE = auto()
+    VERSION_PUBLISH = auto()
+    CHECKLIST = auto()
+    DETAILS = auto()
 
 
 def short_date(date_str: str) -> str:
@@ -55,7 +65,9 @@ class StatusChangeModel:
     new_status: str = ""
     date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="status.change", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.STATUS_CHANGE, hash=False
+    )
 
     def __post_init__(self):
         self.short_date = short_date(self.date)
@@ -71,7 +83,9 @@ class VersionPublishModel:
     product: str = ""
     date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="version.publish", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.VERSION_PUBLISH, hash=False
+    )
 
     def __post_init__(self):
         self.short_date = short_date(self.date)
@@ -92,6 +106,7 @@ class FileModel:
     Attachments could be images, there could be also preview available for
     them.
     """
+
     id: str
     mime: str
     local_path: str = ""
@@ -110,9 +125,13 @@ class CommentModel:
     category_color: str = ""
     comment_date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="comment", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.COMMENT, hash=False
+    )
     files: list[FileModel] = field(default_factory=list, hash=False)
-    annotations: list[AnnotationModel] = field(default_factory=list, hash=False)
+    annotations: list[AnnotationModel] = field(
+        default_factory=list, hash=False
+    )
 
     def __post_init__(self):
         """Set the date if not set and compute the short date."""
@@ -163,6 +182,7 @@ class Team:
 @dataclass
 class CommentCategory:
     """Model for powerpack `activity_categories` settings"""
+
     name: str
     color: str
     access: dict[str, Any]
@@ -176,9 +196,8 @@ class ProjectData:
     users: List[User]
     teams: List[Team]
     anatomy: dict[str, Any]
-    comment_category : List[CommentCategory]
+    comment_category: List[CommentCategory]
     current_user: Optional[User]
-
 
     @staticmethod
     def not_set():
@@ -189,7 +208,7 @@ class ProjectData:
             teams=[],
             anatomy={},
             comment_category=[],
-            current_user=None
+            current_user=None,
         )
 
 
@@ -227,7 +246,7 @@ class VersionData:
             assignees=[],
             attrib={},
             thumbnail_id=None,
-            thumbnail_local_path=None
+            thumbnail_local_path=None,
         )
 
 
