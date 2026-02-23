@@ -13,7 +13,7 @@ name = "ui_qt"
 title = "UI Qt"
 
 # Required: Valid semantic version (https://semver.org/)
-version = "0.1.1-dev"
+version = "0.1.2-dev"
 
 # Client directory containing the addon code
 client_dir = "ayon_ui_qt"
