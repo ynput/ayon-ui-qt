@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-from pathlib import Path
+import logging
 import tempfile
+from pathlib import Path
 
-from qtpy.QtCore import QEvent, QPoint, Qt, Signal, QSize, QRect
+from qtpy.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRect,
+    Qt,
+    Signal,
+)
 from qtpy.QtGui import (
     QColor,
     QEnterEvent,
     QPainter,
     QPaintEvent,
     QPixmap,
+    QTextCharFormat,
+    QTextCursor,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
@@ -28,12 +38,19 @@ from ..data_models import (
     User,
     VersionPublishModel,
 )
+from ..image_cache import ImageCache
 from ..utils import color_blend
 from ..variants import QTextEditVariants
 from .buttons import AYButton
+from .checkbox_handler import (
+    CHECKBOX_CHECKED_PROP,
+    CHECKBOX_FORMAT_TYPE,
+    CHECKBOX_INDEX_PROP,
+    CheckboxHandler,
+)
 from .combo_box import ALL_STATUSES
 from .comment_completion import (
-    apply_web_markdown_formatting,
+    apply_code_block_backgrounds,
     format_comment_on_change,
     on_completer_activated,
     on_completer_key_press,
@@ -45,7 +62,6 @@ from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
-from ..image_cache import ImageCache
 
 # STATUS ---------------------------------------------------------------------
 
@@ -198,9 +214,17 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 
 class AYCommentField(AYTextEdit):
-    """Text field for comment display with markdown support."""
+    """Text field for comment display with markdown and checkbox support.
+
+    Supports GitHub-flavored markdown checkboxes (- [ ] and - [x]) that
+    render with Material icons and can be toggled even in read-only mode.
+
+    Signals:
+        checklist_changed: Emitted when a checkbox state changes.
+    """
 
     Variants = QTextEditVariants
+    checklist_changed = Signal()
 
     def __init__(
         self,
@@ -219,10 +243,17 @@ class AYCommentField(AYTextEdit):
         self._user_list: list[User] = user_list or []
         self._data = model
         self._bg_color = None
+        self._checkbox_handler: CheckboxHandler | None = None
+        # Guard flag: when True, format_comment_on_change is a no-op.
+        self._suppress_formatting: bool = False
 
         super().__init__(*args, variant=variant, **kwargs)
         self.setAutoFormatting(QTextEdit.AutoFormattingFlag.AutoAll)
         self.setSizeAdjustPolicy(QTextEdit.SizeAdjustPolicy.AdjustToContents)
+        self.document().setIndentWidth(22)
+        # Enable mouse tracking on viewport to receive mouseMoveEvent
+        # self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
         self.set_markdown(text)
 
         # configure
@@ -250,9 +281,18 @@ class AYCommentField(AYTextEdit):
         )
 
         # Connect text changed signal to format mentions
-        self.document().contentsChanged.connect(
-            lambda: format_comment_on_change(self)
-        )
+        self.document().contentsChanged.connect(self._on_contents_changed)
+
+    def _on_contents_changed(self) -> None:
+        """Forward contentsChanged to format_comment_on_change.
+
+        Skipped when ``_suppress_formatting`` is True so that checkbox
+        insertion code can mutate the document without triggering a
+        full re-format pass.
+        """
+        if not self._suppress_formatting:
+            format_comment_on_change(self)
+            apply_code_block_backgrounds(self)
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:
@@ -264,43 +304,57 @@ class AYCommentField(AYTextEdit):
         return self._bg_color
 
     def set_markdown(self, md: str) -> None:
-        """Set markdown content, supporting both standard markdown and web markdown.
+        """Set markdown content with checkbox and web markdown support.
 
-        If text contains web markdown syntax (text\\n----, **bold**, _italic_, [link](url), `code`),
-        it will be parsed and formatted accordingly with syntax removed.
-        Otherwise, uses standard QTextDocument markdown.
+        Supports:
+        - GitHub-flavored markdown checkboxes (- [ ] and - [x])
+        - Web markdown syntax (text\\n----, **bold**, _italic_, [link](url))
+        - Standard QTextDocument markdown
 
         Args:
             md: Markdown text to display
         """
-        # Check if text contains web markdown syntax
-        has_web_markdown = any(
-            pattern in md for pattern in ["\n----", "**", "_", "[", "`"]
-        )
+        # Check for checkboxes first
+        if CheckboxHandler.contains_checkboxes(md):
+            self._setup_checkbox_handler()
+            # Handler is guaranteed to exist after _setup_checkbox_handler
+            assert self._checkbox_handler is not None
+            self._checkbox_handler.parse_and_render(md)
+            if self._read_only:
+                self._adjust_height_to_content()
+            return
 
-        if has_web_markdown:
-            # Use web markdown formatting (removes syntax, applies formatting)
-            self.set_web_markdown(md)
-        else:
-            # Use standard markdown
-            self.document().setMarkdown(md, MD_DIALECT)
+        self.document().setMarkdown(md, MD_DIALECT)
+        apply_code_block_backgrounds(self)
 
         if self._read_only:
             self._adjust_height_to_content()
 
-    def set_web_markdown(self, md: str, styles: dict | None = None) -> None:
-        """Set markdown from web data with formatting.
+    def _setup_checkbox_handler(self) -> None:
+        """Initialize checkbox handler if not already done."""
+        if self._checkbox_handler is None:
+            self._checkbox_handler = CheckboxHandler(self)
+            self._checkbox_handler.checklist_changed.connect(
+                self._on_checklist_changed
+            )
 
-        Removes markdown syntax (**text** becomes text with bold formatting).
-
-        Args:
-            md: Markdown text from web (**bold**, _italic_, [link](url), `code`)
-            styles: Optional custom styles for formatting
-        """
-        apply_web_markdown_formatting(self, md, styles=styles)
-        self.setReadOnly(self._read_only)
+    def _on_checklist_changed(self) -> None:
+        """Handle checkbox state changes."""
+        self.checklist_changed.emit()
+        if self._read_only:
+            self._adjust_height_to_content()
 
     def as_markdown(self) -> str:
+        """Get the content as GitHub-flavored markdown.
+
+        If the field contains checkboxes, returns the markdown with
+        checkbox syntax (- [ ] and - [x]) reflecting current state.
+
+        Returns:
+            Markdown string.
+        """
+        if self._checkbox_handler and self._checkbox_handler.has_checkboxes():
+            return self._checkbox_handler.to_markdown()
         return self.document().toMarkdown(MD_DIALECT)
 
     def _on_text_changed(self) -> None:
@@ -339,21 +393,174 @@ class AYCommentField(AYTextEdit):
         if self._read_only:
             self._adjust_height_to_content()
 
+    def contentOffset(self) -> QPointF:
+        """Compute content offset (QPlainTextEdit compatibility).
+
+        Returns the offset from viewport coordinates to document coordinates.
+        This method provides compatibility with QPlainTextEdit for checkbox
+        hit-testing in _is_checkbox_at_cursor.
+
+        Returns:
+            QPointF offset where viewport origin corresponds to document coords.
+        """
+        return QPointF(
+            -self.horizontalScrollBar().value(),
+            -self.verticalScrollBar().value(),
+        )
+
+    def _insert_checkbox_at_cursor(self, cursor: QTextCursor) -> None:
+        """Insert a new unchecked checkbox object at the cursor position.
+
+        Inserts the custom checkbox object character (``\\ufffc``), and a
+        trailing space, then records the document position on the
+        :class:`CheckboxItem` for fast hit-testing.
+        The checkbox handler must already be initialised via
+        :meth:`_setup_checkbox_handler`.
+
+        Args:
+            cursor: Cursor at the insertion point; advanced past the
+                inserted characters on return.
+        """
+        assert self._checkbox_handler is not None
+        new_item = self._checkbox_handler.add_checkbox()
+        fmt = QTextCharFormat()
+        fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
+        fmt.setProperty(CHECKBOX_CHECKED_PROP, False)
+        fmt.setProperty(CHECKBOX_INDEX_PROP, new_item.index)
+        fmt.setVerticalAlignment(
+            QTextCharFormat.VerticalAlignment.AlignBaseline
+        )
+        new_item.doc_position = cursor.position()
+        cursor.insertText("\ufffc", fmt)
+        cursor.insertText(" ")
+
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
         if on_completer_key_press(self, event):
             event.accept()
             return
+
+        # Auto-continue checkbox on Enter
+        if (
+            event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+            and self._checkbox_handler
+            and self._checkbox_handler.has_checkboxes()
+        ):
+            cursor = self.textCursor()
+            block_text = cursor.block().text()
+
+            if "\ufffc" in block_text:
+                # Extract text after the checkbox object char
+                parts = block_text.split("\ufffc", 1)
+                after_checkbox = parts[1].strip() if len(parts) > 1 else ""
+                position_in_block = cursor.positionInBlock()
+                token_pos_in_block = block_text.index("\ufffc")
+                token_pos = (
+                    cursor.position() - position_in_block + token_pos_in_block
+                )
+                cb_index = self._checkbox_handler.get_checkbox_at_position(
+                    token_pos
+                )
+
+                if not after_checkbox:
+                    self._suppress_formatting = True
+                    try:
+                        # Empty checkbox line → end the list
+                        # Remove the checkbox content from current block
+                        cursor.movePosition(
+                            QTextCursor.MoveOperation.StartOfBlock,
+                            QTextCursor.MoveMode.MoveAnchor,
+                        )
+                        cursor.movePosition(
+                            QTextCursor.MoveOperation.EndOfBlock,
+                            QTextCursor.MoveMode.KeepAnchor,
+                        )
+                        cursor.removeSelectedText()
+                        # Remove the last checkbox from handler
+                        if cb_index is not None:
+                            self._checkbox_handler.remove_checkbox(cb_index)
+                    finally:
+                        self._suppress_formatting = False
+                    # Insert a plain newline
+                    super().keyPressEvent(event)
+                    return
+
+                # Non-empty checkbox line → insert new checkbox
+                event.accept()
+                self._suppress_formatting = True
+
+                try:
+                    cursor.beginEditBlock()
+                    cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+                    cursor.insertBlock()
+                    self._insert_checkbox_at_cursor(cursor)
+                    cursor.endEditBlock()
+                except Exception as err:
+                    logging.debug("Error inserting checkbox: %s", err)
+                finally:
+                    self._suppress_formatting = False
+                self.setTextCursor(cursor)
+                return
+
         super().keyPressEvent(event)
 
-    def mousePressEvent(self, event) -> None:
-        """Handle mouse press events to open links only in read-only mode."""
-        # Only handle link clicks in read-only mode (display comments)
-        if self.isReadOnly():
-            # Get the character at the click position
-            cursor = self.cursorForPosition(event.pos())
-            char_format = cursor.charFormat()
+    def _is_checkbox_at_cursor(
+        self, click_pos: QPoint
+    ) -> tuple[bool, int | None]:
+        """Check if a click position hits a checkbox bounding rect.
 
+        Delegates to `CheckboxHandler.find_checkbox_at_click` which
+        uses stored document positions instead of scanning the full text.
+
+        Args:
+            click_pos: QPoint from event.pos(), viewport coords.
+
+        Returns:
+            Tuple of (is_checkbox, document_position_for_lookup).
+        """
+        if not self._checkbox_handler:
+            return False, None
+
+        result = self._checkbox_handler.find_checkbox_at_click(
+            click_pos, self.contentOffset().toPoint()
+        )
+        if result is None:
+            return False, None
+        return result
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        """Prevent text selection when double-clicking checkboxes."""
+        is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
+        if is_cb and cb_pos is not None:
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        """Handle mouse press events for checkboxes and links.
+
+        Checkboxes can be toggled even in read-only mode.
+        Links are opened only in read-only mode.
+        """
+        # Get the character at the click position
+        cursor = self.cursorForPosition(event.pos())
+        char_format = cursor.charFormat()
+
+        # Check if clicked on a checkbox (works in both modes)
+        is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
+        if is_cb and cb_pos is not None:
+            assert self._checkbox_handler is not None  # implied by is_cb==True
+            checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
+                cb_pos
+            )
+            if checkbox_idx is not None:
+                self._checkbox_handler.toggle_checkbox(checkbox_idx)
+                self.viewport().update()
+                event.accept()
+                return
+
+        # Handle link clicks only in read-only mode (display comments)
+        if self.isReadOnly():
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
                 import webbrowser
@@ -366,19 +573,24 @@ class AYCommentField(AYTextEdit):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
-        """Change cursor to hand when hovering over links in read-only mode."""
-        # Only show hand cursor in read-only mode (display comments)
-        if self.isReadOnly():
-            cursor = self.cursorForPosition(event.pos())
-            char_format = cursor.charFormat()
+        """Change cursor to arrow when hovering over checkboxes, hand for links."""
+        cursor = self.cursorForPosition(event.pos())
+        char_format = cursor.charFormat()
 
-            # Show hand cursor only for actual links with href
+        # Show arrow cursor for checkboxes (in any mode)
+        if char_format.objectType() == CHECKBOX_FORMAT_TYPE:
+            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+            super().mouseMoveEvent(event)
+            return
+
+        # Show hand cursor for links (only in read-only mode)
+        if self.isReadOnly():
             if char_format.isAnchor() and char_format.anchorHref():
-                self.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
             else:
-                self.setCursor(Qt.CursorShape.IBeamCursor)
+                self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
         else:
-            self.setCursor(Qt.CursorShape.IBeamCursor)
+            self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
 
         super().mouseMoveEvent(event)
 
@@ -597,6 +809,7 @@ class AYComment(AYContainer):
         self._user_list: list[User] = user_list or []
         self._bg_color = None
         self._image_widgets = {}
+        self._attachments_built = False
 
         super().__init__(
             *args,
@@ -613,9 +826,19 @@ class AYComment(AYContainer):
 
         # configure
         if self._data:
-            self.text_field.set_markdown(self._data.comment)
-            self.date.setText(self._data.short_date)
-            self.set_comment_category()
+            self.update_comment()
+
+        self.text_field.checklist_changed.connect(self._on_checklist_changed)
+
+    def update_comment(self, data: CommentModel | None = None):
+        prev_data = self._data
+        if data:
+            self._data = data
+        self.text_field.set_markdown(self._data.comment)
+        self.date.setText(self._data.short_date)
+        self.set_comment_category()
+        if not self._attachments_built or prev_data.files != self._data.files:
+            self.images_container.clear()
             self._build_image_attachments()
 
     def _build_top_bar(self):
@@ -775,16 +998,11 @@ class AYComment(AYContainer):
                 frame=file_model.frame,
             )
 
-            # # Set fixed width to prevent expanding
-            # image_widget.setFixedWidth(max_image_width)
-            # # Set maximum height to maintain aspect ratio
-            # image_widget.setMaximumHeight(800)
-
             self.images_container.add_widget(image_widget)
             self._image_widgets[file_model.id] = image_widget
 
-        # # Add stretch to push images to the left
-        # self.images_container.addStretch()
+        # mark as built to avoid rebuilding on every update
+        self._attachments_built = True
 
     def _edit_comment(self):
         """Make the field editable, hide the edit/del buttons and show
@@ -862,12 +1080,19 @@ class AYComment(AYContainer):
         if isinstance(image_attachment, AYImageAttachment):
             if not image_attachment._thumb_path:
                 ic = ImageCache.get_instance()
-                image_attachment._thumb_path = ic.get_path(f"act_thumb_{file_id}")
+                image_attachment._thumb_path = ic.get_path(
+                    f"act_thumb_{file_id}"
+                )
             if not image_attachment._image_path:
                 ic = ImageCache.get_instance()
                 image_attachment._image_path = ic.get_path(f"act_{file_id}")
             if image_attachment:
                 image_attachment._load_thumbnail()
+
+    def _on_checklist_changed(self):
+        md = self.text_field.as_markdown()
+        self._data.comment = md
+        self.comment_edited.emit(self._data)
 
 
 if __name__ == "__main__":
@@ -888,14 +1113,25 @@ if __name__ == "__main__":
             layout_margin=16,
         )
 
-        w.addStretch()
-
         w.add_widget(
             AYComment(
                 data=CommentModel(
                     user_src=str(av1),
                     user_full_name="Bob Morane",
-                    comment="This is great !",
+                    comment=(
+                        "Text Styling\n"
+                        "------------\n"
+                        "regular, **bold**, *italic*, ***bold italic*** and `some code` text.\n\n"
+                        "[A link](https://www.google.com)\n\n"
+                        "```\n"
+                        "# A code fragment\n"
+                        "print('Hello World')\n"
+                        "```\n\n"
+                        "1. First item\n"
+                        "2. Second item\n"
+                        "3. Third item\n\n"
+                        "Is it all working ?\n"
+                    ),
                 )
             )
         )
@@ -923,7 +1159,45 @@ if __name__ == "__main__":
                 )
             )
         )
-        w.add_widget(AYTextBox(num_lines=3, variant=AYTextBox.Variants.High))
+
+        # Test checkbox functionality
+        checklist_comment = AYComment(
+            data=CommentModel(
+                user_full_name="Task Manager",
+                comment=(
+                    "Review checklist:\n"
+                    "- [x] Check animation timing\n"
+                    "- [ ] Review color grading\n"
+                    "- [ ] Verify audio sync\n"
+                    "- [x] Approve final render"
+                ),
+                category="Checklist",
+                category_color="#5599ff",
+            )
+        )
+        # Connect to log checkbox changes
+        checklist_comment.text_field.checklist_changed.connect(
+            lambda: print(
+                "Checkbox changed! New markdown:\n"
+                + checklist_comment.text_field.as_markdown()
+            )
+        )
+        w.add_widget(checklist_comment)
+
+        tb = AYTextBox(num_lines=10, variant=AYTextBox.Variants.High)
+        w.add_widget(tb)
+        tb.signals.comment_submitted.connect(
+            lambda *args: print(
+                f"Comment submitted: {'=' * (80 - len('Comment submitted: '))}\n",
+                f"{args[0]}",
+                f"{'-' * 80}\n",
+                f"   markdown: {args[0]!r}\n",
+                f"   category: {args[1]!r}\n",
+                f"attachments: {args[2]}\n",
+                f"{'-' * 80}\n",
+            )
+        )
+
         return w
 
     test(build, style=Style.AyonStyleOverCSS)
