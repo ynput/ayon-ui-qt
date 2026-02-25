@@ -470,14 +470,47 @@ class CheckboxHandler(QObject):
     def remove_checkbox(self, index: int) -> None:
         """Remove a checkbox from the tracked list.
 
+        Re-indexes the Python list **and** patches the stale
+        ``CHECKBOX_INDEX_PROP`` values stored in the live
+        ``QTextDocument`` so that subsequent hit-tests via
+        :meth:`get_checkbox_at_position` return correct indices.
+
         Args:
             index: The index of the checkbox to remove.
         """
-        if 0 <= index < len(self._checkboxes):
-            self._checkboxes.pop(index)
-            # Update indices of remaining checkboxes
+        if not 0 <= index < len(self._checkboxes):
+            return
+
+        self._checkboxes.pop(index)
+
+        # Re-index the Python list and sync each affected document char format.
+        doc = self._text_edit.document()
+        doc.blockSignals(True)
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        try:
             for i, cb in enumerate(self._checkboxes[index:], start=index):
                 cb.index = i
+                pos = cb.doc_position
+                if pos < 0:
+                    continue
+                cursor.setPosition(pos)
+                cursor.setPosition(pos + 1, QTextCursor.MoveMode.KeepAnchor)
+                fmt = QTextCharFormat()
+                fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
+                fmt.setProperty(CHECKBOX_CHECKED_PROP, cb.checked)
+                fmt.setProperty(CHECKBOX_INDEX_PROP, cb.index)
+                fmt.setVerticalAlignment(
+                    QTextCharFormat.VerticalAlignment.AlignBaseline
+                )
+                cursor.setCharFormat(fmt)
+        except Exception:
+            log.warning(
+                "Failed to re-index checkboxes in document", exc_info=True
+            )
+        finally:
+            cursor.endEditBlock()
+            doc.blockSignals(False)
 
     def remove_last_checkbox(self) -> bool:
         """Remove the last checkbox from the tracked list.
