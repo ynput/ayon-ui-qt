@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import atexit
 import logging
 import tempfile
 from pathlib import Path
+from shutil import rmtree
 
 from qtpy.QtCore import (
     QEvent,
@@ -596,9 +598,11 @@ class AYCommentField(AYTextEdit):
 
 
 class AYImageAttachment(QLabel):
-    """Widget to display an image attachment with thumbnail and full-size preview."""
+    """Widget to display an image attachment with thumbnail and full-size
+    preview."""
 
     no_img = get_icon("panorama", color="#666666")
+    cacher_tmp_dir: Path | None = None
 
     def __init__(
         self,
@@ -643,6 +647,7 @@ class AYImageAttachment(QLabel):
             return
 
         thumb_path = Path(self._thumb_path)
+        cache_key = f"{thumb_path.name}_{self._max_width}_{self._max_height}"
 
         def _thumbnail_cacher() -> Path:
             """Cache the scaled-down thumbnail image."""
@@ -660,18 +665,13 @@ class AYImageAttachment(QLabel):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            tmp_dir = Path(tempfile.mkdtemp())
-            tmp_file_path = tmp_dir / f"{thumb_path.name}.thumb.png"
+            tmp_dir = AYImageAttachment.get_cacher_tmp_dir()
+            tmp_file_path = tmp_dir / f"{cache_key}.thumb.png"
             scaled_pixmap.save(str(tmp_file_path), quality=75)
             return tmp_file_path
 
         ic = ImageCache.get_instance()
-        pxm = QPixmap(
-            ic.get(
-                f"{thumb_path.name}_{self._max_width}_{self._max_height}",
-                _thumbnail_cacher,
-            )
-        )
+        pxm = QPixmap(ic.get(cache_key, _thumbnail_cacher))
         self.setPixmap(pxm)
         self.setFixedSize(pxm.width(), pxm.height() + self._label_height)
 
@@ -790,6 +790,24 @@ class AYImageAttachment(QLabel):
 
         # Show dialog
         dialog.exec()
+
+    @classmethod
+    def get_cacher_tmp_dir(cls) -> Path:
+        if cls.cacher_tmp_dir is None:
+            cls.cacher_tmp_dir = Path(
+                tempfile.mkdtemp(
+                    prefix="ayon_review_desktop_thumbnail_cacher_"
+                )
+            )
+        return cls.cacher_tmp_dir
+
+    @staticmethod
+    def cleanup_cacher_directory() -> None:
+        if (
+            AYImageAttachment.cacher_tmp_dir
+            and AYImageAttachment.cacher_tmp_dir.exists()
+        ):
+            rmtree(AYImageAttachment.cacher_tmp_dir, ignore_errors=True)
 
 
 class AYComment(AYContainer):
@@ -1093,6 +1111,9 @@ class AYComment(AYContainer):
         md = self.text_field.as_markdown()
         self._data.comment = md
         self.comment_edited.emit(self._data)
+
+
+atexit.register(AYImageAttachment.cleanup_cacher_directory)
 
 
 if __name__ == "__main__":
