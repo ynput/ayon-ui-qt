@@ -774,6 +774,16 @@ class AYImageAttachment(QLabel):
         )
         dialog.exec()
 
+    def set_gallery_images(self, images: list, current_index: int = 0) -> None:
+        """Set the gallery images for navigation.
+
+        Args:
+            images: List of (image_path, filename) tuples.
+            current_index: Index of this image in the gallery.
+        """
+        self._gallery_images = images
+        self._gallery_index = current_index
+
     @classmethod
     def get_cacher_tmp_dir(cls) -> Path:
         if cls.cacher_tmp_dir is None:
@@ -791,18 +801,6 @@ class AYImageAttachment(QLabel):
             and AYImageAttachment.cacher_tmp_dir.exists()
         ):
             rmtree(AYImageAttachment.cacher_tmp_dir, ignore_errors=True)
-
-    def set_gallery_images(
-        self, images: list, current_index: int = 0
-    ) -> None:
-        """Set the gallery images for navigation.
-
-        Args:
-            images: List of (image_path, filename) tuples.
-            current_index: Index of this image in the gallery.
-        """
-        self._gallery_images = images
-        self._gallery_index = current_index
 
 
 class AYComment(AYContainer):
@@ -1006,8 +1004,7 @@ class AYComment(AYContainer):
 
         # Build gallery images list for navigation
         gallery_images = [
-            (f.local_path, Path(f.local_path).name)
-            for f in valid_files
+            (f.local_path, Path(f.local_path).name) for f in valid_files
         ]
 
         # Second pass: create widgets with gallery support
