@@ -40,6 +40,7 @@ class UserCompleterDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.icon_size = 20
+        self._user_pixmap = {}
 
     def paint(
         self,
@@ -60,13 +61,18 @@ class UserCompleterDelegate(QStyledItemDelegate):
             painter.fillRect(option.rect, option.palette.midlight())
 
         # Draw user icon
-        user_image = AYUserImage(
-            src=user.avatar_url,
-            full_name=user.full_name,
-            size=self.icon_size,
-            outline=False,
-        )
-        icon_pixmap = user_image.pixmap()
+        try:
+            icon_pixmap = self._user_pixmap[user.name]
+        except KeyError:
+            user_image = AYUserImage(
+                src=user.avatar_url,
+                full_name=user.full_name,
+                size=self.icon_size,
+                outline=False,
+            )
+            icon_pixmap = user_image.pixmap()
+            self._user_pixmap[user.name] = icon_pixmap
+
         icon_x = option.rect.x() + 4
         icon_y = option.rect.y() + (option.rect.height() - self.icon_size) // 2
         painter.drawPixmap(icon_x, icon_y, icon_pixmap)
