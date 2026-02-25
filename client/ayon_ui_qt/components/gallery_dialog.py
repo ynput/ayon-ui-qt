@@ -142,9 +142,11 @@ class GalleryDialog(QDialog):
 
         self.image_label.setPixmap(display_pixmap)
 
-        # Set dialog size to match image (plus nav bar if multiple images)
-        nav_height = 40 if len(self.images) > 1 else 0
-        self.resize(display_pixmap.width(), display_pixmap.height() + nav_height)
+        # Set dialog size once on first image, then keep it consistent
+        if not hasattr(self, '_dialog_size_set'):
+            nav_height = 40 if len(self.images) > 1 else 0
+            self.resize(max_w, max_h + nav_height)
+            self._dialog_size_set = True
 
         # Update navigation controls if multiple images
         if len(self.images) > 1:
