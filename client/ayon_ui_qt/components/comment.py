@@ -612,6 +612,7 @@ class AYImageAttachment(QLabel):
         max_width: int = 100,
         max_height: int = 47,
         frame: int = 0,
+        file_id: str = "",
     ):
         super().__init__(parent)
         self._image_path = image_path
@@ -619,6 +620,7 @@ class AYImageAttachment(QLabel):
         self._max_width = max_width
         self._max_height = max_height
         self._frame = frame
+        self.file_id = file_id
 
         self.setScaledContents(False)
         self.setAlignment(
@@ -641,13 +643,23 @@ class AYImageAttachment(QLabel):
         self._draw_icon = get_icon("draw", color="#eeeeee")
 
     def _load_thumbnail(self):
-        """Load and display the thumbnail image."""
-        if not self._thumb_path or not Path(self._thumb_path).exists():
+        """Load and display the thumbnail image.
+
+        If not available, a generic icon is displayed.
+        If the thumbnail isn't available at the required image size, we
+        resize the thumbnail image and store it in the image cache.
+        """
+        if (
+            not self.file_id
+            or not self._thumb_path
+            or not Path(self._thumb_path).exists()
+        ):
             self.setPixmap(self.no_img.pixmap(32, 32))
             return
 
-        thumb_path = Path(self._thumb_path)
-        cache_key = f"{thumb_path.name}_{self._max_width}_{self._max_height}"
+        cache_key = (
+            f"act_thumb_{self.file_id}_{self._max_width}x{self._max_height}"
+        )
 
         def _thumbnail_cacher() -> Path:
             """Cache the scaled-down thumbnail image."""
@@ -666,7 +678,7 @@ class AYImageAttachment(QLabel):
                 Qt.TransformationMode.SmoothTransformation,
             )
             tmp_dir = AYImageAttachment.get_cacher_tmp_dir()
-            tmp_file_path = tmp_dir / f"{cache_key}.thumb.png"
+            tmp_file_path = tmp_dir / f"{cache_key}.png"
             scaled_pixmap.save(str(tmp_file_path), quality=75)
             return tmp_file_path
 
@@ -1014,6 +1026,7 @@ class AYComment(AYContainer):
                 max_width=max_image_width,
                 max_height=max_image_height,
                 frame=file_model.frame,
+                file_id=file_model.id,
             )
 
             self.images_container.add_widget(image_widget)
@@ -1094,15 +1107,17 @@ class AYComment(AYContainer):
             self.date.setText(self._data.short_date)
 
     def refresh_image(self, file_id, filepath):
+        # The task queue calls this after having cached the downloaded images
+        # with keys "act_{file_id}" or "act_thumb_{file_id}".
         image_attachment = self._image_widgets.get(file_id)
         if isinstance(image_attachment, AYImageAttachment):
+            image_attachment.file_id = file_id
+            ic = ImageCache.get_instance()
             if not image_attachment._thumb_path:
-                ic = ImageCache.get_instance()
                 image_attachment._thumb_path = ic.get_path(
                     f"act_thumb_{file_id}"
                 )
             if not image_attachment._image_path:
-                ic = ImageCache.get_instance()
                 image_attachment._image_path = ic.get_path(f"act_{file_id}")
             if image_attachment:
                 image_attachment._load_thumbnail()
