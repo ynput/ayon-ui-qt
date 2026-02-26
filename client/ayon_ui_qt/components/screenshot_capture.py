@@ -296,7 +296,7 @@ class ScreenshotHandler:
             parent_widget: Parent widget instance (typically AYTextBox)
             screenshot_button: Screenshot button widget
         """
-        self.parent = parent_widget
+        self._parent = parent_widget
         self.screenshot_btn = screenshot_button
         self._pending_screenshots = []
         # Create a dedicated temp directory for this handler
@@ -306,7 +306,7 @@ class ScreenshotHandler:
 
     def launch_capture(self):
         """Launch screenshot capture tool."""
-        main_window = self.parent.window()
+        main_window = self._parent.window()
         if main_window:
             main_window.showMinimized()
 
@@ -328,8 +328,8 @@ class ScreenshotHandler:
                 self._pending_screenshots.append(temp_path)
 
                 # Add to parent's unified attachment system
-                if hasattr(self.parent, "add_attachment"):
-                    self.parent.add_attachment(temp_path, "screenshot")
+                if hasattr(self._parent, "add_attachment"):
+                    self._parent.add_attachment(temp_path, "screenshot")
 
                 logger.info(f"Screenshot attached: {temp_path}")
 
@@ -337,7 +337,7 @@ class ScreenshotHandler:
 
     def _restore_window(self):
         """Restore parent window."""
-        main_window = self.parent.window()
+        main_window = self._parent.window()
         if main_window:
             main_window.showNormal()
             main_window.activateWindow()
