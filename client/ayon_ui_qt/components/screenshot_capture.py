@@ -11,7 +11,15 @@ import tempfile
 import uuid
 
 from qtpy.QtCore import QObject, QPoint, QRect, Qt, QTimer, Signal
-from qtpy.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen, QPixmap
+from qtpy.QtGui import (
+    QColor,
+    QCursor,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QScreen,
+)
 from qtpy.QtWidgets import QApplication, QWidget
 
 
@@ -26,16 +34,16 @@ class ScreenMarqueeDialog(QWidget):
     mouse_released = Signal(QPoint)
     close_requested = Signal()
 
-    def __init__(self, screen: QObject, screen_id: str):
+    def __init__(self, screen: QScreen, screen_id: str):
         super().__init__()
         self.setWindowFlags(
-            Qt.Window
-            | Qt.FramelessWindowHint
-            | Qt.WindowStaysOnTopHint
-            | Qt.CustomizeWindowHint
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.CustomizeWindowHint
         )
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setCursor(Qt.CrossCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)
 
         screen.geometryChanged.connect(self._fit_screen_geometry)
