@@ -291,6 +291,10 @@ class ScreenshotHandler:
         self.parent = parent_widget
         self.screenshot_btn = screenshot_button
         self._pending_screenshots = []
+        # Create a dedicated temp directory for this handler
+        self._temp_dir = tempfile.TemporaryDirectory(
+            prefix="ayon_screenshots_"
+        )
 
     def launch_capture(self):
         """Launch screenshot capture tool."""
@@ -309,8 +313,9 @@ class ScreenshotHandler:
         """Handle captured screenshot."""
         if pixmap and not pixmap.isNull():
             screenshot_num = len(self._pending_screenshots) + 1
-            temp_dir = tempfile.gettempdir()
-            temp_path = os.path.join(temp_dir, f"ss{screenshot_num}.jpg")
+            temp_path = os.path.join(
+                self._temp_dir.name, f"ss{screenshot_num}.jpg"
+            )
             if pixmap.save(temp_path, "JPEG"):
                 self._pending_screenshots.append(temp_path)
 
@@ -338,5 +343,16 @@ class ScreenshotHandler:
         return self._pending_screenshots.copy()
 
     def clear_screenshots(self):
-        """Clear all pending screenshots."""
-        self._pending_screenshots = []
+        """Clear all pending screenshots and their files."""
+        self._pending_screenshots.clear()
+        # Recreate the temp dir (deletes old files)
+        self._temp_dir.cleanup()
+        self._temp_dir = tempfile.TemporaryDirectory(
+            prefix="ayon_screenshots_"
+        )
+
+    def cleanup(self):
+        """Delete all screenshot files. Call when handler is
+        no longer needed."""
+        self._pending_screenshots.clear()
+        self._temp_dir.cleanup()
