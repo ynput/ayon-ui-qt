@@ -24,12 +24,7 @@ from qtpy.QtGui import (
     QTextCursor,
     QTextDocument,
 )
-from qtpy.QtWidgets import (
-    QLabel,
-    QMessageBox,
-    QTextEdit,
-    QWidget,
-)
+from qtpy.QtWidgets import QLabel, QLayout, QMessageBox, QTextEdit, QWidget
 
 from ..data_models import (
     CommentModel,
@@ -58,6 +53,7 @@ from .comment_completion import (
     setup_user_completer,
 )
 from .container import AYContainer, AYFrame
+from .gallery_dialog import GalleryDialog
 from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
@@ -749,7 +745,12 @@ class AYImageAttachment(QLabel):
         Uses GalleryDialog for consistent UI regardless of whether there's
         a single image or multiple images in the gallery.
         """
-        from .gallery_dialog import GalleryDialog
+
+        # Collect gallery images if not already done
+        if not self._gallery_images or any(
+            t[0] == "" for t in self._gallery_images
+        ):
+            self._gallery_images = self._image_collector()
 
         # Build gallery images list - use gallery_images if set, otherwise just this image
         if self._gallery_images:
@@ -764,7 +765,7 @@ class AYImageAttachment(QLabel):
                     "The full-size image is not available.",
                 )
                 return
-            images = [(self._image_path, Path(self._image_path).name)]
+            images = [(self._image_path, f"Frame {self._frame}")]
             current_index = 0
 
         dialog = GalleryDialog(
@@ -783,6 +784,30 @@ class AYImageAttachment(QLabel):
         """
         self._gallery_images = images
         self._gallery_index = current_index
+
+    def _image_collector(self) -> list[tuple[str, str]]:
+        """Collect all images in the parent layout."""
+        try:
+            parent_layout = self.parentWidget().layout()
+        except AttributeError:
+            logging.info(
+                "Parent widget has no valid layout for image collector"
+            )
+            return []  # invalid parent widget
+
+        assert isinstance(parent_layout, QLayout)
+        image_list = []
+        for i in range(parent_layout.count()):
+            try:
+                widget = parent_layout.itemAt(i).widget()
+            except AttributeError:
+                continue  # invalid layout item
+            if isinstance(widget, AYImageAttachment):
+                image_list.append(
+                    (widget._image_path, f"Frame {widget._frame}")
+                )
+
+        return image_list
 
     @classmethod
     def get_cacher_tmp_dir(cls) -> Path:
@@ -1004,7 +1029,7 @@ class AYComment(AYContainer):
 
         # Build gallery images list for navigation
         gallery_images = [
-            (f.local_path, Path(f.local_path).name) for f in valid_files
+            (f.local_path, f"Frame {f.frame}") for f in valid_files
         ]
 
         # Second pass: create widgets with gallery support

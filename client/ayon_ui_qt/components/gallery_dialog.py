@@ -9,12 +9,15 @@ from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QKeyEvent, QPixmap
 from qtpy.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QLabel,
-    QPushButton,
-    QVBoxLayout,
     QWidget,
 )
+
+from ayon_ui_qt import get_ayon_style
+from ayon_ui_qt.components.buttons import AYButton
+from ayon_ui_qt.components.container import AYContainer
+from ayon_ui_qt.components.label import AYLabel
+from ayon_ui_qt.components.layouts import AYVBoxLayout
 
 
 class GalleryDialog(QDialog):
@@ -52,61 +55,63 @@ class GalleryDialog(QDialog):
             parent: Parent widget.
         """
         super().__init__(parent)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.Tool)
+        self.setStyle(get_ayon_style())
         self.images = images
         self.current_index = current_index
 
         self.setWindowTitle("Image Preview")
-        self.setModal(True)
-
-        # Apply AYON stylesheet if available
-        try:
-            from ayon_core import style
-            self.setStyleSheet(style.load_stylesheet())
-        except Exception:
-            pass
 
         self._setup_ui()
         self._show_current_image()
 
     def _setup_ui(self) -> None:
         """Set up the dialog UI components using standard Qt widgets."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        dialog_lyt = AYVBoxLayout(self, margin=0, spacing=0)
+
+        self.top_lyt = AYContainer(
+            self,
+            layout=AYContainer.Layout.VBox,
+            variant=AYContainer.Variants.Low,
+            layout_margin=10,
+            layout_spacing=10,
+        )
+        dialog_lyt.addWidget(self.top_lyt)
 
         # Image display area
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setScaledContents(False)
-        layout.addWidget(self.image_label, stretch=1)
+        self.top_lyt.add_widget(self.image_label, stretch=1)
 
         # Only show navigation controls if multiple images
         if len(self.images) > 1:
             # Navigation controls
-            nav_widget = QWidget()
-            nav_layout = QHBoxLayout(nav_widget)
-            nav_layout.setContentsMargins(5, 5, 5, 5)
-            nav_layout.setSpacing(5)
+            nav_widget = AYContainer(
+                layout=AYContainer.Layout.HBox,
+                variant=AYContainer.Variants.High,
+                layout_margin=0,
+                layout_spacing=10,
+            )
 
             # Previous button
-            self.prev_btn = QPushButton("◀ Previous")
-            self.prev_btn.setFixedWidth(100)
+            self.prev_btn = AYButton(
+                "◀ Previous", variant=AYButton.Variants.Nav
+            )
             self.prev_btn.clicked.connect(self._show_previous)
-            nav_layout.addWidget(self.prev_btn)
+            nav_widget.add_widget(self.prev_btn)
 
             # Info label (counter and filename)
-            self.info_label = QLabel()
+            self.info_label = AYLabel(variant=AYLabel.Variants.Default)
             self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.info_label.setStyleSheet("font-size: 12px;")
-            nav_layout.addWidget(self.info_label, stretch=1)
+            nav_widget.add_widget(self.info_label, stretch=1)
 
             # Next button
-            self.next_btn = QPushButton("Next ▶")
-            self.next_btn.setFixedWidth(100)
+            self.next_btn = AYButton("Next ▶", variant=AYButton.Variants.Nav)
             self.next_btn.clicked.connect(self._show_next)
-            nav_layout.addWidget(self.next_btn)
+            nav_widget.add_widget(self.next_btn)
 
-            layout.addWidget(nav_widget)
+            self.top_lyt.add_widget(nav_widget)
 
     def _show_current_image(self) -> None:
         """Display the current image with proper scaling."""
@@ -143,9 +148,8 @@ class GalleryDialog(QDialog):
         self.image_label.setPixmap(display_pixmap)
 
         # Set dialog size once on first image, then keep it consistent
-        if not hasattr(self, '_dialog_size_set'):
-            nav_height = 40 if len(self.images) > 1 else 0
-            self.resize(max_w, max_h + nav_height)
+        if not hasattr(self, "_dialog_size_set"):
+            self.resize(self.top_lyt.layout().sizeHint())
             self._dialog_size_set = True
 
         # Update navigation controls if multiple images
@@ -190,7 +194,6 @@ class GalleryDialog(QDialog):
             super().keyPressEvent(event)
 
 
-
 if __name__ == "__main__":
     from pathlib import Path
 
@@ -217,4 +220,3 @@ if __name__ == "__main__":
         return dialog
 
     test(build, style=Style.AyonStyleOverCSS)
-
