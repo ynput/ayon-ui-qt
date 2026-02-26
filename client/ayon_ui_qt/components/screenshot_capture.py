@@ -85,8 +85,12 @@ class ScreenMarqueeDialog(QWidget):
         pen_color = QColor(255, 255, 255, self._opacity)
         pen = QPen(pen_color, 1, Qt.DotLine)
         painter.setPen(pen)
-        painter.drawLine(rect.left(), mouse_pos.y(), rect.right(), mouse_pos.y())
-        painter.drawLine(mouse_pos.x(), rect.top(), mouse_pos.x(), rect.bottom())
+        painter.drawLine(
+            rect.left(), mouse_pos.y(), rect.right(), mouse_pos.y()
+        )
+        painter.drawLine(
+            mouse_pos.x(), rect.top(), mouse_pos.x(), rect.bottom()
+        )
 
         # Draw rectangle around selection area
         if capture_rect is not None:
@@ -160,7 +164,6 @@ class ScreenMarqueeDialog(QWidget):
         if hasattr(self, "setScreen"):
             self.setScreen(self._screen)
         self.setGeometry(self._screen.geometry())
-
 
 
 class ScreenMarquee(QObject):
@@ -275,7 +278,6 @@ class ScreenMarquee(QObject):
         return tool.get_captured_pixmap()
 
 
-
 class ScreenshotHandler:
     """Handles screenshot capture for text box."""
 
@@ -311,13 +313,13 @@ class ScreenshotHandler:
             temp_path = os.path.join(temp_dir, f"ss{screenshot_num}.jpg")
             if pixmap.save(temp_path, "JPEG"):
                 self._pending_screenshots.append(temp_path)
-                
+
                 # Add to parent's unified attachment system
-                if hasattr(self.parent, 'add_attachment'):
-                    self.parent.add_attachment(temp_path, 'screenshot')
-                
+                if hasattr(self.parent, "add_attachment"):
+                    self.parent.add_attachment(temp_path, "screenshot")
+
                 logger.info(f"Screenshot attached: {temp_path}")
-        
+
         self._restore_window()
 
     def _restore_window(self):
