@@ -12,17 +12,8 @@ import uuid
 
 from qtpy.QtCore import QObject, QPoint, QRect, Qt, QTimer, Signal
 from qtpy.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen, QPixmap
-from qtpy.QtWidgets import (
-    QApplication,
-    QDialog,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from qtpy.QtWidgets import QApplication, QWidget
 
-from .. import get_ayon_style
 
 logger = logging.getLogger(__name__)
 
