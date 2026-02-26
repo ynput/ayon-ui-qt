@@ -256,6 +256,9 @@ class ScreenMarquee(QObject):
             return QPixmap()
 
         screen = QApplication.screenAt(pos_start)
+        if screen is None:
+            return QPixmap()
+
         return screen.grabWindow(
             0,
             pos_start.x() - screen.geometry().x(),
