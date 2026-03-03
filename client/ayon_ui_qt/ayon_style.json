@@ -367,6 +367,13 @@
                     "border-radius": 10,
                     "border-width": 0
                 },
+                "item-view":
+                {
+                    "background-color": "--md-sys-color-surface-container-dark",
+                    "border-color": "--md-sys-color-surface-container-dark",
+                    "border-radius": 0,
+                    "border-width": 0
+                },
                 "debug-r": {
                     "background-color": "#664444"
                 },

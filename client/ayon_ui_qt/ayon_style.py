@@ -8,14 +8,24 @@ from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPainterPath, QPalette, QPen
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QPainter,
+    QPainterPath,
+    QPalette,
+    QPen,
+    QIcon,
+)
 from qtpy.QtWidgets import (
     QApplication,
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QCommonStyle,
     QFrame,
     QLabel,
+    QListView,
     QPushButton,
     QStyle,
     QStyledItemDelegate,
@@ -36,8 +46,6 @@ try:
 except ImportError:
     from .vendor.qtmaterialsymbols import get_icon
 
-from .components.combo_box import Item
-# from .components.color import AYColor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -609,8 +617,6 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                # option.icon = get_icon(widget._icon, color=icon_color)
-
                 option.icon.paint(  # type: ignore
                     painter,
                     icon_rect,
@@ -644,8 +650,6 @@ class ButtonDrawer:
                     if wstate == "hover"
                     else QtGui.QIcon.State.Off
                 )
-
-                # option.icon = get_icon(widget._icon, color=icon_color)
 
                 option.icon.paint(  # type: ignore
                     painter,
@@ -809,11 +813,26 @@ class FrameDrawer:
                 QStyle.ControlElement.CE_ShapedFrame,
                 "QFrame",
             ): self.draw_frame,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_Widget,
+                "QFrame",
+            ): self.draw_frame,
         }
 
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
         variant = getattr(w, "_variant_str", "")
+        is_view_frame = next(
+            (
+                True
+                for child in w.children()
+                if isinstance(child, QAbstractItemView)
+            ),
+            False,
+        )
+        if is_view_frame or isinstance(w, QListView):
+            variant = "item-view"
         style = self.model.get_style("QFrame", variant)
 
         # widget override for comment types
@@ -976,53 +995,17 @@ class CheckboxDrawer:
 
 class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(
-        self, parent=None, padding: int = 4, icon_size: int = 16
+        self,
+        parent=None,
+        padding: int = 4,
+        icon_size: int = 16,
+        style_model: StyleData | None = None,
     ) -> None:
         super().__init__(parent)
         self._padding = padding
         self._icon_size = icon_size
         self._icon_text_spacing = 8
-
-    def paint(
-        self,
-        painter: QtGui.QPainter,
-        option: QtWidgets.QStyleOptionViewItem,
-        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
-    ) -> None:
-        saved_palette = QPalette(option.palette)
-        # change colors for highlight
-        highlight_color = option.palette.color(
-            QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
-        )
-
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.Highlight,
-                    highlight_color,
-                )
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.HighlightedText,
-                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
-                )
-        elif option.state & QStyle.StateFlag.State_Selected:
-            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.Highlight,
-                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
-                )
-            if index.data(QtCore.Qt.ItemDataRole.BackgroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.HighlightedText,
-                    index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
-                )
-
-        super().paint(painter, option, index)
-        option.palette = saved_palette
+        self._style_model = style_model
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index
@@ -1050,6 +1033,120 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
 
         return QtCore.QSize(total_width, total_height)
 
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint combo-box items directly, bypassing QStyle.
+
+        This avoids QStyleSheetStyle intercepting drawPrimitive /
+        drawControl calls when an app-level QSS is active.
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Build a copy of the option with text/palette configured
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        # --- resolve colours -----------------------------------
+        fg_data = index.data(Qt.ItemDataRole.ForegroundRole)
+        bg_data = index.data(Qt.ItemDataRole.BackgroundRole)
+
+        cb = self.parent()
+        inverted = getattr(cb, "_inverted", False)
+
+        # Menu background from the AYON style JSON
+        if self._style_model:
+            cb_style = self._style_model.get_style("QComboBox")
+            menu_bg = QColor(cb_style.get("menu-background-color", "#1c2026"))
+        else:
+            menu_bg = opt.palette.color(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.Window,
+            )
+
+        highlight_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
+        )
+
+        is_hovered = bool(opt.state & QStyle.StateFlag.State_MouseOver)
+        is_selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+
+        if fg_data and bg_data:
+            fg = fg_data.color()
+            bg = bg_data.color()
+
+            if is_hovered:
+                bg_color = highlight_color
+                text_color = fg
+            elif is_selected:
+                bg_color = fg
+                text_color = bg
+            else:
+                bg_color = menu_bg
+                text_color = fg
+        else:
+            # Fallback for items without FG/BG data
+            if is_hovered or is_selected:
+                bg_color = highlight_color
+                text_color = opt.palette.color(
+                    QPalette.ColorRole.HighlightedText
+                )
+            else:
+                bg_color = menu_bg
+                text_color = opt.palette.color(QPalette.ColorRole.Text)
+
+        # --- draw background -----------------------------------
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(opt.rect)
+
+        # --- draw icon -----------------------------------------
+        content_left = opt.rect.left() + self._padding
+        if not opt.icon.isNull():
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - self._icon_size // 2,
+                self._icon_size,
+                self._icon_size,
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if opt.state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            state = (
+                QIcon.State.On
+                if (is_hovered or is_selected)
+                else QIcon.State.Off
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+                state,
+            )
+            content_left = icon_rect.right() + self._icon_text_spacing
+
+        # --- draw text -----------------------------------------
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(text_rect.right() - self._padding)
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
 
 class ComboBoxDrawer:
     def __init__(self, style_inst: AYONStyle) -> None:
@@ -1062,11 +1159,11 @@ class ComboBoxDrawer:
 
     def register_drawers(self):
         return {
-            # enum_to_str(
-            #     QStyle.ControlElement,
-            #     QStyle.ControlElement.CE_ComboBoxLabel,
-            #     "QComboBox",
-            # ): self.draw_label,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ComboBoxLabel,
+                "QComboBox",
+            ): self.draw_label,
             enum_to_str(
                 QStyle.ComplexControl,
                 QStyle.ComplexControl.CC_ComboBox,
@@ -1093,6 +1190,29 @@ class ComboBoxDrawer:
             ): self.combobox_size,
         }
 
+    def get_fg_bg_colors(
+        self, opt: QtWidgets.QStyleOptionComplex, w: QComboBox
+    ) -> tuple[QColor, QColor]:
+        bg_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Base
+        )
+        fg_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.ButtonText
+        )
+
+        inverted = getattr(w, "_inverted", False)
+        current_index = w.currentIndex()
+        if current_index >= 0:
+            item_color = w.itemData(
+                current_index, QtCore.Qt.ItemDataRole.ForegroundRole
+            )
+            if item_color is not None:
+                item_color = item_color.color()
+                fg_color = bg_color if inverted else item_color
+                bg_color = item_color if inverted else bg_color
+
+        return fg_color, bg_color
+
     def draw_box(
         self,
         opt: QtWidgets.QStyleOptionComplex,
@@ -1110,31 +1230,12 @@ class ComboBoxDrawer:
 
         # print(f"SUB_CTL: {opt.activeSubControls}")
         if not w.isEditable():
-            bg_color = opt.palette.color(
-                QPalette.ColorGroup.Active, QPalette.ColorRole.Base
-            )
-            fg_color = opt.palette.color(
-                QPalette.ColorGroup.Active, QPalette.ColorRole.ButtonText
-            )
-
-            if not w:
-                # print("NO WIDGET")
-                return
-
-            inverted = False
+            fg_color, bg_color = self.get_fg_bg_colors(opt, w)
             icon_name = ""
-
-            # Get the current selected status
-            current_index = w.currentIndex()
-            if current_index >= 0:
-                item: Item = w.itemData(
-                    current_index, QtCore.Qt.ItemDataRole.UserRole
+            if hasattr(w.model(), "IconNameRole"):
+                icon_name = w.itemData(
+                    w.currentIndex(), w.model().IconNameRole
                 )
-                if item:
-                    inverted = getattr(w, "_inverted", False)
-                    fg_color = bg_color if inverted else QColor(item.color)
-                    bg_color = QColor(item.color) if inverted else bg_color
-                    icon_name = item.icon
 
             # Paint background with status color
             rect = opt.rect
@@ -1146,17 +1247,95 @@ class ComboBoxDrawer:
 
             # set pen for text drawing
             p.setPen(fg_color)
-            if icon_name:
-                opt.currentIcon = get_icon(icon_name, color=fg_color)
         else:
             # editable combobox - IMPLEMENT ME
-            pass
+            super(AYONStyle, self.style_inst).drawComplexControl(
+                QStyle.ComplexControl.CC_ComboBox, opt, p, w
+            )
+
+    def draw_label(self, opt: QStyleOptionComboBox, p: QPainter, w: QWidget):
+        if not isinstance(w, QComboBox):
+            return
+
+        _style = self.model.get_style("QComboBox")
+        icon_padding = _style.get("icon-padding", [4, 4])
+        text_padding = _style.get("text-padding", [1, 1])
+
+        fg_color, bg_color = self.get_fg_bg_colors(opt, w)
+
+        base_cls = super(AYONStyle, self.style_inst)
+        edit_rect = base_cls.subControlRect(
+            QStyle.ComplexControl.CC_ComboBox,
+            opt,
+            QStyle.SubControl.SC_ComboBoxEditField,
+            w,
+        )
+        p.save()
+        p.setClipRect(edit_rect)
+        if opt.currentIcon:
+            mode = (
+                QIcon.Mode.Normal
+                if opt.state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            pixmap = opt.currentIcon.pixmap(opt.iconSize, mode)
+            icon_rect = QRect(edit_rect)
+            icon_rect.setWidth(opt.iconSize.width() + icon_padding[0])
+            icon_rect.setHeight(opt.iconSize.height() + icon_padding[1])
+            icon_rect = QStyle.alignedRect(
+                opt.direction,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                icon_rect.size(),
+                edit_rect,
+            )
+            if opt.editable:
+                p.fillRect(
+                    icon_rect, opt.palette.brush(QPalette.ColorRole.Base)
+                )
+            base_cls.drawItemPixmap(
+                p, icon_rect, Qt.AlignmentFlag.AlignCenter, pixmap
+            )
+            if opt.direction == Qt.LayoutDirection.RightToLeft:
+                edit_rect.translate(-icon_padding[0] - opt.iconSize.width(), 0)
+            else:
+                edit_rect.translate(opt.iconSize.width() + icon_padding[0], 0)
+
+        if opt.currentText and not opt.editable:
+            base_cls.drawItemText(
+                p,
+                edit_rect.adjusted(
+                    text_padding[0],
+                    -text_padding[1],
+                    -text_padding[0],
+                    text_padding[1],
+                ),
+                QStyle.visualAlignment(
+                    opt.direction,
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                ),
+                opt.palette,
+                bool(opt.state & QStyle.StateFlag.State_Enabled),
+                opt.currentText,
+            )
+
+        p.restore()
 
     def draw_panel_item_view_item(
         self, option: QStyleOption, painter: QPainter, w: QWidget
     ):
-        stl = self.model.get_style("QComboBox")
-        option.backgroundBrush.setColor(QColor(stl["menu-background-color"]))
+        cb = w.model().parent()
+        if cb and getattr(cb, "_inverted", False):
+            idx = option.index
+            if idx:
+                fgc = (
+                    w.model().data(idx, Qt.ItemDataRole.ForegroundRole).color()
+                )
+                option.backgroundBrush.setColor(fgc)
+        else:
+            stl = self.model.get_style("QComboBox")
+            option.backgroundBrush.setColor(
+                QColor(stl["menu-background-color"])
+            )
         super(AYONStyle, self.style_inst).drawPrimitive(  # type: ignore
             QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, w
         )
@@ -1798,7 +1977,9 @@ class AYONStyle(QCommonStyle):
 
             if isinstance(widget, QComboBox):
                 widget.setMinimumContentsLength(1)
-                widget.setItemDelegate(ComboBoxItemDelegate(parent=widget))
+                widget.setItemDelegate(
+                    ComboBoxItemDelegate(parent=widget, style_model=self.model)
+                )
                 widget.setSizeAdjustPolicy(
                     QComboBox.SizeAdjustPolicy.AdjustToContents
                 )

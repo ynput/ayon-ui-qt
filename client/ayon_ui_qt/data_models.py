@@ -3,10 +3,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Flag, auto
+from enum import Enum, Flag, auto
 from typing import Any, List, Optional
 
 RE_HAS_CHECKLIST = re.compile(r"\s*[-*+]\s+\[[xX ]\]\s*")
+
+
+class MenuSize(Enum):
+    Full = "full"
+    Short = "short"
+    Icon = "icon"
 
 
 class ActivityCategory(Flag):
@@ -19,16 +25,12 @@ class ActivityCategory(Flag):
 
 
 def short_date(date_str: str) -> str:
-    if date_str:
-        try:
-            # Parse the ISO string
-            dt = datetime.fromisoformat(date_str)
-            return dt.strftime("%b %d, %I:%M %p")
-        except ValueError:
-            # Handle invalid date format
-            return date_str
-    else:
+    if not date_str:
         return "Not available"
+    try:
+        return datetime.fromisoformat(date_str).strftime("%b %d, %I:%M %p")
+    except ValueError:
+        return date_str
 
 
 @dataclass
@@ -260,8 +262,8 @@ class VersionData:
             folder_path=ns,
             assignees=[],
             attrib={},
-            thumbnail_id=None,
-            thumbnail_local_path=None,
+            thumbnail_id="",
+            thumbnail_local_path="",
         )
 
 
@@ -310,7 +312,5 @@ if __name__ == "__main__":
         print(f"filter = {filter!r} -----------------------------------------")
         for cat in ActivityCategory:
             # print(f"{cat.name} -> {cat.value}")
-            print(
-                f"bool({cat.name} & filter) -> {bool(cat & filter)}"
-            )
+            print(f"bool({cat.name} & filter) -> {bool(cat & filter)}")
             # print(f"filter & {cat.name}  == {cat.name} -> {filter & cat == cat}")
