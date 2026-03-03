@@ -1006,6 +1006,7 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
         self._icon_size = icon_size
         self._icon_text_spacing = 8
         self._style_model = style_model
+        self._icon_cache: dict[str, QIcon] = {}
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index
@@ -1033,6 +1034,18 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
 
         return QtCore.QSize(total_width, total_height)
 
+    def _get_icon(
+        self, fg: QColor, bg: QColor, icon_name: str, invert: bool = True
+    ) -> QIcon:
+        """Get icon from cache or create new one."""
+        key = f"{icon_name}-{fg.name()}-{bg.name()}-{invert}"
+        if key not in self._icon_cache:
+            self._icon_cache[key] = get_icon(
+                icon_name,
+                bg if invert else fg,
+            )
+        return self._icon_cache[key]
+
     def paint(
         self,
         painter: QPainter,
@@ -1050,6 +1063,14 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
         # Build a copy of the option with text/palette configured
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
+
+        # --- debug ---------------------------------------------
+        # m = f">> {opt.text!r} -> "
+        # for flag in QStyle.StateFlag:
+        #     if opt.state & flag:
+        #         m += f"{flag.name}, "
+        # print(m)
+        # -------------------------------------------------------
 
         # --- resolve colours -----------------------------------
         fg_data = index.data(Qt.ItemDataRole.ForegroundRole)
@@ -1072,8 +1093,11 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
             QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
         )
 
-        is_hovered = bool(opt.state & QStyle.StateFlag.State_MouseOver)
-        is_selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = (
+            bool(state & QStyle.StateFlag.State_MouseOver) and not is_selected
+        )
 
         if fg_data and bg_data:
             fg = fg_data.color()
@@ -1085,6 +1109,16 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
             elif is_selected:
                 bg_color = fg
                 text_color = bg
+                # Regenerate icon with the swapped text_color
+                icon_name = (
+                    index.data(cb.model().IconNameRole)
+                    if hasattr(cb.model(), "IconNameRole")
+                    else None
+                )
+                if icon_name:
+                    opt.icon = self._get_icon(
+                        text_color, bg_color, icon_name, False
+                    )
             else:
                 bg_color = menu_bg
                 text_color = fg
