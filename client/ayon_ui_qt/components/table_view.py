@@ -9,7 +9,13 @@ import logging
 from typing import Any
 
 from qtpy import QtCore, QtWidgets
-from qtpy.QtCore import QItemSelection, QModelIndex, QRect, Qt, Signal
+from qtpy.QtCore import (
+    QItemSelection,
+    QModelIndex,
+    QRect,
+    Qt,
+    Signal,  # type: ignore
+)
 from qtpy.QtGui import (
     QBrush,
     QColor,

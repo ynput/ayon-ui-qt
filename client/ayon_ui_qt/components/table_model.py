@@ -52,7 +52,7 @@ class PaginatedTableModel(QAbstractTableModel):
 
     def __init__(
         self,
-        fetch_page: Callable[[int, int], list[dict[str, Any]]],
+        fetch_page: Callable[[int, int, str | None, bool], list[dict[str, Any]]],
         columns: list[TableColumn] | None = None,
         page_size: int = 50,
         parent: QObject | None = None,
@@ -74,11 +74,12 @@ class PaginatedTableModel(QAbstractTableModel):
         self._current_page: int = 0
         self._has_more: bool = True
         self._is_fetching: bool = False
+        self._sort_column: int = -1
+        self._sort_order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+
         self._fetch_next_page()
 
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
+    # Properties --------------------------------------------------------------
 
     @property
     def columns(self) -> list[TableColumn]:
@@ -98,9 +99,7 @@ class PaginatedTableModel(QAbstractTableModel):
         """
         return self._current_page
 
-    # ------------------------------------------------------------------
-    # QAbstractTableModel overrides
-    # ------------------------------------------------------------------
+    # QAbstractTableModel overrides -------------------------------------------
 
     def rowCount(  # noqa: N802
         self,
@@ -232,9 +231,23 @@ class PaginatedTableModel(QAbstractTableModel):
         """
         self._fetch_next_page()
 
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
+    def sort(
+        self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+    ) -> None:
+        """Set the active sort column and order, then reload data.
+
+        Args:
+            column: Zero-based index of the column to sort by. If out of
+                range, the call is ignored.
+            order: Sort order (ascending or descending).
+        """
+        if column < 0 or column >= len(self._columns):
+            return
+        self._sort_column = column
+        self._sort_order = order
+        self.reset_data()  # refetch page 0 using new sort
+
+    # Public interface --------------------------------------------------------
 
     def set_page(self, page: int) -> None:
         """Reset the model and begin fetching from the given page.
@@ -271,9 +284,7 @@ class PaginatedTableModel(QAbstractTableModel):
         self.endResetModel()
         self._fetch_next_page()
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    # Internal helpers --------------------------------------------------------
 
     def _fetch_next_page(self) -> None:
         """Fetch the next page from the data source and append rows.
@@ -293,8 +304,15 @@ class PaginatedTableModel(QAbstractTableModel):
         self._is_fetching = True
         try:
             try:
-                results: list[dict[str, Any]] = self._fetch_page(
-                    self._current_page, self._page_size
+                sort_key = None
+                if 0 <= self._sort_column < len(self._columns):
+                    sort_key = self._columns[self._sort_column].key
+
+                results = self._fetch_page(
+                    self._current_page,
+                    self._page_size,
+                    sort_key,
+                    self._sort_order == Qt.SortOrder.DescendingOrder,
                 )
             except Exception:
                 log.exception(
@@ -364,7 +382,7 @@ TABLE_TEST_DATA: list[dict[str, Any]] = [
 
 def make_test_fetch(
     data: list[dict[str, Any]],
-) -> Callable[[int, int], list[dict[str, Any]]]:
+) -> Callable[[int, int, str | None, bool], list[dict[str, Any]]]:
     """Create a fetch_page callback from static data.
 
     Args:
@@ -374,10 +392,29 @@ def make_test_fetch(
         A callable suitable for PaginatedTableModel.
     """
 
-    def _fetch(page: int, page_size: int) -> list[dict[str, Any]]:
+    def _fetch(
+        page: int,
+        page_size: int,
+        sort_key: str | None,
+        descending: bool,
+    ) -> list[dict[str, Any]]:
+        print(
+            f"Fetching page {page} (page_size={page_size}, "
+            f"sort_key={sort_key!r}, descending={descending})"
+        )
+        rows = data
+        if sort_key:
+            rows = sorted(
+                data,
+                key=lambda r: (
+                    r.get(sort_key) is None,
+                    str(r.get(sort_key, "")),
+                ),
+                reverse=descending,
+            )
         start = page * page_size
         end = start + page_size
-        return data[start:end]
+        return rows[start:end]
 
     return _fetch
 
