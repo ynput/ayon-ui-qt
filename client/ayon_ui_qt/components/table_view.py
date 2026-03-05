@@ -9,15 +9,14 @@ import logging
 from typing import Any
 
 from qtpy import QtCore, QtWidgets
-from qtpy.QtCore import Qt, Signal, QItemSelection, QModelIndex
-from qtpy.QtCore import QRect
+from qtpy.QtCore import QItemSelection, QModelIndex, QRect, Qt, Signal
 from qtpy.QtGui import (
+    QBrush,
     QColor,
     QFont,
-    QPaintEvent,
     QPainter,
+    QPaintEvent,
     QPalette,
-    QBrush,
     QPen,
 )
 from qtpy.QtWidgets import QHeaderView, QTreeView, QWidget
@@ -87,8 +86,6 @@ class AYTableHeader(QHeaderView):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setClipRect(rect)
 
-        r = QRect(rect)
-
         # draw cell
         painter.setBrush(
             QBrush(QColor(tbl_style.get("header-background-color", "#272d35")))
@@ -143,10 +140,14 @@ class AYTableHeader(QHeaderView):
                     ),
                 )
                 size = tbl_style.get("header-sort-indicator-size", 16)
-                margin = (r.height() - size) / 2.0
-                x = rect.x() + (rect.width() - size)
+                margin = (rect.height() - size) / 2.0
                 pixmap = icon.pixmap(size, size)
-                target = rect.adjusted(x - h_pad, margin, -h_pad, -margin)
+                target = rect.adjusted(
+                    max(rect.width() - (size + h_pad), 0),
+                    margin,
+                    -h_pad,
+                    -margin,
+                )
 
                 if order == Qt.SortOrder.AscendingOrder:
                     painter.save()
@@ -449,9 +450,9 @@ if __name__ == "__main__":
     from ..tester import Style, test
     from .layouts import AYVBoxLayout
     from .table_model import (
+        TABLE_TEST_DATA,
         PaginatedTableModel,
         TableColumn,
-        TABLE_TEST_DATA,
         make_test_fetch,
     )
 
