@@ -185,7 +185,9 @@ class StyleData:
     def base_font(self):
         # delayed to make sure QApplication is initialized
         if self._base_font is None:
-            self._base_font = _style_font(self.data.get("global", {}), QWidget())
+            self._base_font = _style_font(
+                self.data.get("global", {}), QWidget()
+            )
         return self._base_font
 
     def _build_palette(self):
@@ -2228,15 +2230,19 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
         painter.drawRect(opt.rect)
 
         # --- text colour ---
+        index_color = index.data(role=Qt.ItemDataRole.ForegroundRole)
         if is_selected:
-            text_color = QColor(
-                selected_style.get(
-                    "color",
-                    base_style.get("color", "#f4f5f5"),
-                )
+            text_color = (
+                index_color.color()
+                if index_color
+                else QColor(base_style.get("color", "#f4f5f5"))
             )
         else:
-            text_color = QColor(base_style.get("color", "#f4f5f5"))
+            text_color = (
+                index_color.color()
+                if index_color
+                else QColor(base_style.get("color", "#f4f5f5"))
+            )
 
         # disabled dimming
         if not (state & QStyle.StateFlag.State_Enabled):

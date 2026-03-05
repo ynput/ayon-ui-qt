@@ -13,6 +13,12 @@ from qtpy.QtCore import (
     QPersistentModelIndex,
     Qt,
 )
+from qtpy.QtGui import QBrush, QColor
+
+try:
+    from qtmaterialsymbols import get_icon  # type: ignore
+except ImportError:
+    from ..vendor.qtmaterialsymbols import get_icon
 
 log = logging.getLogger(__name__)
 
@@ -170,7 +176,18 @@ class PaginatedTableModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.DecorationRole:
             icon_key = f"{col_key}__icon"
-            return row_dict.get(icon_key)
+            icon_name = row_dict.get(icon_key)
+            if icon_name:
+                icon_color = row_dict.get(f"{col_key}__color", "#ffffff")
+                return get_icon(icon_name, color=icon_color)
+            return None
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            color_key = f"{col_key}__color"
+            color = row_dict.get(color_key)
+            if isinstance(color, str):
+                return QBrush(QColor(color))
+            return None
 
         if role == self.WidgetFactoryRole:
             factory_key = f"{col_key}__widget_factory"
@@ -374,6 +391,8 @@ TABLE_TEST_DATA: list[dict[str, Any]] = [
     {
         "name": f"Asset {i:03d}",
         "status": ["Active", "Inactive", "Review"][i % 3],
+        "status__icon":["play_arrow", "fiber_new", "visibility"][i % 3],
+        "status__color": ["#3498db", "#434a56", "#ff9b0a"][i % 3],
         "type": ["Model", "Texture", "Rig", "Animation"][i % 4],
         "author": ["Alice", "Bob", "Charlie", "Diana"][i % 4],
         "version": f"v{(i % 10) + 1:03d}",
