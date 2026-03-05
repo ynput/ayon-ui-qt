@@ -645,10 +645,21 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                state = (
-                    QtGui.QIcon.State.On
-                    if wstate == "hover"
-                    else QtGui.QIcon.State.Off
+                checkable = widget.isCheckable() if widget else False
+                # checked = widget.isChecked() if widget else False
+
+                icon_state = (
+                    (
+                        QtGui.QIcon.State.On
+                        if wstate == "hover"
+                        else QtGui.QIcon.State.Off
+                    )
+                    if not checkable
+                    else (
+                        QtGui.QIcon.State.On
+                        if option.state & QStyle.StateFlag.State_On
+                        else QtGui.QIcon.State.Off
+                    )
                 )
 
                 option.icon.paint(  # type: ignore
@@ -656,7 +667,7 @@ class ButtonDrawer:
                     content_rect,
                     Qt.AlignmentFlag.AlignCenter,
                     mode,
-                    state,
+                    icon_state,
                 )
         else:
             # Text only

@@ -22,6 +22,7 @@ class AYButton(QtWidgets.QPushButton):
         *args,
         variant: Variants = Variants.Surface,
         icon: str | None = None,
+        icon_on: str | None = None,
         icon_size: int = 24,
         icon_color: str | None = None,
         checkable=False,
@@ -38,6 +39,7 @@ class AYButton(QtWidgets.QPushButton):
         style_dict = get_ayon_style_data("QPushButton", variant.value)
 
         self._icon = icon
+        self._icon_on = icon_on or icon
         self._variant_str = variant.value
         self._icon_color = QtGui.QColor(
             icon_color or style_dict.get("color", "#ffffff")
@@ -117,12 +119,20 @@ class AYButton(QtWidgets.QPushButton):
         #   State.Off: checkable off
         #   State.On: checkable on
         #   State.Active: hover
-        icn = get_icon(
-            icon_name_off=self._icon,
-            color_off=self._icon_color,
-            icon_name_on=self._icon,
-            color_on=self._icon_hover_color,
-        )
+        if self.isCheckable():
+            icn = get_icon(
+                icon_name_off=self._icon,
+                color_off=self._icon_color,
+                icon_name_on=self._icon_on,
+                color_on=self._icon_color,
+            )
+        else:
+            icn = get_icon(
+                icon_name_off=self._icon,
+                color_off=self._icon_color,
+                icon_name_on=self._icon,
+                color_on=self._icon_hover_color,
+            )
         self.setIcon(icn)
 
 
