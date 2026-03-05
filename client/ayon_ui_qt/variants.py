@@ -52,6 +52,7 @@ class QFrameVariants(Enum):
     Low_Framed = "low-framed"
     High = "high"
     Tag = "tag"
+    Item_View = "item-view"
     Debug_R = "debug-r"
     Debug_G = "debug-g"
     Debug_B = "debug-b"

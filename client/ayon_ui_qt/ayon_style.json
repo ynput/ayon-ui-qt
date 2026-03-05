@@ -370,8 +370,7 @@
                     "border-radius": 10,
                     "border-width": 0
                 },
-                "item-view":
-                {
+                "item-view": {
                     "background-color": "--md-sys-color-surface-container-dark",
                     "border-color": "--md-sys-color-surface-container-dark",
                     "border-radius": 0,
