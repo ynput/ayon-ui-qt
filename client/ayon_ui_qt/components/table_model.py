@@ -52,7 +52,9 @@ class PaginatedTableModel(QAbstractTableModel):
 
     def __init__(
         self,
-        fetch_page: Callable[[int, int, str | None, bool], list[dict[str, Any]]],
+        fetch_page: Callable[
+            [int, int, str | None, bool], list[dict[str, Any]]
+        ],
         columns: list[TableColumn] | None = None,
         page_size: int = 50,
         parent: QObject | None = None,
