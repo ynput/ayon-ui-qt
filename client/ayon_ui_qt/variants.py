@@ -75,6 +75,12 @@ class QTreeViewVariants(Enum):
     High = "high"
 
 
+class AYTableVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
+
+
 class QStyledItemDelegateVariants(Enum):
     Default = "default"
 

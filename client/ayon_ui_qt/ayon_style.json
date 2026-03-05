@@ -484,6 +484,57 @@
                     }
                 }
             }
+        },
+        "AYTable": {
+            "states": [
+                "hover",
+                "selected",
+                "disabled"
+            ],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--color-table-row",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-radius": 0,
+                    "border-width": 0,
+                    "border-color": "--md-sys-color-surface-container-dark",
+                    "item-height": 32,
+                    "item-padding": [
+                        4,
+                        8
+                    ],
+                    "icon-text-spacing": 6,
+                    "header-background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "header-color": "--md-sys-color-on-surface-variant-dark",
+                    "header-border-color": "--md-sys-color-surface-container-dark",
+                    "header-border-width": 1,
+                    "header-height": 36,
+                    "header-padding": [
+                        4,
+                        8
+                    ],
+                    "header-sort-indicator-color": "--md-sys-color-primary-dark",
+                    "header-sort-indicator-icon": "sort",
+                    "disabled-opacity": 0.5,
+                    "hover": {
+                        "background-color": "--md-sys-color-surface-container-high-dark"
+                    },
+                    "selected": {
+                        "background-color": "--md-sys-color-primary-container-dark",
+                        "color": "--md-sys-color-on-primary-container-dark"
+                    },
+                    "disabled": {
+                        "opacity": 0.5
+                    }
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "high": {
+                    "background-color": "--md-sys-color-surface-container-dark"
+                }
+            }
         }
     },
     "layouts": {},
@@ -645,6 +696,7 @@
         "--md-ref-palette-neutral-variant98": "#f6faff",
         "--md-ref-palette-neutral-variant99": "#fcfcff",
         "--md-ref-palette-neutral-variant100": "#ffffff",
+        "--color-table-row": "#191c22",
         "qt-active-window": "--md-sys-color-background-dark",
         "qt-active-window-text": "--md-sys-color-on-surface-dark",
         "qt-active-base": "--md-sys-color-surface-container-dark",

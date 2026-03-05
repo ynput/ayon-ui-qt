@@ -24,6 +24,7 @@ from qtpy.QtWidgets import (
     QComboBox,
     QCommonStyle,
     QFrame,
+    QHeaderView,
     QLabel,
     QListView,
     QPushButton,
@@ -2115,6 +2116,177 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
 # ----------------------------------------------------------------------------
 
 
+class TableItemDelegate(QtWidgets.QStyledItemDelegate):
+    """Item delegate for AYTable that paints cells directly, bypassing QSS.
+
+    Reads style data from the AYTable style entry to draw cell
+    backgrounds (hover, selected) and text/icons. Cells that provide
+    a WidgetFactoryRole value are skipped — the embedded widget covers
+    them.
+
+    Args:
+        parent: The parent widget (expected to be an AYTable instance).
+        style_model: StyleData instance providing colour/dimension data.
+        variant: The variant string used to look up the correct style.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        style_model: StyleData | None = None,
+        variant: str = "default",
+    ) -> None:
+        super().__init__(parent)
+        self._style_model = style_model
+        self._variant_str = variant
+
+    def _table_styles(self) -> dict[str, dict]:
+        """Return base, hover and selected style dicts at once."""
+        if self._style_model is None:
+            return {"base": {}, "hover": {}, "selected": {}}
+        return self._style_model.get_styles(
+            "AYTable",
+            self._variant_str,
+            ["base", "hover", "selected"],
+        )
+
+    def sizeHint(
+        self,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QtCore.QSize:
+        """Return a fixed row height from the style data."""
+        if self._style_model:
+            style = self._style_model.get_style("AYTable", self._variant_str)
+            h = int(style.get("item-height", 32))
+        else:
+            h = 32
+        return QtCore.QSize(option.rect.width(), h)
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint a table cell directly, bypassing QStyle."""
+        # Skip painting for cells with embedded widgets
+        from .components.table_model import PaginatedTableModel
+
+        widget_factory = index.data(PaginatedTableModel.WidgetFactoryRole)
+        if widget_factory is not None:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+
+        styles = self._table_styles()
+        base_style = styles["base"]
+        hover_style = styles["hover"]
+        selected_style = styles["selected"]
+
+        item_padding = base_style.get("item-padding", [4, 8])
+        icon_text_spacing = int(base_style.get("icon-text-spacing", 6))
+
+        # --- background ---
+        if is_selected:
+            bg_color = QColor(
+                selected_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        elif is_hovered:
+            bg_color = QColor(
+                hover_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        else:
+            bg_color = QColor(
+                base_style.get("background-color", "transparent")
+            )
+
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(opt.rect)
+
+        # --- text colour ---
+        if is_selected:
+            text_color = QColor(
+                selected_style.get(
+                    "color",
+                    base_style.get("color", "#f4f5f5"),
+                )
+            )
+        else:
+            text_color = QColor(base_style.get("color", "#f4f5f5"))
+
+        # disabled dimming
+        if not (state & QStyle.StateFlag.State_Enabled):
+            text_color.setAlpha(
+                int(
+                    text_color.alpha()
+                    * base_style.get("disabled-opacity", 0.5)
+                )
+            )
+
+        # --- icon + text layout ---
+        content_rect = QRect(opt.rect).adjusted(
+            item_padding[1],
+            item_padding[0],
+            -item_padding[1],
+            -item_padding[0],
+        )
+        content_left = content_rect.left()
+
+        if not opt.icon.isNull():
+            icon_size = opt.decorationSize
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - icon_size.height() // 2,
+                icon_size.width(),
+                icon_size.height(),
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+            )
+            content_left = icon_rect.right() + icon_text_spacing
+
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(content_rect.right())
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 class TreeViewDrawer:
     """AYONStyle drawer for QTreeView.
 
@@ -2252,6 +2424,190 @@ class TreeViewDrawer:
 # ----------------------------------------------------------------------------
 
 
+class TableHeaderDrawer:
+    """AYONStyle drawer for QHeaderView used by AYTable.
+
+    Handles painting of header sections and labels using colours
+    from the AYTable style data in ayon_style.json.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._icon_cache: dict[str, QIcon] = {}
+
+    @property
+    def base_class(self):
+        return {"QHeaderView": QtWidgets.QHeaderView}
+
+    def register_drawers(self) -> dict:
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_Header,
+                "QHeaderView",
+            ): [
+                partial(
+                    self.style_inst.drawControl,
+                    QStyle.ControlElement.CE_HeaderSection,
+                ),
+                partial(
+                    self.style_inst.drawControl,
+                    QStyle.ControlElement.CE_HeaderLabel,
+                ),
+            ],
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_HeaderSection,
+                "QHeaderView",
+            ): self.draw_header_section,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_HeaderLabel,
+                "QHeaderView",
+            ): self.draw_header_label,
+        }
+
+    def register_metrics(self) -> dict:
+        """Register pixel metrics for QHeaderView."""
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_HeaderMargin,
+                "QHeaderView",
+            ): self.get_metric,
+        }
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        """Return header margin from style data."""
+        if metric == QStyle.PixelMetric.PM_HeaderMargin:
+            return 4
+        return 0
+
+    def _get_table_style(self, widget: QWidget | None) -> dict:
+        """Resolve the AYTable style for the header's parent table."""
+        variant = "default"
+        if widget is not None:
+            # QHeaderView's parent is the QTreeView/AYTable
+            table = widget.parent()
+            if table is not None:
+                variant = getattr(table, "_variant_str", "default")
+        return self.model.get_style("AYTable", variant)
+
+    def draw_header_section(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the header section background and bottom border."""
+        style = self._get_table_style(widget)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+
+        # Background
+        bg_color = QColor(style.get("header-background-color", "#272d35"))
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        # Bottom border
+        border_color = QColor(style.get("header-border-color", "#41474d"))
+        pen = QPen(border_color)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        bottom = option.rect.bottom()
+        painter.drawLine(
+            option.rect.left(),
+            bottom,
+            option.rect.right(),
+            bottom,
+        )
+
+        painter.restore()
+
+    def draw_header_label(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the header label text and sort indicator."""
+        style = self._get_table_style(widget)
+        padding = style.get("header-padding", [4, 8])
+
+        painter.save()
+
+        # Text
+        text_color = QColor(style.get("header-color", "#c1c7ce"))
+        painter.setPen(text_color)
+
+        font = painter.font()
+        font.setWeight(QtGui.QFont.Weight.DemiBold)
+        painter.setFont(font)
+
+        text_rect = option.rect.adjusted(
+            padding[1], padding[0], -padding[1], -padding[0]
+        )
+
+        text = ""
+        if hasattr(option, "text"):
+            text = option.text or ""
+
+        # Check for sort indicator
+        sort_indicator = getattr(option, "sortIndicator", None)
+        indicator_space = 0
+        if sort_indicator and sort_indicator != 0:
+            indicator_space = 16
+
+        if text:
+            draw_rect = QRect(text_rect)
+            if indicator_space:
+                draw_rect.setRight(draw_rect.right() - indicator_space)
+            painter.drawText(
+                draw_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                text,
+            )
+
+        # Sort indicator arrow
+        if sort_indicator and sort_indicator != 0:
+            indicator_color = QColor(
+                style.get(
+                    "header-sort-indicator-color",
+                    "#8fceff",
+                )
+            )
+            # sortIndicator: 1 = Down, 2 = Up (in QStyleOptionHeader)
+            icon_name = (
+                "arrow_downward" if sort_indicator == 1 else "arrow_upward"
+            )
+            cache_key = f"{icon_name}-{indicator_color.name()}"
+            if cache_key not in self._icon_cache:
+                self._icon_cache[cache_key] = get_icon(
+                    icon_name, color=indicator_color
+                )
+            icon = self._icon_cache[cache_key]
+            icon_rect = QRect(
+                text_rect.right() - 14,
+                text_rect.center().y() - 7,
+                14,
+                14,
+            )
+            icon.paint(painter, icon_rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 W_T = {}
 
 
@@ -2278,6 +2634,7 @@ class AYONStyle(QCommonStyle):
             ScrollBarDrawer(self),
             FrameDrawer(self),
             TreeViewDrawer(self),
+            TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
         ]
         for obj in self.drawer_objs:
@@ -2305,7 +2662,9 @@ class AYONStyle(QCommonStyle):
         if w:
             # Handle item view widgets - check parent for delegate and exclude
             # ComboBoxItemDelegate
-            if hasattr(w, "itemDelegate") and not isinstance(w, QComboBox):
+            if hasattr(w, "itemDelegate") and not isinstance(
+                w, (QComboBox, QHeaderView)
+            ):
                 # Calling itemDelegate() is not a simple getter - it can
                 # trigger Qt's internal operations that call back into the
                 # custom style methods (subElementRect, drawPrimitive,
