@@ -179,7 +179,14 @@ class StyleData:
         self.last_key = ""
         # base palette
         self.base_palette = self._build_palette()
-        self.base_font = _style_font(self.data.get("global", {}), QWidget())
+        self._base_font = None
+
+    @property
+    def base_font(self):
+        # delayed to make sure QApplication is initialized
+        if self._base_font is None:
+            self._base_font = _style_font(self.data.get("global", {}), QWidget())
+        return self._base_font
 
     def _build_palette(self):
         bp = {
