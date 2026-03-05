@@ -179,6 +179,7 @@ class StyleData:
         self.last_key = ""
         # base palette
         self.base_palette = self._build_palette()
+        self.base_font = _style_font(self.data.get("global", {}), QWidget())
 
     def _build_palette(self):
         bp = {
@@ -2706,6 +2707,7 @@ class AYONStyle(QCommonStyle):
             super().polish(widget)
             # TODO(plp): move to QStyle:polishPalette(QPalette)
             widget.setPalette(self.model.base_palette)
+            widget.setFont(self.model.base_font)
 
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
