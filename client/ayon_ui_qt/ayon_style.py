@@ -1267,9 +1267,15 @@ class ComboBoxDrawer:
         if not isinstance(w, QComboBox):
             return
 
-        _style = self.model.get_style("QComboBox")
+        _style = self.model.get_style(
+            "QComboBox", variant=getattr(w, "_variant_str", None)
+        )
+        style_bg_color = _style.get("background-color", None)
         opt.palette.setBrush(
-            QPalette.ColorRole.Base, self.model.base_palette.base()
+            QPalette.ColorRole.Base,
+            QColor(style_bg_color)
+            if style_bg_color
+            else self.model.base_palette.base(),
         )
         _radius = _style.get("border-radius", 0)
 
@@ -1302,7 +1308,9 @@ class ComboBoxDrawer:
         if not isinstance(w, QComboBox):
             return
 
-        _style = self.model.get_style("QComboBox")
+        _style = self.model.get_style(
+            "QComboBox", variant=getattr(w, "_variant_str", None)
+        )
         icon_padding = _style.get("icon-padding", [4, 4])
         text_padding = _style.get("text-padding", [1, 1])
 

@@ -38,6 +38,7 @@ class QLineEditVariants(Enum):
 
 class QComboBoxVariants(Enum):
     Default = "default"
+    Low = "low"
 
 
 class QScrollBarVariants(Enum):

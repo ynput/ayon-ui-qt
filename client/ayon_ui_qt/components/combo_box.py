@@ -59,6 +59,7 @@ from qtpy.QtGui import (
 )
 
 from ..data_models import MenuSize
+from ..variants import QComboBoxVariants
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -223,6 +224,8 @@ class AYComboBox(QtWidgets.QComboBox):
             combo.set_inverted(True)
     """
 
+    Variants = QComboBoxVariants
+
     def __init__(
         self,
         parent: Optional[QtWidgets.QWidget] = None,
@@ -232,10 +235,12 @@ class AYComboBox(QtWidgets.QComboBox):
         placeholder: Optional[str] = None,
         inverted: bool = False,
         icon_size: int = 20,
+        variant: Variants = Variants.Default,
         **kwargs,
     ) -> None:
         self._uses_incompatible_model = False
         super().__init__(parent, **kwargs)
+        self._variant_str = variant.value
         from .. import get_ayon_style
 
         self.setStyle(get_ayon_style())

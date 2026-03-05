@@ -321,6 +321,9 @@
                     "background-color": "--md-sys-color-surface-container-highest-dark",
                     "color": "--md-sys-color-on-surface-dark",
                     "menu-background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
                 }
             }
         },
