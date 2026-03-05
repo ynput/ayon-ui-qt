@@ -178,7 +178,7 @@ class AYTableHeader(QHeaderView):
         painter.restore()
 
 
-class AYTable(QTreeView):
+class AYTableView(QTreeView):
     """AYON-styled flat table view.
 
     Subclasses QTreeView in flat-table mode (no tree indentation or
@@ -503,7 +503,7 @@ if __name__ == "__main__":
         container = QtWidgets.QWidget()
         root_lyt = AYVBoxLayout(container, margin=8, spacing=8)
 
-        for variant in AYTable.Variants:
+        for variant in AYTableView.Variants:
             label = QtWidgets.QLabel(f"variant: {variant.value}")
             label.setFixedHeight(20)
             root_lyt.addWidget(label)
@@ -523,7 +523,7 @@ if __name__ == "__main__":
                 page_size=20,
             )
 
-            table = AYTable(variant=variant)
+            table = AYTableView(variant=variant)
             table.setModel(model)
             table.setMinimumHeight(200)
             root_lyt.addWidget(table)
