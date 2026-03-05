@@ -28,6 +28,11 @@ from ..variants import AYTableVariants
 from .scroll_area import AYScrollBar
 from .table_model import PaginatedTableModel
 
+try:
+    from qtmaterialsymbols import get_icon  # type: ignore
+except ImportError:
+    from ..vendor.qtmaterialsymbols import get_icon
+
 log = logging.getLogger(__name__)
 
 
@@ -79,7 +84,10 @@ class AYTableHeader(QHeaderView):
         tbl_style = self._style_model.get_style("AYTable", self._variant_str)
 
         painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setClipRect(rect)
+
+        r = QRect(rect)
 
         # draw cell
         painter.setBrush(
@@ -126,12 +134,39 @@ class AYTableHeader(QHeaderView):
             and self.sortIndicatorSection() == logical_index
         ):
             order = self.sortIndicatorOrder()
-            arrow = "▲" if order == Qt.SortOrder.AscendingOrder else "▼"
-            painter.drawText(
-                text_rect,
-                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
-                arrow,
-            )
+            icon_name = tbl_style.get("header-sort-indicator-icon", None)
+            if icon_name is not None:
+                icon = get_icon(
+                    icon_name,
+                    color=tbl_style.get(
+                        "header-sort-indicator-color", "#ffffff"
+                    ),
+                )
+                size = tbl_style.get("header-sort-indicator-size", 16)
+                margin = (r.height() - size) / 2.0
+                x = rect.x() + (rect.width() - size)
+                pixmap = icon.pixmap(size, size)
+                target = rect.adjusted(x - h_pad, margin, -h_pad, -margin)
+
+                if order == Qt.SortOrder.AscendingOrder:
+                    painter.save()
+                    center = target.center()
+                    painter.translate(center)
+                    painter.rotate(180)
+                    painter.translate(-center)
+                    painter.drawPixmap(target, pixmap)
+                    painter.restore()
+                else:
+                    painter.drawPixmap(target, pixmap)
+
+            else:
+                arrow = "▲" if order == Qt.SortOrder.AscendingOrder else "▼"
+                painter.drawText(
+                    text_rect,
+                    Qt.AlignmentFlag.AlignVCenter
+                    | Qt.AlignmentFlag.AlignRight,
+                    arrow,
+                )
 
         painter.restore()
 

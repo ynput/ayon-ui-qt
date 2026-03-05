@@ -514,8 +514,9 @@
                         4,
                         8
                     ],
-                    "header-sort-indicator-color": "--md-sys-color-primary-dark",
+                    "header-sort-indicator-color": "--md-sys-color-on-surface-dark",
                     "header-sort-indicator-icon": "sort",
+                    "header-sort-indicator-size": 18,
                     "disabled-opacity": 0.5,
                     "hover": {
                         "background-color": "--md-sys-color-surface-container-high-dark"
