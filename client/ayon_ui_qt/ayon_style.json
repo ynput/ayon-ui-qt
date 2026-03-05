@@ -416,6 +416,50 @@
                 "pill": {}
             }
         },
+        "QTreeView": {
+            "states": [
+                "hover",
+                "selected",
+                "disabled"
+            ],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-background-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-radius": 4,
+                    "border-width": 0,
+                    "border-color": "--md-sys-color-background-dark",
+                    "indent": 20,
+                    "item-height": 28,
+                    "item-padding": [
+                        4,
+                        8
+                    ],
+                    "icon-text-spacing": 6,
+                    "branch-indicator-color": "--md-sys-color-on-surface-dark",
+                    "hover": {
+                        "background-color": "--md-sys-color-surface-container-high-dark"
+                    },
+                    "selected": {
+                        "background-color": "--md-sys-color-primary-container-dark",
+                        "color": "--md-sys-color-on-primary-container-dark"
+                    },
+                    "disabled": {
+                        "opacity": 0.5
+                    },
+                    "expand-icon-name": "keyboard_arrow_right",
+                    "expanded-icon-name": "keyboard_arrow_down",
+                    "expand-icon-size": 16
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                },
+                "high": {
+                    "background-color": "--md-sys-color-surface-container-dark"
+                }
+            }
+        },
         "QStyledItemDelegate": {
             "states": [
                 "hover",

@@ -37,6 +37,7 @@ from qtpy.QtWidgets import (
     QStyleOptionSlider,
     QStyleOptionViewItem,
     QToolTip,
+    QTreeView,
     QWidget,
 )
 from qtpy.shiboken import isValid
@@ -1941,6 +1942,322 @@ class ItemViewItemDrawer:
 # ----------------------------------------------------------------------------
 
 
+class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
+    """Item delegate for AYTreeView that paints directly, bypassing QSS.
+
+    Reads style data from the QTreeView style entry to draw item
+    backgrounds (hover, selected) and text/icons.  The paint() method
+    uses raw QPainter calls so that a parent-level QStyleSheet cannot
+    intercept and override the colours.
+
+    Args:
+        parent: The parent widget (expected to be an AYTreeView instance).
+        style_model: StyleData instance providing colour/dimension data.
+        variant: The variant string used to look up the correct style.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        style_model: StyleData | None = None,
+        variant: str = "default",
+    ) -> None:
+        super().__init__(parent)
+        self._style_model = style_model
+        self._variant_str = variant
+        self._icon_cache: dict[str, QIcon] = {}
+
+    def _tv_styles(self) -> dict[str, dict]:
+        """Return *base*, *hover* and *selected* style dicts at once."""
+        if self._style_model is None:
+            return {"base": {}, "hover": {}, "selected": {}}
+        return self._style_model.get_styles(
+            "QTreeView",
+            self._variant_str,
+            ["base", "hover", "selected"],
+        )
+
+    def sizeHint(
+        self,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QtCore.QSize:
+        """Return a fixed row height from the style data.
+
+        Args:
+            option: The style option for the item.
+            index: The model index of the item.
+
+        Returns:
+            The size hint for the item.
+        """
+        if self._style_model:
+            style = self._style_model.get_style("QTreeView", self._variant_str)
+            h = int(style.get("item-height", 28))
+        else:
+            h = 28
+        return QtCore.QSize(option.rect.width(), h)
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint a tree-view item directly, bypassing QStyle completely.
+
+        Args:
+            painter: The QPainter to use.
+            option: The style option for the item.
+            index: The model index of the item.
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+
+        styles = self._tv_styles()
+        base_style = styles["base"]
+        hover_style = styles["hover"]
+        selected_style = styles["selected"]
+
+        item_padding = base_style.get("item-padding", [4, 8])
+        icon_text_spacing = int(base_style.get("icon-text-spacing", 6))
+
+        # --- background ------------------------------------------------
+        if is_selected:
+            bg_color = QColor(
+                selected_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        elif is_hovered:
+            bg_color = QColor(
+                hover_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        else:
+            bg_color = QColor(
+                base_style.get("background-color", "transparent")
+            )
+
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(opt.rect)
+
+        # --- text colour -----------------------------------------------
+        if is_selected:
+            text_color = QColor(
+                selected_style.get(
+                    "color",
+                    base_style.get("color", "#f4f5f5"),
+                )
+            )
+        else:
+            text_color = QColor(base_style.get("color", "#f4f5f5"))
+
+        # disabled dimming
+        if not (state & QStyle.StateFlag.State_Enabled):
+            text_color.setAlpha(
+                int(
+                    text_color.alpha()
+                    * base_style.get("disabled-opacity", 0.5)
+                )
+            )
+
+        # --- icon + text layout ----------------------------------------
+        content_rect = QRect(opt.rect).adjusted(
+            item_padding[1],
+            item_padding[0],
+            -item_padding[1],
+            -item_padding[0],
+        )
+        content_left = content_rect.left()
+
+        if not opt.icon.isNull():
+            icon_size = opt.decorationSize
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - icon_size.height() // 2,
+                icon_size.width(),
+                icon_size.height(),
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+            )
+            content_left = icon_rect.right() + icon_text_spacing
+
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(content_rect.right())
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class TreeViewDrawer:
+    """AYONStyle drawer for QTreeView.
+
+    Handles branch expand/collapse indicators and the indentation metric
+    using colours from the QTreeView style data in ayon_style.json.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._icon_cache = {}
+
+    @property
+    def base_class(self):
+        return {"QTreeView": QTreeView}
+
+    def register_drawers(self) -> dict:
+        """Register drawing functions for QTreeView primitives."""
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            ): self.draw_branch_indicator,
+        }
+
+    def register_metrics(self) -> dict:
+        """Register pixel metric functions for QTreeView."""
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_TreeViewIndentation,
+                "QTreeView",
+            ): self.get_metric,
+        }
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        """Return indent width from style data.
+
+        Args:
+            metric: The pixel metric being queried.
+            opt: Optional style option.
+            widget: The target widget.
+
+        Returns:
+            The indent size in pixels.
+        """
+        if metric == QStyle.PixelMetric.PM_TreeViewIndentation:
+            variant = getattr(widget, "_variant_str", "default")
+            style = self.model.get_style("QTreeView", variant)
+            return int(style.get("indent", 20))
+        return 0
+
+    def draw_branch_indicator(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw expand / collapse arrows for tree branch items.
+
+        Args:
+            option: The primitive element style option.
+            painter: The QPainter to draw on.
+            widget: The QTreeView widget (may be the viewport).
+        """
+        has_children = bool(option.state & QStyle.StateFlag.State_Children)
+        if not has_children:
+            return
+
+        is_open = bool(option.state & QStyle.StateFlag.State_Open)
+
+        # Resolve the QTreeView (option.widget might be the viewport)
+        tv = widget
+        if tv is not None and not isinstance(tv, QTreeView):
+            tv = tv.parent() if tv.parent() else tv
+
+        variant = getattr(tv, "_variant_str", "default")
+        style = self.model.get_style("QTreeView", variant)
+        color = QColor(style.get("branch-indicator-color", "#8b9198"))
+
+        icon_name = (
+            style.get("expanded-icon-name", None)
+            if is_open
+            else style.get("expand-icon-name", None)
+        )
+
+        painter.save()
+
+        if icon_name:
+            key = f"{icon_name}-{color.name()}"
+            if key not in self._icon_cache:
+                self._icon_cache[key] = get_icon(icon_name, color=color)
+            icon = self._icon_cache[key]
+            icon_size = style.get("expand-icon-size", None)
+            rect = option.rect
+            if icon_size:
+                center = rect.center()
+                rect.setSize(QSize(16, 16))
+                rect.moveCenter(center)
+            icon.paint(painter, rect)
+
+        else:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+
+            rect = option.rect
+            cx = rect.center().x()
+            cy = rect.center().y()
+            size = max(4, min(rect.width(), rect.height()) // 3)
+
+            path = QPainterPath()
+            if is_open:
+                # Downward-pointing triangle
+                path.moveTo(cx - size, cy - size // 2)
+                path.lineTo(cx + size, cy - size // 2)
+                path.lineTo(cx, cy + size // 2)
+            else:
+                # Right-pointing triangle
+                path.moveTo(cx - size // 2, cy - size)
+                path.lineTo(cx - size // 2, cy + size)
+                path.lineTo(cx + size // 2, cy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 W_T = {}
 
 
@@ -1966,6 +2283,7 @@ class AYONStyle(QCommonStyle):
             ComboBoxDrawer(self),
             ScrollBarDrawer(self),
             FrameDrawer(self),
+            TreeViewDrawer(self),
             ItemViewItemDrawer(self),
         ]
         for obj in self.drawer_objs:
@@ -1976,6 +2294,15 @@ class AYONStyle(QCommonStyle):
                 self.sizers.update(obj.register_sizers())
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
+
+        # Sort base_classes: most-specific (deepest MRO) first
+        self.base_classes = dict(
+            sorted(
+                self.base_classes.items(),
+                key=lambda kv: len(kv[1].__mro__),
+                reverse=True,
+            )
+        )
 
     def widget_key(self, w: QWidget | None) -> str:
         if self._in_widget_key or w is None or not isValid(w):
@@ -1996,7 +2323,10 @@ class AYONStyle(QCommonStyle):
                     cbd = delegate and isinstance(
                         delegate, ComboBoxItemDelegate
                     )
-                    if not cbd:
+                    tvd = delegate and isinstance(
+                        delegate, TreeViewItemDelegate
+                    )
+                    if not cbd and not tvd:
                         return "QStyledItemDelegate"
                 finally:
                     self._in_widget_key = False

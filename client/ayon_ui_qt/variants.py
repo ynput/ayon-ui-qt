@@ -69,6 +69,12 @@ class QLabelVariants(Enum):
     Pill = "pill"
 
 
+class QTreeViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
+
+
 class QStyledItemDelegateVariants(Enum):
     Default = "default"
 
@@ -77,7 +83,6 @@ class QStyledItemDelegateVariants(Enum):
 
 
 if __name__ == "__main__":
-
     # NOTE: Execute this file to update the variants.py file with the current
     # style data:
     #    uv run python -m client.ayon_ui_qt.variants
