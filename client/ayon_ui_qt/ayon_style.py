@@ -1089,7 +1089,6 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
         bg_data = index.data(Qt.ItemDataRole.BackgroundRole)
 
         cb = self.parent()
-        inverted = getattr(cb, "_inverted", False)
 
         # Menu background from the AYON style JSON
         if self._style_model:
@@ -1283,11 +1282,6 @@ class ComboBoxDrawer:
         # print(f"SUB_CTL: {opt.activeSubControls}")
         if not w.isEditable():
             fg_color, bg_color = self.get_fg_bg_colors(opt, w)
-            icon_name = ""
-            if hasattr(w.model(), "IconNameRole"):
-                icon_name = w.itemData(
-                    w.currentIndex(), w.model().IconNameRole
-                )
 
             # Paint background with status color
             rect = opt.rect
