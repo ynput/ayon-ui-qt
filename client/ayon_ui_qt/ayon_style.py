@@ -2226,7 +2226,15 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             )
 
         painter.setBrush(QBrush(bg_color))
-        painter.setPen(Qt.PenStyle.NoPen)
+
+        pen_width = base_style.get("border-width", 0)
+        if pen_width > 0:
+            pen_color = QColor(base_style.get("border-color", "#000000"))
+            pen = QPen(pen_color)
+            pen.setWidth(pen_width)
+            painter.setPen(pen)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRect(opt.rect)
 
         # --- text colour ---
