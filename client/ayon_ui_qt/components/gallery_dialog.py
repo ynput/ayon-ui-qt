@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QEvent, Qt, Signal
 from qtpy.QtGui import QKeyEvent, QPixmap, QShowEvent
 from qtpy.QtWidgets import (
     QDialog,
@@ -65,6 +65,9 @@ class GalleryDialog(QDialog):
         # Set focus policy so dialog can receive keyboard events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+        # Install event filter to intercept keyboard events from child widgets
+        self.installEventFilter(self)
+
         self._setup_ui()
         self._show_current_image()
 
@@ -78,6 +81,32 @@ class GalleryDialog(QDialog):
         # Activate window and set focus to the dialog so keyboard events work immediately
         self.activateWindow()
         self.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def eventFilter(self, obj, event: QEvent) -> bool:
+        """Filter events to intercept keyboard navigation from any widget.
+
+        This ensures arrow key navigation works even if a child widget
+        somehow gains focus.
+
+        Args:
+            obj: Object that received the event.
+            event: Event to filter.
+
+        Returns:
+            True if the event was handled, False otherwise.
+        """
+        if event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_Left:
+                self._show_previous()
+                return True
+            elif key == Qt.Key.Key_Right:
+                self._show_next()
+                return True
+            elif key == Qt.Key.Key_Escape:
+                self.accept()
+                return True
+        return super().eventFilter(obj, event)
 
     def _setup_ui(self) -> None:
         """Set up the dialog UI components using standard Qt widgets."""
@@ -121,6 +150,7 @@ class GalleryDialog(QDialog):
             self.prev_btn.clicked.connect(self._show_previous)
             # Prevent button from stealing focus
             self.prev_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.prev_btn.installEventFilter(self)
             nav_widget.add_widget(self.prev_btn)
 
             # Info label (counter and filename)
@@ -135,6 +165,7 @@ class GalleryDialog(QDialog):
             self.next_btn.clicked.connect(self._show_next)
             # Prevent button from stealing focus
             self.next_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.next_btn.installEventFilter(self)
             nav_widget.add_widget(self.next_btn)
 
             self.top_lyt.add_widget(nav_widget)
