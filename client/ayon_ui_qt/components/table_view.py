@@ -1,4 +1,4 @@
-"""AYTable component module.
+"""AYTableView component module.
 
 A flat, paginated table built on QTreeView with AYON styling.
 """
@@ -86,7 +86,9 @@ class AYTableHeader(QHeaderView):
             super().paintSection(painter, rect, logical_index)
             return
 
-        tbl_style = self._style_model.get_style("AYTable", self._variant_str)
+        tbl_style = self._style_model.get_style(
+            "AYTableView", self._variant_str
+        )
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -136,6 +138,18 @@ class AYTableHeader(QHeaderView):
             self.isSortIndicatorShown()
             and self.sortIndicatorSection() == logical_index
         ):
+            # do not draw sort indicator if column is not sortable
+            model = self.model()
+            is_sortable = True
+            if isinstance(model, PaginatedTableModel):
+                cols = model.columns
+                if 0 <= logical_index < len(cols):
+                    is_sortable = cols[logical_index].sortable
+            if not is_sortable:
+                painter.restore()
+                return
+
+            # draw sort indicator (icon if available, otherwise arrow)
             order = self.sortIndicatorOrder()
             icon_name = tbl_style.get("header-sort-indicator-icon", None)
             if icon_name is not None:
@@ -271,7 +285,7 @@ class AYTableView(QTreeView):
     def _sync_viewport_palette(self) -> None:
         """Apply the variant background colour to the viewport."""
         style = get_ayon_style()
-        tbl_style = style.model.get_style("AYTable", self._variant_str)
+        tbl_style = style.model.get_style("AYTableView", self._variant_str)
         bg = QColor(tbl_style.get("background-color", "#252a31"))
         p = self.viewport().palette()
         p.setColor(QPalette.ColorRole.Base, bg)
@@ -287,7 +301,7 @@ class AYTableView(QTreeView):
         painter = QPainter(self.viewport())
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         style = get_ayon_style()
-        tbl_style = style.model.get_style("AYTable", self._variant_str)
+        tbl_style = style.model.get_style("AYTableView", self._variant_str)
         bg = QColor(tbl_style.get("background-color", "#252a31"))
         painter.fillRect(self.viewport().rect(), bg)
         painter.end()
@@ -336,7 +350,7 @@ class AYTableView(QTreeView):
 
         # Set header height from style.
         style = get_ayon_style()
-        tbl_style = style.model.get_style("AYTable", self._variant_str)
+        tbl_style = style.model.get_style("AYTableView", self._variant_str)
         header_height = int(tbl_style.get("header-height", 36))
         header.setFixedHeight(header_height)
 
@@ -375,8 +389,42 @@ class AYTableView(QTreeView):
             header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
         # Enable sorting.
-        self.setSortingEnabled(True)
+        # setSectionsClickable enables header click interaction (indicator
+        # toggling + sortIndicatorChanged signal) without QTreeView's internal
+        # sortIndicatorChanged → model.sort() connection that setSortingEnabled
+        # would create behind our guard.
+        header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
+        if isinstance(model, PaginatedTableModel):
+            header.sortIndicatorChanged.connect(
+                lambda section, order: self._on_sort_indicator_changed(
+                    section, order, model
+                )
+            )
+
+    def _on_sort_indicator_changed(
+        self, section: int, order: Qt.SortOrder, model: PaginatedTableModel
+    ) -> None:
+        cols = model.columns
+        if 0 <= section < len(cols) and not cols[section].sortable:
+            header = self.header()
+            header.blockSignals(True)
+            if 0 <= model._sort_column < len(cols):
+                header.setSortIndicator(model._sort_column, model._sort_order)
+            else:
+                header.setSortIndicatorShown(False)
+            header.blockSignals(False)
+            return
+        # Sortable column — delegate to the model.
+        model.sort(section, order)
+        # model.sort() triggers beginResetModel/endResetModel, which causes
+        # QHeaderView.initializeSections() to wipe the sort indicator state.
+        # Re-apply it explicitly after the reset.
+        header = self.header()
+        header.blockSignals(True)
+        header.setSortIndicatorShown(True)
+        header.setSortIndicator(section, order)
+        header.blockSignals(False)
 
     def _on_rows_inserted(
         self,
@@ -499,7 +547,7 @@ if __name__ == "__main__":
         _WIDGET_TEST_DATA.append(new_row)
 
     def _build() -> QtWidgets.QWidget:
-        """Build test UI with one AYTable per variant."""
+        """Build test UI with one AYTableView per variant."""
         container = QtWidgets.QWidget()
         root_lyt = AYVBoxLayout(container, margin=8, spacing=8)
 

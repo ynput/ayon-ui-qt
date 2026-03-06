@@ -485,7 +485,7 @@
                 }
             }
         },
-        "AYTable": {
+        "AYTableView": {
             "states": [
                 "hover",
                 "selected",

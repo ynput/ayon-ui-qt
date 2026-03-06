@@ -2127,15 +2127,15 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
 
 
 class TableItemDelegate(QtWidgets.QStyledItemDelegate):
-    """Item delegate for AYTable that paints cells directly, bypassing QSS.
+    """Item delegate for AYTableView that paints cells directly, bypassing QSS.
 
-    Reads style data from the AYTable style entry to draw cell
+    Reads style data from the AYTableView style entry to draw cell
     backgrounds (hover, selected) and text/icons. Cells that provide
     a WidgetFactoryRole value are skipped — the embedded widget covers
     them.
 
     Args:
-        parent: The parent widget (expected to be an AYTable instance).
+        parent: The parent widget (expected to be an AYTableView instance).
         style_model: StyleData instance providing colour/dimension data.
         variant: The variant string used to look up the correct style.
     """
@@ -2155,7 +2155,7 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
         if self._style_model is None:
             return {"base": {}, "hover": {}, "selected": {}}
         return self._style_model.get_styles(
-            "AYTable",
+            "AYTableView",
             self._variant_str,
             ["base", "hover", "selected"],
         )
@@ -2167,7 +2167,9 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
     ) -> QtCore.QSize:
         """Return a fixed row height from the style data."""
         if self._style_model:
-            style = self._style_model.get_style("AYTable", self._variant_str)
+            style = self._style_model.get_style(
+                "AYTableView", self._variant_str
+            )
             h = int(style.get("item-height", 32))
         else:
             h = 32
@@ -2447,10 +2449,10 @@ class TreeViewDrawer:
 
 
 class TableHeaderDrawer:
-    """AYONStyle drawer for QHeaderView used by AYTable.
+    """AYONStyle drawer for QHeaderView used by AYTableView.
 
     Handles painting of header sections and labels using colours
-    from the AYTable style data in ayon_style.json.
+    from the AYTableView style data in ayon_style.json.
     """
 
     def __init__(self, style_inst: AYONStyle) -> None:
@@ -2512,14 +2514,14 @@ class TableHeaderDrawer:
         return 0
 
     def _get_table_style(self, widget: QWidget | None) -> dict:
-        """Resolve the AYTable style for the header's parent table."""
+        """Resolve the AYTableView style for the header's parent table."""
         variant = "default"
         if widget is not None:
-            # QHeaderView's parent is the QTreeView/AYTable
+            # QHeaderView's parent is the QTreeView/AYTableView
             table = widget.parent()
             if table is not None:
                 variant = getattr(table, "_variant_str", "default")
-        return self.model.get_style("AYTable", variant)
+        return self.model.get_style("AYTableView", variant)
 
     def draw_header_section(
         self,

@@ -31,11 +31,13 @@ class TableColumn:
         key: Dictionary key used to look up cell values in row data.
         label: Display text shown in the header.
         width: Preferred column width hint in pixels. 0 means auto.
+        sortable: Whether the column can be sorted by clicking the header.
     """
 
     key: str
     label: str
     width: int = 0
+    sortable: bool = True
 
 
 class PaginatedTableModel(QAbstractTableModel):
