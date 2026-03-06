@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QKeyEvent, QPixmap
+from qtpy.QtGui import QKeyEvent, QPixmap, QShowEvent
 from qtpy.QtWidgets import (
     QDialog,
     QLabel,
@@ -61,9 +61,23 @@ class GalleryDialog(QDialog):
         self.current_index = current_index
 
         self.setWindowTitle("Image Preview")
+        
+        # Set focus policy so dialog can receive keyboard events
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._setup_ui()
         self._show_current_image()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Handle dialog show event to set focus properly.
+        
+        Args:
+            event: Show event.
+        """
+        super().showEvent(event)
+        # Activate window and set focus to the dialog so keyboard events work immediately
+        self.activateWindow()
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _setup_ui(self) -> None:
         """Set up the dialog UI components using standard Qt widgets."""
@@ -76,12 +90,16 @@ class GalleryDialog(QDialog):
             layout_margin=10,
             layout_spacing=10,
         )
+        # Prevent container from accepting focus
+        self.top_lyt.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         dialog_lyt.addWidget(self.top_lyt)
 
         # Image display area
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setScaledContents(False)
+        # Prevent label from accepting focus
+        self.image_label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.top_lyt.add_widget(self.image_label, stretch=1)
 
         # Only show navigation controls if multiple images
@@ -93,22 +111,30 @@ class GalleryDialog(QDialog):
                 layout_margin=0,
                 layout_spacing=10,
             )
+            # Prevent container from accepting focus
+            nav_widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
             # Previous button
             self.prev_btn = AYButton(
                 "◀ Previous", variant=AYButton.Variants.Nav
             )
             self.prev_btn.clicked.connect(self._show_previous)
+            # Prevent button from stealing focus
+            self.prev_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             nav_widget.add_widget(self.prev_btn)
 
             # Info label (counter and filename)
             self.info_label = AYLabel(variant=AYLabel.Variants.Default)
             self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            # Prevent label from accepting focus
+            self.info_label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             nav_widget.add_widget(self.info_label, stretch=1)
 
             # Next button
             self.next_btn = AYButton("Next ▶", variant=AYButton.Variants.Nav)
             self.next_btn.clicked.connect(self._show_next)
+            # Prevent button from stealing focus
+            self.next_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             nav_widget.add_widget(self.next_btn)
 
             self.top_lyt.add_widget(nav_widget)
