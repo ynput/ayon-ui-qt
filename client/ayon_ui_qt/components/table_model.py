@@ -366,7 +366,8 @@ class PaginatedTableModel(QAbstractTableModel):
     def _infer_columns(row: dict[str, Any]) -> list[TableColumn]:
         """Infer column definitions from a sample row dictionary.
 
-        Keys ending with ``__icon`` or ``__widget_factory`` are excluded.
+        Keys ending with ``__icon``, ``__color``, or ``__widget_factory``
+        are excluded.
 
         Args:
             row: A representative row dictionary.
@@ -376,7 +377,7 @@ class PaginatedTableModel(QAbstractTableModel):
         """
         columns: list[TableColumn] = []
         for key in row:
-            if key.endswith("__icon") or key.endswith("__widget_factory"):
+            if key.endswith(("__icon", "__color", "__widget_factory")):
                 continue
             label = key.replace("_", " ").title()
             columns.append(TableColumn(key=key, label=label))
@@ -391,7 +392,7 @@ TABLE_TEST_DATA: list[dict[str, Any]] = [
     {
         "name": f"Asset {i:03d}",
         "status": ["Active", "Inactive", "Review"][i % 3],
-        "status__icon":["play_arrow", "fiber_new", "visibility"][i % 3],
+        "status__icon": ["play_arrow", "fiber_new", "visibility"][i % 3],
         "status__color": ["#3498db", "#434a56", "#ff9b0a"][i % 3],
         "type": ["Model", "Texture", "Rig", "Animation"][i % 4],
         "author": ["Alice", "Bob", "Charlie", "Diana"][i % 4],
