@@ -294,6 +294,15 @@ class PaginatedTableModel(QAbstractTableModel):
         self._page_size = size
         self.reset_data()
 
+    def set_columns(self, columns: list[Column]) -> None:
+        """Set the columns and reset the model from page 0.
+
+        Args:
+            columns: List of columns to display.
+        """
+        self._explicit_columns = columns
+        self.reset_data()
+
     def reset_data(self) -> None:
         """Reset the model and re-fetch from page 0."""
         self.beginResetModel()
