@@ -29,6 +29,8 @@ class AYButton(QtWidgets.QPushButton):
         tooltip: str = "",
         name_id: str = "",
         contrast_color: QtGui.QColor | None = QtGui.QColor(),
+        label_alignment: QtCore.Qt.AlignmentFlag | None = None,
+        fixed_width: bool | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -74,10 +76,28 @@ class AYButton(QtWidgets.QPushButton):
         if self._tooltip:
             self.setToolTip(self._tooltip)
 
+        self._label_alignment = label_alignment
+
         self._name_id = ""
         if name_id:
             self.setObjectName(name_id)
             self._name_id = name_id
+
+        use_fixed_width = (
+            style_dict.get("fixed-width", True)
+            if fixed_width is None
+            else fixed_width
+        )
+        if use_fixed_width:
+            self.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Fixed,
+                QtWidgets.QSizePolicy.Policy.Fixed,
+            )
+        else:
+            self.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Preferred,
+                QtWidgets.QSizePolicy.Policy.Fixed,
+            )
 
     @property
     def contrast_color(self):
@@ -102,12 +122,14 @@ class AYButton(QtWidgets.QPushButton):
             self.initStyleOption(option)
             # override rect set by stylesheet
             size = self.sizeHint()
-            if self._variant_str == QPushButtonVariants.Tag_Menu.value:
-                self.setFixedHeight(size.height())
-            else:
+            if (
+                self.sizePolicy().horizontalPolicy()
+                == QtWidgets.QSizePolicy.Policy.Fixed
+            ):
                 self.setFixedSize(size)
                 option.rect = QtCore.QRect(0, 0, size.width(), size.height())
-            # draw
+            else:
+                self.setFixedHeight(size.height())  # draw
             return get_ayon_style().drawControl(
                 QtWidgets.QStyle.ControlElement.CE_PushButton, option, p, self
             )

@@ -605,20 +605,17 @@ class ButtonDrawer:
         )
         # _debug_rect(painter, "#ff5555", content_rect)
 
+        # Optional per-widget alignment override (None → default centered layout)
+        label_alignment = getattr(widget, "_label_alignment", None)
+
         # Draw icon if present
         if option.icon:  # type: ignore
             # icon_color = QColor(getattr(widget, "_icon_color", text_color))
-            icon_rect = QRect(content_rect)
             if option.text and not style.get("ignore-text", False):  # type: ignore
-                # Icon + text: place icon on the left
                 icon_size = option.iconSize  # type: ignore
-                icon_rect.setSize(icon_size)
-                icon_rect.moveCenter(
-                    QtCore.QPoint(
-                        content_rect.left() + style["icon-padding"][0],
-                        content_rect.center().y(),
-                    )
-                )
+                icon_w = icon_size.width()
+                icon_h = icon_size.height()
+                _gap = 4
 
                 # Draw icon with text color inheritance
                 mode = QtGui.QIcon.Mode.Normal
@@ -629,26 +626,76 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                option.icon.paint(  # type: ignore
-                    painter,
-                    icon_rect,
-                    Qt.AlignmentFlag.AlignCenter,
-                    mode,
-                )
-
-                # Adjust text rectangle
-                text_rect = QRect(content_rect)
-                text_rect.setLeft(icon_rect.right() + 4)
-
-                # Draw text
-                if option.text:  # type: ignore
+                if label_alignment is not None:
+                    # Group layout: icon + text move together as a unit
+                    h_align = (
+                        label_alignment
+                        & Qt.AlignmentFlag.AlignHorizontal_Mask
+                    )
+                    text_w = painter.fontMetrics().horizontalAdvance(
+                        option.text  # type: ignore
+                    )
+                    group_w = icon_w + _gap + text_w
+                    if h_align == Qt.AlignmentFlag.AlignLeft:
+                        group_x = content_rect.left()
+                    elif h_align == Qt.AlignmentFlag.AlignRight:
+                        group_x = content_rect.right() - group_w
+                    else:
+                        group_x = (
+                            content_rect.left()
+                            + (content_rect.width() - group_w) // 2
+                        )
+                    icon_rect = QRect(
+                        group_x,
+                        content_rect.center().y() - icon_h // 2,
+                        icon_w,
+                        icon_h,
+                    )
+                    text_rect = QRect(
+                        icon_rect.right() + _gap,
+                        content_rect.top(),
+                        text_w,
+                        content_rect.height(),
+                    )
+                    option.icon.paint(  # type: ignore
+                        painter,
+                        icon_rect,
+                        Qt.AlignmentFlag.AlignCenter,
+                        mode,
+                    )
+                    painter.drawText(
+                        text_rect,
+                        Qt.AlignmentFlag.AlignLeft
+                        | Qt.AlignmentFlag.AlignVCenter,
+                        option.text,  # type: ignore
+                    )
+                else:
+                    # Icon + text: place icon on the left (default centered layout)
+                    icon_rect = QRect(content_rect)
+                    icon_rect.setSize(icon_size)
+                    icon_rect.moveCenter(
+                        QtCore.QPoint(
+                            content_rect.left() + style["icon-padding"][0],
+                            content_rect.center().y(),
+                        )
+                    )
+                    option.icon.paint(  # type: ignore
+                        painter,
+                        icon_rect,
+                        Qt.AlignmentFlag.AlignCenter,
+                        mode,
+                    )
+                    # Adjust text rectangle
+                    text_rect = QRect(content_rect)
+                    text_rect.setLeft(icon_rect.right() + _gap)
+                    # Draw text
                     painter.drawText(
                         text_rect,
                         Qt.AlignmentFlag.AlignCenter,
                         option.text,  # type: ignore
                     )
             elif variant != "thumbnail":
-                # Icon only: center the icon
+                # Icon only
                 mode = QtGui.QIcon.Mode.Normal
                 if not (
                     option.state & QStyle.StateFlag.State_Enabled  # type: ignore
@@ -674,19 +721,37 @@ class ButtonDrawer:
                     )
                 )
 
+                _icon_align = (
+                    (
+                        label_alignment
+                        & Qt.AlignmentFlag.AlignHorizontal_Mask
+                    )
+                    | Qt.AlignmentFlag.AlignVCenter
+                    if label_alignment is not None
+                    else Qt.AlignmentFlag.AlignCenter
+                )
                 option.icon.paint(  # type: ignore
                     painter,
                     content_rect,
-                    Qt.AlignmentFlag.AlignCenter,
+                    _icon_align,
                     mode,
                     icon_state,
                 )
         else:
             # Text only
             if option.text and not style.get("ignore-text", False):  # type: ignore
+                _text_align = (
+                    (
+                        label_alignment
+                        & Qt.AlignmentFlag.AlignHorizontal_Mask
+                    )
+                    | Qt.AlignmentFlag.AlignVCenter
+                    if label_alignment is not None
+                    else Qt.AlignmentFlag.AlignCenter
+                )
                 painter.drawText(
                     content_rect,
-                    Qt.AlignmentFlag.AlignCenter,
+                    _text_align,
                     option.text,  # type: ignore
                 )
 
