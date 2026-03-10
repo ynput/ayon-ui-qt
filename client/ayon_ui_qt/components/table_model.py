@@ -32,12 +32,14 @@ class TableColumn:
         label: Display text shown in the header.
         width: Preferred column width hint in pixels. 0 means auto.
         sortable: Whether the column can be sorted by clicking the header.
+        icon: Optional material icon name shown in the filter dropdown.
     """
 
     key: str
     label: str
     width: int = 0
     sortable: bool = True
+    icon: str | None = None
 
 
 class PaginatedTableModel(QAbstractTableModel):
@@ -294,7 +296,7 @@ class PaginatedTableModel(QAbstractTableModel):
         self._page_size = size
         self.reset_data()
 
-    def set_columns(self, columns: list[Column]) -> None:
+    def set_columns(self, columns: list[TableColumn]) -> None:
         """Set the columns and reset the model from page 0.
 
         Args:
@@ -313,6 +315,26 @@ class PaginatedTableModel(QAbstractTableModel):
         self._columns = self._explicit_columns or []
         self.endResetModel()
         self._fetch_next_page()
+
+    def get_distinct_values(self, key: str) -> list[str]:
+        """Return sorted distinct non-empty string values for a column.
+
+        Scans currently loaded rows only.
+
+        Args:
+            key: Column key to inspect.
+
+        Returns:
+            Sorted list of unique string values found in loaded rows.
+        """
+        seen: set[str] = set()
+        for row in self._rows:
+            val = row.get(key)
+            if val is not None:
+                s = str(val).strip()
+                if s:
+                    seen.add(s)
+        return sorted(seen)
 
     # Internal helpers --------------------------------------------------------
 
@@ -432,7 +454,7 @@ def make_test_fetch(
         descending: bool,
     ) -> list[dict[str, Any]]:
         print(
-            f"Fetching page {page} (page_size={page_size}, "
+            f"[test]  Fetching page {page} (page_size={page_size}, "
             f"sort_key={sort_key!r}, descending={descending})"
         )
         rows = data
@@ -460,6 +482,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     fetch = make_test_fetch(TABLE_TEST_DATA)
     model = PaginatedTableModel(fetch_page=fetch, page_size=25)
-    print(f"Rows: {model.rowCount()}, Columns: {model.columnCount()}")
-    print(f"Columns: {[c.label for c in model.columns]}")
-    print(f"Has more: {model.canFetchMore(model.index(0, 0).parent())}")
+    print(f"[test]  Rows: {model.rowCount()}, Columns: {model.columnCount()}")
+    print(f"[test]  Columns: {[c.label for c in model.columns]}")
+    print(f"[test]  Has more: {model.canFetchMore(model.index(0, 0).parent())}")
