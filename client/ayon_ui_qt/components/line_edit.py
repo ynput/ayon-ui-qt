@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtWidgets import QStyleOptionFrame
 from qtpy.QtCore import Qt, QRectF
 from qtpy.QtGui import QPainter, QPaintEvent, QColor, QPalette, QPen, QBrush
 from qtpy.QtWidgets import (
@@ -38,9 +39,9 @@ class AYLineEdit(QLineEdit):
         name_id: str = "",
     ) -> None:
         super().__init__(parent)
-        self.setStyle(get_ayon_style())
 
         self._variant_str = variant.value
+        self._pal: QPalette | None = None
 
         if placeholder:
             self.setPlaceholderText(placeholder)
@@ -54,7 +55,9 @@ class AYLineEdit(QLineEdit):
         # Neutralise any ancestor stylesheet that would intercept
         # PE_PanelLineEdit via QStyleSheetStyle, making it visually transparent.
         self.setStyleSheet(
-            "AYLineEdit { background: transparent; border: none; padding: 0px; }"
+            "AYLineEdit { background: transparent; border: none; "
+            "padding: 0px; selection-background-color: none; "
+            "selection-color: none; }"
         )
 
         # Suppress macOS native focus ring (we draw our own)
@@ -65,24 +68,43 @@ class AYLineEdit(QLineEdit):
 
         self._apply_style_palette()
 
+        #  this must be called after the palette has been set for it to stick.
+        self.setStyle(get_ayon_style())
+
+    @property
+    def ayon_palette(self) -> QPalette:
+        """Return the palette used for this widget."""
+        if self._pal is None:
+            self._apply_style_palette()
+        return self._pal
+
     def _apply_style_palette(self) -> None:
         """Push text / placeholder colors and padding from ayon_style.json."""
         model = get_ayon_style().model
         style = model.get_style("QLineEdit", variant=self._variant_str)
 
-        pal = self.palette()
+        self._pal = self.palette()
 
         text_color = QColor(style.get("color", "#ffffff"))
-        pal.setColor(QPalette.ColorRole.Text, text_color)
-        pal.setColor(QPalette.ColorRole.BrightText, text_color)
+        self._pal.setColor(QPalette.ColorRole.Text, text_color)
+        self._pal.setColor(QPalette.ColorRole.BrightText, text_color)
 
         ph_color = QColor(style.get("placeholder-color", "#888888"))
-        pal.setColor(QPalette.ColorRole.PlaceholderText, ph_color)
+        self._pal.setColor(QPalette.ColorRole.PlaceholderText, ph_color)
+
+        self._pal.setColor(
+            QPalette.ColorRole.Highlight,
+            QColor(style.get("selection-background-color", "#4040dd")),
+        )
+        self._pal.setColor(
+            QPalette.ColorRole.HighlightedText,
+            QColor(style.get("selection-color", "#ffffff")),
+        )
 
         # Transparent base so the background rect we draw is visible
-        pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        self._pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
 
-        self.setPalette(pal)
+        self.setPalette(self._pal)
 
         # Apply padding as text margins (immune to QSS interception)
         padding = style.get("padding", [8, 4])
@@ -93,6 +115,11 @@ class AYLineEdit(QLineEdit):
             else pad_v
         )
         self.setTextMargins(pad_h, pad_v, pad_h, pad_v)
+
+    def initStyleOption(self, option: QStyleOptionFrame) -> None:
+        """Override the palette used by the style to paint the widget."""
+        self.setPalette(self.ayon_palette)
+        super().initStyleOption(option)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """Paint background, border, and focus ring, then delegate text rendering.

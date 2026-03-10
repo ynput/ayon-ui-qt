@@ -302,15 +302,17 @@
                 "default": {
                     "background-color": "--md-sys-color-surface-container-dark",
                     "color": "--md-sys-color-on-surface-dark",
-                    "placeholder-color": "--md-ref-palette-neutral-variant50",
+                    "placeholder-color": "--md-ref-palette-neutral-variant30",
+                    "selection-background-color": "--md-sys-color-secondary-container-dark",
+                    "selection-color": "--md-sys-color-on-secondary-container-dark",
                     "border-color": "--md-sys-color-outline-variant-dark",
                     "border-width": 1,
-                    "border-radius": 2,
-                    "focus-outline-width": 2,
+                    "border-radius": 4,
+                    "focus-outline-width": 1,
                     "focus-outline-color": "--md-sys-color-primary-dark",
                     "padding": [
-                        4,
-                        8
+                        8,
+                        4
                     ],
                     "hover": {
                         "border-color": "--md-sys-color-outline-dark"
@@ -321,7 +323,12 @@
                     }
                 },
                 "search-field": {
-                    "background-color": "--md-sys-color-surface-container-lowest-dark"
+                    "background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "selection-background-color": "--md-sys-color-secondary-container-dark",
+                    "selection-color": "--md-sys-color-on-secondary-container-dark",
+                    "icon": "search",
+                    "icon-color": "--md-ref-palette-neutral-variant50",
+                    "icon-padding": 8
                 }
             }
         },
