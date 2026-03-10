@@ -75,14 +75,14 @@ class QTreeViewVariants(Enum):
     High = "high"
 
 
-class AYTableVariants(Enum):
+class QStyledItemDelegateVariants(Enum):
+    Default = "default"
+
+
+class AYTableViewVariants(Enum):
     Default = "default"
     Low = "low"
     High = "high"
-
-
-class QStyledItemDelegateVariants(Enum):
-    Default = "default"
 
 
 # END OF VARIANTs DEFINITIONS -------------------------------------------------

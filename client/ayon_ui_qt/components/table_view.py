@@ -29,7 +29,7 @@ from qtpy.QtWidgets import QHeaderView, QTreeView, QWidget
 
 from .. import get_ayon_style
 from ..ayon_style import StyleData, TableItemDelegate
-from ..variants import AYTableVariants
+from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
 from .table_model import PaginatedTableModel
 
@@ -211,13 +211,13 @@ class AYTableView(QTreeView):
         variant: Visual style variant controlling colours.
     """
 
-    Variants = AYTableVariants
+    Variants = AYTableViewVariants
     selection_changed = Signal(QItemSelection, QItemSelection)
 
     def __init__(
         self,
         parent: QWidget | None = None,
-        variant: AYTableVariants = AYTableVariants.Default,
+        variant: Variants = Variants.Default,
     ) -> None:
         self._variant_str: str = variant.value
 
