@@ -26,6 +26,7 @@ from qtpy.QtWidgets import (
     QFrame,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QListView,
     QPushButton,
     QStyle,
@@ -629,8 +630,7 @@ class ButtonDrawer:
                 if label_alignment is not None:
                     # Group layout: icon + text move together as a unit
                     h_align = (
-                        label_alignment
-                        & Qt.AlignmentFlag.AlignHorizontal_Mask
+                        label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask
                     )
                     text_w = painter.fontMetrics().horizontalAdvance(
                         option.text  # type: ignore
@@ -722,10 +722,7 @@ class ButtonDrawer:
                 )
 
                 _icon_align = (
-                    (
-                        label_alignment
-                        & Qt.AlignmentFlag.AlignHorizontal_Mask
-                    )
+                    (label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask)
                     | Qt.AlignmentFlag.AlignVCenter
                     if label_alignment is not None
                     else Qt.AlignmentFlag.AlignCenter
@@ -741,10 +738,7 @@ class ButtonDrawer:
             # Text only
             if option.text and not style.get("ignore-text", False):  # type: ignore
                 _text_align = (
-                    (
-                        label_alignment
-                        & Qt.AlignmentFlag.AlignHorizontal_Mask
-                    )
+                    (label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask)
                     | Qt.AlignmentFlag.AlignVCenter
                     if label_alignment is not None
                     else Qt.AlignmentFlag.AlignCenter
@@ -1677,6 +1671,47 @@ class ScrollBarDrawer:
         painter.drawRect(option.rect)
 
         painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class LineEditDrawer:
+    """AYONStyle drawer for QLineEdit.
+
+    Registers a no-op for PE_PanelLineEdit when the widget is an AYLineEdit
+    instance (which paints itself fully in its own paintEvent), and falls back
+    to the base QCommonStyle implementation for all other QLineEdit widgets.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+
+    @property
+    def base_class(self):
+        return {"QLineEdit": QLineEdit}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelLineEdit,
+                "QLineEdit",
+            ): self.draw_panel,
+        }
+
+    def draw_panel(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None,
+    ) -> None:
+        # AYLineEdit paints its own background — skip Qt's default frame.
+        if type(widget).__name__ == "AYLineEdit":
+            return
+        super(AYONStyle, self.style_inst).drawPrimitive(
+            QStyle.PrimitiveElement.PE_PanelLineEdit, option, painter, widget
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -2717,6 +2752,7 @@ class AYONStyle(QCommonStyle):
         self.drawer_objs = [
             TooltipDrawer(self),
             LabelDrawer(self),  # first because QLabel inherits from QFrame.
+            LineEditDrawer(self),
             ButtonDrawer(self),
             CheckboxDrawer(self),
             ComboBoxDrawer(self),

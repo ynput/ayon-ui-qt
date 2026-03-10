@@ -35,6 +35,7 @@ class QTextEditVariants(Enum):
 
 class QLineEditVariants(Enum):
     Default = "default"
+    Search_Field = "search-field"
 
 
 class QComboBoxVariants(Enum):

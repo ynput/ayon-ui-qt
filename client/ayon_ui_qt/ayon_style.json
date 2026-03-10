@@ -294,6 +294,7 @@
         },
         "QLineEdit": {
             "states": [
+                "hover",
                 "disabled"
             ],
             "default-variant": "default",
@@ -308,13 +309,19 @@
                     "focus-outline-width": 2,
                     "focus-outline-color": "--md-sys-color-primary-dark",
                     "padding": [
-                        8,
-                        12
+                        4,
+                        8
                     ],
+                    "hover": {
+                        "border-color": "--md-sys-color-outline-dark"
+                    },
                     "disabled": {
                         "background-color": "--md-sys-color-surface-container-dark",
                         "opacity": 0.5
                     }
+                },
+                "search-field": {
+                    "background-color": "--md-sys-color-surface-container-lowest-dark"
                 }
             }
         },
