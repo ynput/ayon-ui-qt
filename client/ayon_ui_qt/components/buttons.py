@@ -23,7 +23,7 @@ class AYButton(QtWidgets.QPushButton):
         variant: Variants = Variants.Surface,
         icon: str | None = None,
         icon_on: str | None = None,
-        icon_size: int = 24,
+        icon_size: int = 16,
         icon_color: str | None = None,
         checkable=False,
         tooltip: str = "",
@@ -34,7 +34,6 @@ class AYButton(QtWidgets.QPushButton):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.setStyle(get_ayon_style())
         self.setCheckable(checkable)
 
         # Convert enum to string if needed
@@ -99,9 +98,15 @@ class AYButton(QtWidgets.QPushButton):
                 QtWidgets.QSizePolicy.Policy.Fixed,
             )
 
+        self.setStyle(get_ayon_style())
+
     @property
     def contrast_color(self):
         return self._contrast_color
+
+    def initStyleOption(self, option: QtWidgets.QStyleOptionButton) -> None:
+        super().initStyleOption(option)
+        option.iconSize = QtCore.QSize(self._icon_size, self._icon_size)
 
     def sizeHint(self) -> QtCore.QSize:
         if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
