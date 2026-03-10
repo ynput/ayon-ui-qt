@@ -252,10 +252,19 @@
                 "default": {
                     "background-color": "--md-sys-color-surface-container-highest-dark",
                     "color": "--md-sys-color-on-surface-dark",
-                    "focus-outline-width": 2,
+                    "focus-outline-width": 0,
+                    "indicator-width": 32,
+                    "indicator-height": 18,
+                    "checkbox-label-spacing": 8,
                     "checked": {
                         "color": "--md-sys-color-on-tertiary-dark",
                         "background-color": "--md-sys-color-tertiary-dark"
+                    }
+                },
+                "primary": {
+                    "checked": {
+                        "color": "--md-sys-color-on-primary-dark",
+                        "background-color": "--md-sys-color-primary-dark"
                     }
                 }
             }

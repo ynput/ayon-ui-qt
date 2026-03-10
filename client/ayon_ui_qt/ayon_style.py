@@ -1021,12 +1021,17 @@ class CheckboxDrawer:
         opt: QStyleOption | None = None,
         widget: QWidget | None = None,
     ):
+        variant = getattr(widget, "_variant_str", "default")
+        style = self.model.get_style(
+            "QCheckBox",
+            variant=variant,
+        )
         if metric == QStyle.PixelMetric.PM_IndicatorWidth:
-            return 32
+            return style.get("indicator-width", 32)
         elif metric == QStyle.PixelMetric.PM_IndicatorHeight:
-            return 18
+            return style.get("indicator-height", 18)
         elif metric == QStyle.PixelMetric.PM_CheckBoxLabelSpacing:
-            return 8
+            return style.get("checkbox-label-spacing", 8)
         return 0
 
     def draw_control(
@@ -1047,14 +1052,19 @@ class CheckboxDrawer:
     ):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # get style data
         checked = bool(option.state & QStyle.StateFlag.State_On)
+        variant = getattr(w, "_variant_str", "default")
         style = self.model.get_style(
-            "QCheckBox", "", state="checked" if checked else "base"
+            "QCheckBox",
+            variant=variant,
+            state="checked" if checked else "base",
         )
-        painter.setBrush(QColor(style["background-color"]))
-        painter.setPen(Qt.PenStyle.NoPen)
 
         # draw toggle background
+        painter.setBrush(QColor(style["background-color"]))
+        painter.setPen(Qt.PenStyle.NoPen)
         frame_rect: QRectF = option.rect.toRectF().adjusted(1, 0, -1, 0)
         radius = frame_rect.height() / 2.0
         painter.drawRoundedRect(frame_rect, radius, radius)
@@ -1069,6 +1079,7 @@ class CheckboxDrawer:
         if checked:
             state_rect.moveRight(frame_rect.width() - offset * 0.5)
         painter.drawEllipse(state_rect)
+
         painter.restore()
 
 

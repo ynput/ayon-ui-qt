@@ -22,6 +22,7 @@ class QPushButtonVariants(Enum):
 
 class QCheckBoxVariants(Enum):
     Default = "default"
+    Primary = "primary"
 
 
 class QTextEditVariants(Enum):
