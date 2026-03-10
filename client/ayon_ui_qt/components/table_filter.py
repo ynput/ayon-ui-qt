@@ -257,14 +257,15 @@ class _FilterDropdown(AYFrame):
         footer = AYContainer(
             layout=AYContainer.Layout.HBox,
             variant=AYContainer.Variants.Low,
-            layout_margin=0,
+            layout_margin=4,
             layout_spacing=4,
         )
         footer.addStretch()
         self._apply_btn = AYButton(
-            "Apply",
+            "Confirm",
             variant=AYButton.Variants.Filled,
             fixed_width=False,
+            icon="check",
         )
         self._apply_btn.clicked.connect(self._on_apply)
         footer.add_widget(self._apply_btn)
