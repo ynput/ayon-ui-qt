@@ -319,8 +319,10 @@ class _FilterDropdown(AYFrame):
             btn = AYButton(
                 col.label,
                 icon=col.icon or "",
+                icon_color="#dedede",
                 variant=AYButton.Variants.Tag_Menu,
                 fixed_width=False,
+                label_alignment=Qt.AlignmentFlag.AlignLeft,
             )
             btn.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
