@@ -327,8 +327,9 @@
                     "selection-background-color": "--md-sys-color-secondary-container-dark",
                     "selection-color": "--md-sys-color-on-secondary-container-dark",
                     "icon": "search",
-                    "icon-color": "--md-ref-palette-neutral-variant50",
-                    "icon-padding": 8
+                    "icon-size": 16,
+                    "icon-color": "--md-sys-color-on-surface-dark",
+                    "icon-padding": 4
                 }
             }
         },

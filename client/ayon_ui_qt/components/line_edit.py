@@ -13,6 +13,11 @@ from qtpy.QtWidgets import (
 from .. import get_ayon_style
 from ..variants import QLineEditVariants
 
+try:
+    from qtmaterialsymbols import get_icon  # type: ignore
+except ImportError:
+    from ..vendor.qtmaterialsymbols import get_icon
+
 
 class AYLineEdit(QLineEdit):
     """Custom styled line edit component.
@@ -108,13 +113,14 @@ class AYLineEdit(QLineEdit):
 
         # Apply padding as text margins (immune to QSS interception)
         padding = style.get("padding", [8, 4])
-        pad_v = padding[1] if isinstance(padding, list) else padding
-        pad_h = (
-            padding[0]
-            if isinstance(padding, list) and len(padding) > 1
-            else pad_v
-        )
-        self.setTextMargins(pad_h, pad_v, pad_h, pad_v)
+        pad_h = padding[0]
+        pad_v = padding[1]
+        icon_width = 0
+        if style.get("icon"):
+            icon_width = style.get("icon-size", 16) + style.get(
+                "icon-padding", 8
+            )
+        self.setTextMargins(pad_h + icon_width, pad_v, pad_h, pad_v)
 
     def initStyleOption(self, option: QStyleOptionFrame) -> None:
         """Override the palette used by the style to paint the widget."""
@@ -171,6 +177,18 @@ class AYLineEdit(QLineEdit):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(bg_color))
         painter.drawRoundedRect(bg_rect, border_radius, border_radius)
+
+        # icon
+        icon_name = style.get("icon")
+        if icon_name:
+            icon_color = QColor(style.get("icon-color", "#888888"))
+            icon_size = style.get("icon-size", 16)
+            x = style.get("padding", [8, 4])[0]
+            pixmap = get_icon(icon_name, color=icon_color).pixmap(
+                icon_size, icon_size
+            )
+            y = (rect.height() - icon_size) / 2.0
+            painter.drawPixmap(x, y, icon_size, icon_size, pixmap)
 
         # Border
         border_pen = QPen(border_color)
