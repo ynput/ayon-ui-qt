@@ -559,10 +559,11 @@ class AYTableFilter(AYContainer):
         super().__init__(
             parent=parent,
             layout=AYContainer.Layout.HBox,
-            variant=AYContainer.Variants.Low_Framed,
+            variant=AYContainer.Variants.Low_Framed_Thin,
             layout_margin=4,
         )
         self.setObjectName("AYTableFilter")
+        self.setFixedHeight(32)
 
         self._model = model
         self._criteria: list[FilterCriterion] = []
@@ -614,7 +615,7 @@ class AYTableFilter(AYContainer):
         if not self._criteria:
             empty_btn = AYButton(
                 "Filter",
-                variant=AYButton.Variants.Text,
+                variant=AYButton.Variants.Table_Filter,
                 label_alignment=Qt.AlignmentFlag.AlignLeft,
                 fixed_width=False,
             )

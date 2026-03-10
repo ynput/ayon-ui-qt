@@ -17,6 +17,7 @@ class QPushButtonVariants(Enum):
     Thumbnail = "thumbnail"
     Tag = "tag"
     Tag_Menu = "tag-menu"
+    Table_Filter = "table-filter"
 
 
 class QCheckBoxVariants(Enum):
@@ -50,6 +51,7 @@ class QFrameVariants(Enum):
     Low = "low"
     Low_Square = "low-square"
     Low_Framed = "low-framed"
+    Low_Framed_Thin = "low-framed-thin"
     High = "high"
     Tag = "tag"
     Item_View = "item-view"

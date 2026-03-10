@@ -226,6 +226,20 @@
                         "background-color": "transparent",
                         "opacity": 0.5
                     }
+                },
+                "table-filter": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "text-padding": [
+                        2,
+                        2
+                    ],
+                    "hover": {
+                        "background-color": "transparent"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-neutral20"
+                    }
                 }
             }
         },
@@ -361,6 +375,11 @@
                 "low-framed": {
                     "background-color": "--md-sys-color-surface-container-low-dark",
                     "border-width": 2,
+                    "border-color": "--md-sys-color-outline-variant-dark"
+                },
+                "low-framed-thin": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "border-width": 1,
                     "border-color": "--md-sys-color-outline-variant-dark"
                 },
                 "high": {
