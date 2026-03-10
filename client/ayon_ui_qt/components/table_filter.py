@@ -157,10 +157,12 @@ class _FilterDropdown(AYFrame):
     def __init__(
         self,
         model: PaginatedTableModel,
+        table_filter: AYTableFilter,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent, variant=AYFrame.Variants.Low_Framed)
+        super().__init__(parent, variant=AYFrame.Variants.Low_Framed_Thin)
         self._model = model
+        self._table_filter = table_filter
         self._current_key: str = ""
         self._current_label: str = ""
         self._value_buttons: dict[str, AYButton] = {}
@@ -448,23 +450,43 @@ class _FilterDropdown(AYFrame):
     # ------------------------------------------------------------------
 
     def _show_below(self, widget: QWidget) -> None:
-        global_pos = widget.mapToGlobal(QPoint(0, widget.height()))
+        # Use minimumHeight — set synchronously by setFixedHeight in _adjust_height.
+        # This is reliable before show(), unlike self.height() which depends on
+        # the native window being created.
+        h = self.minimumHeight()
+
+        global_pos = widget.mapToGlobal(QPoint(0, widget.height() + 2))
 
         screen = QApplication.screenAt(global_pos)
         if screen:
             geo = screen.availableGeometry()
             if global_pos.x() + self.width() > geo.right():
                 global_pos.setX(geo.right() - self.width())
-            if global_pos.y() + self.height() > geo.bottom():
+            if global_pos.y() + h > geo.bottom():
                 above = widget.mapToGlobal(QPoint(0, 0))
-                global_pos.setY(above.y() - self.height())
+                global_pos.setY(above.y() - h)
 
         self.move(global_pos)
         self.show()
 
     def _adjust_height(self) -> None:
-        self.adjustSize()
-        self.setMaximumHeight(420)
+        """Resize popup to fit current page content."""
+        _MAX_H = 420
+        _ROW_H = 32  # nominal height per button row
+        _CHROME = 24  # root layout margins + spacing overhead
+
+        if self._stack.currentIndex() == 0 and hasattr(self, "_attr_buttons"):
+            visible = [
+                b for b in self._attr_buttons.values() if not b.isHidden()
+            ]
+            search_h = max(self._attr_search.sizeHint().height(), 28)
+            desired = search_h + _ROW_H * max(len(visible), 1) + _CHROME
+        else:
+            # value page: header + scrollable values + apply footer
+            desired = 280
+
+        self.setFixedHeight(min(desired, _MAX_H))
+        self.setMinimumWidth(self._table_filter.width())
 
     def closeEvent(self, event) -> None:
         self.closed.emit()
@@ -578,7 +600,7 @@ class AYTableFilter(AYContainer):
         model.rowsInserted.connect(lambda *_: self._proxy.refresh_filter())
 
         # Shared dropdown instance (reused across open calls)
-        self._dropdown = _FilterDropdown(model=model)
+        self._dropdown = _FilterDropdown(model, self)
         self._dropdown.criterion_ready.connect(self._on_criterion_ready)
 
         # search button - always visible, opens empty dropdown for new criterion

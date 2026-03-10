@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable
+import random
 
 from qtpy.QtCore import (
     QAbstractTableModel,
@@ -424,11 +425,56 @@ class PaginatedTableModel(QAbstractTableModel):
 TABLE_TEST_DATA: list[dict[str, Any]] = [
     {
         "name": f"Asset {i:03d}",
-        "status": ["Active", "Inactive", "Review"][i % 3],
-        "status__icon": ["play_arrow", "fiber_new", "visibility"][i % 3],
-        "status__color": ["#3498db", "#434a56", "#ff9b0a"][i % 3],
-        "type": ["Model", "Texture", "Rig", "Animation"][i % 4],
-        "author": ["Alice", "Bob", "Charlie", "Diana"][i % 4],
+        "status": [
+            "Not ready",
+            "Ready to start",
+            "In progress",
+            "Pending review",
+            "Approved",
+            "On hold",
+            "Omitted",
+        ][i % 7],
+        "status__icon": [
+            "fiber_new",
+            "timer",
+            "play_arrow",
+            "visibility",
+            "task_alt",
+            "back_hand",
+            "block",
+        ][i % 7],
+        "status__color": [
+            "#434a56",
+            "#bababa",
+            "#3498db",
+            "#ff9b0a",
+            "#00f0b4",
+            "#fa6e46",
+            "#cb1a1a",
+        ][i % 7],
+        "type": random.choice(
+            [
+                "Model",
+                "Texture",
+                "Rig",
+                "Animation",
+                "Look-dev",
+                "Compositing",
+                "Grading",
+            ]
+        ),
+        "author": random.choice(
+            [
+                "Alice",
+                "Bob",
+                "Charlie",
+                "Diana",
+                "Steve",
+                "Eva",
+                "Frank",
+                "Grace",
+            ]
+        ),
         "version": f"v{(i % 10) + 1:03d}",
     }
     for i in range(200)
@@ -484,4 +530,6 @@ if __name__ == "__main__":
     model = PaginatedTableModel(fetch_page=fetch, page_size=25)
     print(f"[test]  Rows: {model.rowCount()}, Columns: {model.columnCount()}")
     print(f"[test]  Columns: {[c.label for c in model.columns]}")
-    print(f"[test]  Has more: {model.canFetchMore(model.index(0, 0).parent())}")
+    print(
+        f"[test]  Has more: {model.canFetchMore(model.index(0, 0).parent())}"
+    )
