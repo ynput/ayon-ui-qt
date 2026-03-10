@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QStyleOptionFrame
-from qtpy.QtCore import Qt, QRectF
+from qtpy.QtCore import Qt, QRectF, QSize
 from qtpy.QtGui import QPainter, QPaintEvent, QColor, QPalette, QPen, QBrush
 from qtpy.QtWidgets import (
     QLineEdit,
@@ -47,6 +47,7 @@ class AYLineEdit(QLineEdit):
 
         self._variant_str = variant.value
         self._pal: QPalette | None = None
+        self._variant_styles = {}
 
         if placeholder:
             self.setPlaceholderText(placeholder)
@@ -83,10 +84,19 @@ class AYLineEdit(QLineEdit):
             self._apply_style_palette()
         return self._pal
 
+    def variant_style(self, state=None) -> dict:
+        """Return the style dict for the current variant."""
+        key = (self._variant_str, state)
+        if key not in self._variant_styles:
+            model = get_ayon_style().model
+            self._variant_styles[key] = model.get_style(
+                "QLineEdit", variant=self._variant_str, state=state
+            )
+        return self._variant_styles[key]
+
     def _apply_style_palette(self) -> None:
         """Push text / placeholder colors and padding from ayon_style.json."""
-        model = get_ayon_style().model
-        style = model.get_style("QLineEdit", variant=self._variant_str)
+        style = self.variant_style()
 
         self._pal = self.palette()
 
@@ -137,7 +147,6 @@ class AYLineEdit(QLineEdit):
         implementation is intercepted by LineEditDrawer which returns
         immediately for AYLineEdit instances, so our background is preserved.
         """
-        model = get_ayon_style().model
 
         is_disabled = not self.isEnabled()
         is_hover = self.underMouse()
@@ -150,9 +159,7 @@ class AYLineEdit(QLineEdit):
         else:
             state = "base"
 
-        style = model.get_style(
-            "QLineEdit", variant=self._variant_str, state=state
-        )
+        style = self.variant_style(state)
 
         bg_color = QColor(style.get("background-color", "#272d35"))
         border_color = QColor(style.get("border-color", "#41474d"))
@@ -213,6 +220,15 @@ class AYLineEdit(QLineEdit):
         # LineEditDrawer intercepts PE_PanelLineEdit for AYLineEdit and is a
         # no-op, so the background we just drew is preserved.
         super().paintEvent(event)
+
+    def sizeHint(self) -> QSize:
+        """Override sizeHint to account for padding."""
+        size = super().sizeHint()
+        style = self.variant_style()
+        padding = style.get("padding", [8, 4])
+        size.setWidth(size.width() + padding[0] * 2)
+        size.setHeight(size.height() + padding[1] * 2)
+        return size
 
 
 if __name__ == "__main__":

@@ -312,7 +312,7 @@
                     "focus-outline-color": "--md-sys-color-primary-dark",
                     "padding": [
                         8,
-                        4
+                        2
                     ],
                     "hover": {
                         "border-color": "--md-sys-color-outline-dark"
@@ -323,7 +323,7 @@
                     }
                 },
                 "search-field": {
-                    "background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "background-color": "--md-sys-color-surface-container-low-dark",
                     "selection-background-color": "--md-sys-color-secondary-container-dark",
                     "selection-color": "--md-sys-color-on-secondary-container-dark",
                     "icon": "search",

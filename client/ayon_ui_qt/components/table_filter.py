@@ -197,7 +197,10 @@ class _FilterDropdown(AYFrame):
         layout = AYVBoxLayout(page, margin=0, spacing=4)
 
         # Search field
-        self._attr_search = AYLineEdit(placeholder="Search attributes…")
+        self._attr_search = AYLineEdit(
+            placeholder="Search or filter...",
+            variant=AYLineEdit.Variants.Search_Field,
+        )
         self._attr_search.textChanged.connect(self._on_attr_search_changed)
         layout.addWidget(self._attr_search)
 
@@ -283,6 +286,7 @@ class _FilterDropdown(AYFrame):
         self._attr_search.clear()
         self._stack.setCurrentIndex(0)
         self._show_below(anchor)
+        self._attr_search.setFocus()
 
     def open_for_edit(
         self,
@@ -423,7 +427,9 @@ class _FilterDropdown(AYFrame):
             self._value_content_layout.addWidget(scroll)
         else:
             self._is_free_text = True
-            self._free_text_edit = AYLineEdit(placeholder="Enter value…")
+            self._free_text_edit = AYLineEdit(
+                placeholder="Search", variant=AYLineEdit.Variants.Search_Field
+            )
             if selected_values:
                 self._free_text_edit.setText(selected_values[0])
             self._value_content_layout.addWidget(self._free_text_edit)
