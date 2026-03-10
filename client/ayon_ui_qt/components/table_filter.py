@@ -192,7 +192,7 @@ class _FilterDropdown(AYFrame):
         self._stack.addWidget(self._build_value_page())
 
     def _build_attribute_page(self) -> QWidget:
-        """Build Page 0 – attribute selector."""
+        """Build Page 0 - attribute selector."""
         page = AYFrame(variant=AYFrame.Variants.Low)
         layout = AYVBoxLayout(page, margin=0, spacing=4)
 
@@ -221,7 +221,7 @@ class _FilterDropdown(AYFrame):
         return page
 
     def _build_value_page(self) -> QWidget:
-        """Build Page 1 – value selector."""
+        """Build Page 1 - value selector."""
         page = AYFrame(variant=AYFrame.Variants.Low)
         layout = AYVBoxLayout(page, margin=0, spacing=4)
 
@@ -260,7 +260,7 @@ class _FilterDropdown(AYFrame):
         footer.addStretch()
         self._apply_btn = AYButton(
             "Apply",
-            variant=AYButton.Variants.Surface,
+            variant=AYButton.Variants.Filled,
             fixed_width=False,
         )
         self._apply_btn.clicked.connect(self._on_apply)
@@ -408,6 +408,8 @@ class _FilterDropdown(AYFrame):
                     variant=AYButton.Variants.Tag_Menu,
                     fixed_width=False,
                     checkable=True,
+                    label_alignment=Qt.AlignmentFlag.AlignLeft,
+                    # TODO: support icons for enum columns (need to expose in model)
                 )
                 btn.setSizePolicy(
                     QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
