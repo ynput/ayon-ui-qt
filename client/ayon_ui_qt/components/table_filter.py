@@ -228,24 +228,6 @@ class _FilterDropdown(AYFrame):
         page = AYFrame(variant=AYFrame.Variants.Low)
         layout = AYVBoxLayout(page, margin=0, spacing=4)
 
-        # Header: back button + attribute label
-        header = AYContainer(
-            layout=AYContainer.Layout.HBox,
-            variant=AYContainer.Variants.Low,
-            layout_margin=0,
-            layout_spacing=4,
-        )
-        self._back_btn = AYButton(
-            icon="arrow_back",
-            variant=AYButton.Variants.Nav_Small,
-        )
-        self._back_btn.clicked.connect(self._go_to_attribute_page)
-        header.add_widget(self._back_btn)
-
-        self._value_title_lbl = AYLabel("", bold=True)
-        header.add_widget(self._value_title_lbl, stretch=1)
-        layout.addWidget(header)
-
         # Content area (swapped depending on column type)
         self._value_content_container = AYFrame(variant=AYFrame.Variants.Low)
         self._value_content_layout = AYVBoxLayout(
@@ -258,13 +240,28 @@ class _FilterDropdown(AYFrame):
             layout=AYContainer.Layout.HBox,
             variant=AYContainer.Variants.Low,
             layout_margin=4,
-            layout_spacing=4,
+            layout_spacing=8,
         )
+        self._back_btn = AYButton(
+            "Back",
+            icon="arrow_back",
+            variant=AYButton.Variants.Nav_Small,
+        )
+        self._back_btn.clicked.connect(self._go_to_attribute_page)
+        footer.add_widget(self._back_btn)
         footer.addStretch()
+        self._exclude_checkbox = AYButton(
+            "Excludes",
+            variant=AYButton.Variants.Filled,
+            checkable=True,
+            icon="toggle_off",
+            icon_on="toggle_on",
+            icon_size=20,
+        )
+        footer.add_widget(self._exclude_checkbox)
         self._apply_btn = AYButton(
             "Confirm",
             variant=AYButton.Variants.Filled,
-            fixed_width=False,
             icon="check",
         )
         self._apply_btn.clicked.connect(self._on_apply)
@@ -381,7 +378,6 @@ class _FilterDropdown(AYFrame):
         """
         self._current_key = key
         self._current_label = label
-        self._value_title_lbl.setText(label)
         self._value_buttons = {}
 
         # Clear previous content
