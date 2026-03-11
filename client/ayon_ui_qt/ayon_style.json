@@ -250,21 +250,46 @@
             "default-variant": "default",
             "variants": {
                 "default": {
-                    "background-color": "--md-sys-color-surface-container-highest-dark",
-                    "color": "--md-sys-color-on-surface-dark",
                     "focus-outline-width": 0,
+                    "indicator-color": "--md-sys-color-on-surface-dark",
+                    "indicator-background-color": "--md-sys-color-surface-container-highest-dark",
                     "indicator-width": 32,
                     "indicator-height": 18,
                     "checkbox-label-spacing": 8,
                     "checked": {
-                        "color": "--md-sys-color-on-tertiary-dark",
-                        "background-color": "--md-sys-color-tertiary-dark"
+                        "indicator-color": "--md-sys-color-on-primary-dark",
+                        "indicator-background-color": "--md-sys-color-primary-dark"
                     }
                 },
-                "primary": {
+                "secondary": {
                     "checked": {
-                        "color": "--md-sys-color-on-primary-dark",
-                        "background-color": "--md-sys-color-primary-dark"
+                        "indicator-color": "--md-sys-color-on-secondary-dark",
+                        "indicator-background-color": "--md-sys-color-secondary-dark"
+                    }
+                },
+                "tertiary": {
+                    "checked": {
+                        "indicator-color": "--md-sys-color-on-tertiary-dark",
+                        "indicator-background-color": "--md-sys-color-tertiary-dark"
+                    }
+                },
+                "button": {
+                    "indicator-position": "right",
+                    "padding": [
+                        6,
+                        6
+                    ],
+                    "color": "--md-sys-color-on-surface-dark",
+                    "background-color": "--md-sys-color-surface-container-highest-dark",
+                    "indicator-border-width": 1,
+                    "indicator-border-color": "--md-sys-color-outline-dark",
+                    "border-radius": 6,
+                    "checked": {
+                        "color": "--md-sys-color-primary-dark",
+                        "background-color": "--md-sys-color-primary-container-dark",
+                        "indicator-border-color": "--md-sys-color-primary-dark",
+                        "indicator-color": "--md-sys-color-on-primary-dark",
+                        "indicator-background-color": "--md-sys-color-primary-dark"
                     }
                 }
             }
@@ -747,7 +772,7 @@
         "qt-active-base": "--md-sys-color-surface-container-dark",
         "qt-active-text": "--md-sys-color-on-surface-dark",
         "qt-active-link": "text-color-link",
-        "qt-active-button": "-md-sys-color-surface-container-highest-dark",
+        "qt-active-button": "--md-sys-color-surface-container-highest-dark",
         "qt-active-button-text": "--md-sys-color-on-surface-dark",
         "qt-active-placeholder-text": "--md-ref-palette-neutral-variant50",
         "qt-active-highlight": "--md-sys-color-primary-dark",

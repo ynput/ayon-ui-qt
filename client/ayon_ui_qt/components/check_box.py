@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QSize
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
@@ -30,7 +31,19 @@ class AYCheckBox(QCheckBox):
     ):
         super().__init__(*args, **kwargs)
         self._variant_str = variant.value
+        self._style_dict = None
         self.setStyle(get_ayon_style())
+
+        if variant == AYCheckBox.Variants.Button:
+            self.setFixedSize(self.sizeHint())
+
+    @property
+    def style_dict(self):
+        if self._style_dict is None:
+            self._style_dict = get_ayon_style().model.get_style(
+                "QCheckBox", variant=self._variant_str
+            )
+        return self._style_dict
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         p = QPainter(self)
@@ -40,9 +53,19 @@ class AYCheckBox(QCheckBox):
         _style.drawControl(QStyle.ControlElement.CE_CheckBox, option, p, self)
         return
 
+    def sizeHint(self) -> QSize:
+        size = super().sizeHint()
+
+        if self._variant_str == AYCheckBox.Variants.Button.value:
+            h_pad, v_pad = self.style_dict.get("padding", [6, 6])
+            size.setWidth(size.width() + h_pad * 2)
+            size.setHeight(size.height() + v_pad * 2)
+
+        return size
+
 
 if __name__ == "__main__":
-    from ..tester import test
+    from ..tester import test, Style
     from .container import AYContainer
 
     def _build():
@@ -52,8 +75,8 @@ if __name__ == "__main__":
             layout_spacing=20,
         )
         for variant in AYCheckBox.Variants:
-            cb1 = AYCheckBox("Default Checkbox", variant=variant)
+            cb1 = AYCheckBox(f"{variant.name} Checkbox", variant=variant)
             container.add_widget(cb1)
         return container
 
-    test(_build)
+    test(_build, style=Style.AyonStyleOverCSS)

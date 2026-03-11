@@ -278,11 +278,13 @@ class StyleData:
             # all states. That way, we can directly use "background-color" without
             # checking the widget's state.
             to_be_removed = []
+            state_dict = {}
             for key, val in list(d.items()):
                 if isinstance(val, dict):
                     if key == state:
-                        for kk, vv in val.items():
-                            d[kk] = pal.get(vv, vv)
+                        state_dict = val
+                        for kk, vv in state_dict.items():
+                            state_dict[kk] = pal.get(vv, vv)
                     to_be_removed.append(key)
                 elif isinstance(val, list):
                     pass
@@ -291,6 +293,9 @@ class StyleData:
             # remove states
             for k in to_be_removed:
                 d.pop(k)
+            # apply current state overrides last to ensure they take precedence
+            # over the base variant
+            d.update(state_dict)
 
         # cache result
         self.last_key = f"{widget_cls}-{variant}-{state}"
@@ -980,10 +985,10 @@ class CheckboxDrawer:
     def register_drawers(self):
         return {
             enum_to_str(
-                QStyle.PrimitiveElement,
+                QStyle.ControlElement,
                 QStyle.ControlElement.CE_CheckBox,
                 "QCheckBox",
-            ): self.draw_control,
+            ): self.draw_indicator,
             enum_to_str(
                 QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_IndicatorCheckBox,
@@ -1034,12 +1039,40 @@ class CheckboxDrawer:
             return style.get("checkbox-label-spacing", 8)
         return 0
 
-    def draw_control(
+    def draw_indicator(
         self,
         option: QStyleOption,
         painter: QPainter,
         widget: QWidget | None,
     ):
+        variant = getattr(widget, "_variant_str", "default")
+        state = (
+            "checked" if option.state & QStyle.StateFlag.State_On else "base"
+        )
+        style = self.model.get_style(
+            "QCheckBox",
+            variant=variant,
+            state=state,
+        )
+        option.direction = (
+            Qt.LayoutDirection.LeftToRight
+            if style.get("indicator-position", "left") == "left"
+            else Qt.LayoutDirection.RightToLeft
+        )
+
+        if style.get("background-color"):
+            painter.save()
+            painter.setBrush(QColor(style["background-color"]))
+            painter.setPen(Qt.PenStyle.NoPen)
+            radius = style.get("border-radius", 0)
+            painter.drawRoundedRect(option.rect, radius, radius)
+            painter.restore()
+
+        if style.get("color"):
+            option.palette.setColor(
+                QPalette.ColorRole.WindowText, QColor(style["color"])
+            )
+
         super(AYONStyle, self.style_inst).drawControl(
             QStyle.ControlElement.CE_CheckBox, option, painter, widget
         )
@@ -1063,21 +1096,26 @@ class CheckboxDrawer:
         )
 
         # draw toggle background
-        painter.setBrush(QColor(style["background-color"]))
-        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(style["indicator-background-color"]))
+        if style.get("indicator-border-width", 0):
+            pen = QPen(QColor(style["indicator-border-color"]))
+            pen.setWidth(style.get("indicator-border-width", 0))
+            painter.setPen(pen)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
         frame_rect: QRectF = option.rect.toRectF().adjusted(1, 0, -1, 0)
         radius = frame_rect.height() / 2.0
         painter.drawRoundedRect(frame_rect, radius, radius)
 
         # draw toggle
-        painter.setBrush(QColor(style["color"]))
+        painter.setBrush(QColor(style["indicator-color"]))
         offset = frame_rect.height() * 0.125
         state_rect: QRectF = frame_rect.adjusted(
             offset, offset, -offset, -offset
         )
         state_rect.setWidth(state_rect.height())
         if checked:
-            state_rect.moveRight(frame_rect.width() - offset * 0.5)
+            state_rect.moveRight(frame_rect.right() - offset)
         painter.drawEllipse(state_rect)
 
         painter.restore()
