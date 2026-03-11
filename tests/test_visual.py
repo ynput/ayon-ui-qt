@@ -108,7 +108,7 @@ def test_steps(widget_test_cls: Type[WidgetTest], step_index: int, qtbot, image_
     steps = wt.steps()
     for i in range(step_index + 1):
         steps[i]()
-        qtbot.wait(1)  # process pending events / repaints
+        qtbot.wait(10)  # process pending events / repaints
 
     step_fn = steps[step_index]
     step_name = getattr(step_fn, "__name__", f"step_{step_index}")
