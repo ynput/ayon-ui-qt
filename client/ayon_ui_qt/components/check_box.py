@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QSize
-from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
 
