@@ -250,6 +250,7 @@
             "default-variant": "default",
             "variants": {
                 "default": {
+                    "color": "--md-sys-color-on-surface-dark",
                     "focus-outline-width": 0,
                     "indicator-color": "--md-sys-color-on-surface-dark",
                     "indicator-background-color": "--md-sys-color-surface-container-highest-dark",
