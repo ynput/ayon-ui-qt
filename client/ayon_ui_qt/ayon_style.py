@@ -171,7 +171,7 @@ class StyleData:
             if v.startswith("hsl("):
                 self._palette[k] = hsl_to_html_color(v)
         for k, v in self._palette.items():
-            self.data["palette"][k] = self.data["palette"].get(v, v)
+            self._palette[k] = self._palette.get(v, v)
         for k, v in self._palette.items():
             if v in self._palette:
                 raise ValueError(f"Unresolved palette value in {k}")
@@ -233,16 +233,16 @@ class StyleData:
 
     def default_variant(self, widget_data):
         return widget_data.get(
-            "default-variant", list(widget_data.get("variants", {}).keys())[0]
+            "default-variant", next(iter(widget_data.get("variants", {})))
         )
 
     def validate_variant(self, widget_data, variant):
-        if variant not in widget_data.get("variants", {}).keys():
+        if variant not in widget_data.get("variants", {}):
             return self.default_variant(widget_data)
         return variant
 
     def palette(self):
-        return self.data.get("palette", {})
+        return self._palette
 
     def get_style(
         self,
@@ -259,7 +259,7 @@ class StyleData:
         data = self.widget_data(widget_cls)
         vrt = self.validate_variant(data, variant)
         dvrt = self.default_variant(data)
-        pal = self.palette()
+        pal = self._palette
         d = copy.copy(self.data["global"])
         d.update(copy.deepcopy(data.get("variants", {}).get(dvrt, {})))
         d.update(copy.deepcopy(data.get("variants", {}).get(vrt, {})))
@@ -267,32 +267,21 @@ class StyleData:
         if state == "all":
             for key, val in d.items():
                 if isinstance(val, dict):
-                    for kk, vv in val.items():
-                        d[key][kk] = pal.get(vv, vv)
-                elif isinstance(val, list):
-                    pass
-                else:
+                    d[key] = {kk: pal.get(vv, vv) for kk, vv in val.items()}
+                elif not isinstance(val, list):
                     d[key] = pal.get(val, val)
         else:
             # Override palette variables with the current state's values and remove
             # all states. That way, we can directly use "background-color" without
             # checking the widget's state.
-            to_be_removed = []
             state_dict = {}
             for key, val in list(d.items()):
                 if isinstance(val, dict):
                     if key == state:
-                        state_dict = val
-                        for kk, vv in state_dict.items():
-                            state_dict[kk] = pal.get(vv, vv)
-                    to_be_removed.append(key)
-                elif isinstance(val, list):
-                    pass
-                else:
+                        state_dict = {kk: pal.get(vv, vv) for kk, vv in val.items()}
+                    d.pop(key)
+                elif not isinstance(val, list):
                     d[key] = pal.get(val, val)
-            # remove states
-            for k in to_be_removed:
-                d.pop(k)
             # apply current state overrides last to ensure they take precedence
             # over the base variant
             d.update(state_dict)
