@@ -83,11 +83,10 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
             criteria: List of active filter criteria.
             columns: Column definitions from the source model.
         """
-        self.beginFilterChange()
         self._criteria = [c for c in criteria if c.values]
         self._columns = columns
         self._key_to_col = {col.key: idx for idx, col in enumerate(columns)}
-        self.endFilterChange()
+        self.invalidateFilter()
 
     def _direct_match(
         self,
