@@ -11,15 +11,15 @@ from qtpy.QtCore import QRect, QRectF, QSize, Qt
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QIcon,
     QPainter,
     QPainterPath,
     QPalette,
     QPen,
-    QIcon,
 )
 from qtpy.QtWidgets import (
-    QApplication,
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QCommonStyle,
@@ -278,7 +278,9 @@ class StyleData:
             for key, val in list(d.items()):
                 if isinstance(val, dict):
                     if key == state:
-                        state_dict = {kk: pal.get(vv, vv) for kk, vv in val.items()}
+                        state_dict = {
+                            kk: pal.get(vv, vv) for kk, vv in val.items()
+                        }
                     d.pop(key)
                 elif not isinstance(val, list):
                     d[key] = pal.get(val, val)
@@ -2336,6 +2338,18 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
         state = opt.state
         is_selected = bool(state & QStyle.StateFlag.State_Selected)
         is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+        # State_MouseOver is only set for the cell directly under the cursor.
+        # When hovering the branch-indicator column, other cells in the same
+        # row don't receive it.  Fall back to a y-coordinate check so the
+        # entire row highlights consistently.
+        if not is_hovered and not is_selected:
+            _view = self.parent()
+            if type(_view).__name__ == "AYTableView" and hasattr(
+                _view, "viewport"
+            ):
+                _cursor = _view.viewport().mapFromGlobal(QtGui.QCursor.pos())
+                is_hovered = opt.rect.top() <= _cursor.y() < opt.rect.bottom()
+        is_item = not bool(state & QStyle.StateFlag.State_Children)
 
         styles = self._table_styles()
         base_style = styles["base"]
@@ -2362,7 +2376,10 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             )
         else:
             bg_color = QColor(
-                base_style.get("background-color", "transparent")
+                base_style.get(
+                    "background-color-item" if is_item else "background-color",
+                    "transparent",
+                )
             )
 
         painter.setBrush(QBrush(bg_color))
@@ -2375,7 +2392,19 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             painter.setPen(pen)
         else:
             painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRect(opt.rect)
+        column = index.column()
+        if column == 1:
+            painter.fillRect(opt.rect, bg_color)
+            painter.drawPolyline(
+                [
+                    opt.rect.topLeft(),
+                    opt.rect.topRight(),
+                    opt.rect.bottomRight(),
+                    opt.rect.bottomLeft(),
+                ]
+            )
+        else:
+            painter.drawRect(opt.rect)
 
         # --- text colour ---
         index_color = index.data(role=Qt.ItemDataRole.ForegroundRole)
@@ -2507,6 +2536,28 @@ class TreeViewDrawer:
             return int(style.get("indent", 20))
         return 0
 
+    def _draw_cell_border(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        style: dict,
+    ) -> None:
+        """Draw top and bottom border lines for an AYTableView cell."""
+        painter.setPen(
+            QPen(
+                QColor(style.get("border-color")), style.get("border-width", 1)
+            )
+        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLines(
+            [
+                rect.topLeft(),
+                rect.topRight(),
+                rect.bottomLeft(),
+                rect.bottomRight(),
+            ]
+        )
+
     def draw_branch_indicator(
         self,
         option: QStyleOption,
@@ -2521,36 +2572,79 @@ class TreeViewDrawer:
             widget: The QTreeView widget (may be the viewport).
         """
         has_children = bool(option.state & QStyle.StateFlag.State_Children)
-        if not has_children:
-            return
 
-        is_open = bool(option.state & QStyle.StateFlag.State_Open)
-
-        # Resolve the QTreeView (option.widget might be the viewport)
+        # Resolve to the actual QTreeView — widget may be the viewport.
         tv = widget
         if tv is not None and not isinstance(tv, QTreeView):
             tv = tv.parent() if tv.parent() else tv
 
+        is_table = type(tv).__name__ == "AYTableView"
+        is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+
+        # State_MouseOver is only set when the cursor is directly over the
+        # branch rect — not when hovering another column in the same row.
+        # Query the actual cursor position for true row-level hover.
+        # Compare by y-coordinate rather than index.row() to avoid false
+        # matches between rows at the same row number under different parents
+        # (e.g. row 2 under root vs row 2 under an expanded child).
+        is_hovered = False
+        if not is_selected and is_table and isinstance(tv, QTreeView):
+            vp = tv.viewport()
+            cursor_vp = vp.mapFromGlobal(QtGui.QCursor.pos())
+            is_hovered = (
+                option.rect.top() <= cursor_vp.y() < option.rect.bottom()
+            )
+
+        if not has_children:
+            if is_table:
+                if is_selected:
+                    state_name = "selected"
+                elif is_hovered:
+                    state_name = "hover"
+                else:
+                    state_name = "base"
+                style = self.model.get_style("AYTableView", state=state_name)
+                painter.save()
+                painter.fillRect(
+                    option.rect,
+                    QColor(style.get("background-color", "transparent")),
+                )
+                self._draw_cell_border(painter, option.rect, style)
+                painter.restore()
+            return
+
+        is_open = bool(option.state & QStyle.StateFlag.State_Open)
+
         variant = getattr(tv, "_variant_str", "default")
         style = self.model.get_style("QTreeView", variant)
         color = QColor(style.get("branch-indicator-color", "#8b9198"))
-
-        icon_name = (
-            style.get("expanded-icon-name", None)
-            if is_open
-            else style.get("expand-icon-name", None)
+        icon_name = style.get(
+            "expanded-icon-name" if is_open else "expand-icon-name"
         )
 
         painter.save()
+
+        if is_table:
+            if is_selected:
+                state_name = "selected"
+            elif is_hovered:
+                state_name = "hover"
+            else:
+                state_name = "base"
+            tbl_style = self.model.get_style("AYTableView", state=state_name)
+            painter.fillRect(
+                option.rect,
+                QColor(tbl_style.get("background-color", "transparent")),
+            )
+            self._draw_cell_border(painter, option.rect, tbl_style)
 
         if icon_name:
             key = f"{icon_name}-{color.name()}"
             if key not in self._icon_cache:
                 self._icon_cache[key] = get_icon(icon_name, color=color)
             icon = self._icon_cache[key]
-            icon_size = style.get("expand-icon-size", None)
             rect = option.rect
-            if icon_size:
+            if style.get("expand-icon-size"):
                 center = rect.center()
                 rect.setSize(QSize(16, 16))
                 rect.moveCenter(center)
@@ -2562,8 +2656,7 @@ class TreeViewDrawer:
             painter.setBrush(QBrush(color))
 
             rect = option.rect
-            cx = rect.center().x()
-            cy = rect.center().y()
+            cx, cy = rect.center().x(), rect.center().y()
             size = max(4, min(rect.width(), rect.height()) // 3)
 
             path = QPainterPath()
@@ -2840,7 +2933,7 @@ class AYONStyle(QCommonStyle):
                         delegate, ComboBoxItemDelegate
                     )
                     tvd = delegate and isinstance(
-                        delegate, TreeViewItemDelegate
+                        delegate, (TreeViewItemDelegate, TableItemDelegate)
                     )
                     if not cbd and not tvd:
                         return "QStyledItemDelegate"

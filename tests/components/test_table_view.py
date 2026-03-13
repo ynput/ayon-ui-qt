@@ -6,7 +6,12 @@ from qtpy.QtWidgets import QWidget
 
 from widget_test import WidgetTest
 from ayon_ui_qt.components.table_view import AYTableView
-from ayon_ui_qt.components.table_model import PaginatedTableModel, TableColumn
+from ayon_ui_qt.components.table_model import (
+    PaginatedTableModel,
+    TableColumn,
+    HIERARCHICAL_TEST_DATA,
+    make_hierarchical_test_fetch,
+)
 from ayon_ui_qt.components.container import AYContainer
 
 
@@ -34,7 +39,13 @@ _ROWS = [
 
 
 def _make_fetch(rows):
-    def fetch_page(page_number, page_size, sort_key=None, descending=False):
+    def fetch_page(
+        page_number,
+        page_size,
+        sort_key=None,
+        descending=False,
+        parent_id=None,  # noqa: ARG001
+    ):
         start = page_number * page_size
         end = start + page_size
         return rows[start:end]
@@ -73,3 +84,50 @@ class TableViewTest(WidgetTest):
 
     def steps(self):
         return [self.select_first_row]
+
+
+_TREE_COLUMNS = [
+    TableColumn(key="name",   label="Name",    width=160, sortable=True),
+    TableColumn(key="status", label="Status",  width=100, sortable=True),
+    TableColumn(key="type",   label="Type",    width=100, sortable=True),
+    TableColumn(key="author", label="Author",  width=100, sortable=False),
+    TableColumn(key="version",label="Version", width=70,  sortable=True),
+]
+
+
+class TableViewTreeTest(WidgetTest):
+    """Tests AYTableView in tree mode with hierarchical data."""
+
+    size = (700, 360)
+    tolerance = 0.0
+
+    def build(self) -> QWidget:
+        root = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            layout_margin=20,
+            layout_spacing=0,
+        )
+
+        fetch = make_hierarchical_test_fetch(HIERARCHICAL_TEST_DATA)
+        model = PaginatedTableModel(
+            fetch_page=fetch,
+            columns=_TREE_COLUMNS,
+            page_size=50,
+        )
+        model.set_tree_mode(True)
+
+        self._model = model
+        self._view = AYTableView(variant=AYTableView.Variants.Default)
+        self._view.setModel(model)
+        self._view.setMinimumHeight(280)
+
+        root.add_widget(self._view, stretch=1)
+        return root
+
+    def expand_assets(self) -> None:
+        """Expand the first root folder (Assets)."""
+        idx = self._model.index(0, 0)
+        self._view.expand(idx)
+
+    def steps(self):
+        return [self.expand_assets]

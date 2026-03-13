@@ -8,11 +8,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from qtpy import QtCore, QtWidgets
+from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import (
     QItemSelection,
     QModelIndex,
     QRect,
+    QSortFilterProxyModel,
     Qt,
     Signal,  # type: ignore
 )
@@ -25,7 +26,7 @@ from qtpy.QtGui import (
     QPalette,
     QPen,
 )
-from qtpy.QtWidgets import QHeaderView, QTreeView, QWidget
+from qtpy.QtWidgets import QHeaderView, QToolButton, QTreeView, QWidget
 
 from .. import get_ayon_style
 from ..ayon_style import StyleData, TableItemDelegate
@@ -64,6 +65,7 @@ class AYTableHeader(QHeaderView):
         super().__init__(orientation, parent)
         self._style_model = style_model
         self._variant_str = variant
+        self._toggle_btn: QToolButton | None = None
         # self.setSortIndicatorShown(True)
 
     def paintSection(
@@ -191,6 +193,27 @@ class AYTableHeader(QHeaderView):
 
         painter.restore()
 
+    def resizeEvent(self, event: Any) -> None:  # type: ignore[override]
+        """Reposition the toggle button after a resize.
+
+        Args:
+            event: Resize event.
+        """
+        super().resizeEvent(event)
+        self._reposition_toggle()
+
+    def _reposition_toggle(self) -> None:
+        """Move the toggle button to the right-centre of the header."""
+        if self._toggle_btn is None:
+            return
+        btn = self._toggle_btn
+        h = self.height()
+        margin = max((h - btn.height()) // 2, 0)
+        x = max(self.width() - btn.width() - margin, 0)
+        btn.move(x, margin)
+
+    # -------------------------------------------------------------------------
+
 
 class AYTableView(QTreeView):
     """AYON-styled flat table view.
@@ -279,8 +302,23 @@ class AYTableView(QTreeView):
         # Alternating row colours disabled — delegate handles it.
         self.setAlternatingRowColors(False)
 
-        # Track model connections for cleanup.
-        self._model_connections: list[QtCore.QMetaObject.Connection] = []
+        # Hovered-row tracking: stores the visual rect of the currently
+        # hovered row so we can force-repaint it when the mouse moves to a
+        # different row.  Without this, the branch-indicator area (painted
+        # by PE_IndicatorBranch, not the delegate) is never invalidated on
+        # row transitions and stays highlighted until the next full repaint.
+        self._hovered_row: int = -1
+        self._hovered_row_rect: QRect = QRect()
+
+        # Track model connections for cleanup.  Each entry is (source_object,
+        # connection) so we can call the right object's .disconnect().
+        self._model_connections: list[
+            tuple[Any, QtCore.QMetaObject.Connection]
+        ] = []
+
+        # Node IDs that were expanded when the user last switched away from
+        # tree mode.  Restored row-by-row as data is (re-)loaded in tree mode.
+        self._expanded_node_ids: set[str] = set()
 
     def _sync_viewport_palette(self) -> None:
         """Apply the variant background colour to the viewport."""
@@ -315,9 +353,9 @@ class AYTableView(QTreeView):
             model: The data model to display.
         """
         # Disconnect previous model signals.
-        for conn in self._model_connections:
+        for obj, conn in self._model_connections:
             try:
-                self.model().disconnect(conn)
+                obj.disconnect(conn)
             except (RuntimeError, TypeError):
                 pass
         self._model_connections.clear()
@@ -336,7 +374,51 @@ class AYTableView(QTreeView):
         # Connect to rowsInserted for lazy-loaded rows.
         conn = model.rowsInserted.connect(self._on_rows_inserted)
         if conn is not None:
-            self._model_connections.append(conn)
+            self._model_connections.append((model, conn))
+
+        # Connect to the source PaginatedTableModel for tree mode changes.
+        source: Any = model
+        if isinstance(model, QSortFilterProxyModel):
+            source = model.sourceModel()
+        if isinstance(source, PaginatedTableModel):
+            conn2 = source.tree_mode_changed.connect(self._apply_tree_mode)
+            if conn2 is not None:
+                self._model_connections.append((source, conn2))
+            self._apply_tree_mode(source._tree_mode)
+
+    def _apply_tree_mode(self, tree_mode: bool) -> None:
+        """Configure the view for flat-table or tree display.
+
+        Args:
+            tree_mode: ``True`` to enable tree indentation and expand
+                controls; ``False`` for flat-table layout.
+        """
+        if not tree_mode:
+            # Snapshot expansion state before the model resets.
+            self._save_expansion_state()
+        style = get_ayon_style()
+        tbl_style = style.model.get_style("AYTableView", self._variant_str)
+        model = (
+            self.model().sourceModel()
+            if isinstance(self.model(), QSortFilterProxyModel)
+            else self.model()
+        )
+        tree_pos = (
+            model.tree_position
+            if isinstance(model, PaginatedTableModel)
+            else 0
+        )
+        if tree_mode:
+            indent = int(tbl_style.get("indent", 16))
+            self.setRootIsDecorated(True)
+            self.setItemsExpandable(True)
+            self.setIndentation(indent)
+        else:
+            self.setRootIsDecorated(False)
+            self.setItemsExpandable(False)
+            self.setIndentation(0)
+        # Set the tree position to the column specified by the model.
+        self.setTreePosition(tree_pos)
 
     def _configure_header(self, model: QtCore.QAbstractItemModel) -> None:
         """Set up header section sizes from model column hints.
@@ -426,6 +508,78 @@ class AYTableView(QTreeView):
         header.setSortIndicator(section, order)
         header.blockSignals(False)
 
+    def _save_expansion_state(self) -> None:
+        """Snapshot the node IDs of all expanded rows into ``_expanded_node_ids``.
+
+        Called just before the model resets when switching from tree to flat
+        mode, while the tree is still fully populated.
+        """
+        self._expanded_node_ids.clear()
+        display_model = self.model()
+        if display_model is None:
+            return
+        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+
+        def _collect(parent_view_idx: QModelIndex) -> None:
+            for row in range(display_model.rowCount(parent_view_idx)):
+                child_view_idx = display_model.index(row, 0, parent_view_idx)
+                if not self.isExpanded(child_view_idx):
+                    continue
+                src_idx = (
+                    display_model.mapToSource(child_view_idx)  # type: ignore[union-attr]
+                    if is_proxy
+                    else child_view_idx
+                )
+                node = src_idx.internalPointer()
+                if node is not None and node.node_id is not None:
+                    self._expanded_node_ids.add(node.node_id)
+                _collect(child_view_idx)
+
+        _collect(QModelIndex())
+
+    def _restore_expansion_in_range(
+        self,
+        parent: QModelIndex,
+        first: int,
+        last: int,
+    ) -> None:
+        """Expand any newly-inserted rows whose node ID was previously saved.
+
+        Expanding a row triggers lazy child loading which fires more
+        ``rowsInserted`` signals, so the full expansion tree is restored
+        incrementally without extra bookkeeping.
+
+        Args:
+            parent: Parent index of the inserted rows.
+            first: First inserted row index.
+            last: Last inserted row index.
+        """
+        if not self._expanded_node_ids:
+            return
+        display_model = self.model()
+        if display_model is None:
+            return
+        source = (
+            display_model.sourceModel()
+            if isinstance(display_model, QSortFilterProxyModel)
+            else display_model
+        )
+        if not isinstance(source, PaginatedTableModel):
+            return
+        if not source._tree_mode:
+            return
+        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+        for row in range(first, last + 1):
+            child_view_idx = display_model.index(row, 0, parent)
+            src_idx = (
+                display_model.mapToSource(child_view_idx)
+                if is_proxy
+                else child_view_idx
+            )
+            node = src_idx.internalPointer()
+            if node is not None and node.node_id in self._expanded_node_ids:
+                self.expand(child_view_idx)
+
     def _on_rows_inserted(
         self,
         parent: QModelIndex,
@@ -435,14 +589,18 @@ class AYTableView(QTreeView):
         """Install embedded widgets for newly inserted rows.
 
         Args:
-            parent: Parent index (unused for flat tables).
+            parent: Parent index; supports non-root parents in tree mode.
             first: First inserted row index.
             last: Last inserted row index.
         """
-        self._install_widgets_for_range(first, last)
+        self._install_widgets_for_range(first, last, parent)
+        self._restore_expansion_in_range(parent, first, last)
 
     def _install_widgets_for_range(
-        self, first_row: int, last_row: int
+        self,
+        first_row: int,
+        last_row: int,
+        parent: QModelIndex = QModelIndex(),
     ) -> None:
         """Scan a row range and install embedded widgets.
 
@@ -454,6 +612,7 @@ class AYTableView(QTreeView):
         Args:
             first_row: First row to scan (inclusive).
             last_row: Last row to scan (inclusive).
+            parent: Parent index (invalid = root level).
         """
         model = self.model()
         if model is None:
@@ -462,7 +621,7 @@ class AYTableView(QTreeView):
         col_count = model.columnCount()
         for row in range(first_row, last_row + 1):
             for col in range(col_count):
-                idx = model.index(row, col)
+                idx = model.index(row, col, parent)
                 factory = idx.data(PaginatedTableModel.WidgetFactoryRole)
                 if factory is not None and callable(factory):
                     try:
@@ -476,6 +635,61 @@ class AYTableView(QTreeView):
                         continue
                     if isinstance(widget, QWidget):
                         self.setIndexWidget(idx, widget)
+
+    def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
+        """Track the hovered row and force-repaint it when it changes.
+
+        Qt only invalidates the cell directly under the cursor on hover
+        transitions.  The branch-indicator area (PE_IndicatorBranch) is
+        outside that cell rect, so it never receives a repaint request when
+        the cursor moves to a new row.  We force the viewport to repaint the
+        full width of the previously-hovered row so the indicator clears.
+        """
+        new_idx = self.indexAt(event.pos())
+        new_row = new_idx.row() if new_idx.isValid() else -1
+        if new_row != self._hovered_row:
+            vp = self.viewport()
+            vp_width = vp.width()
+            # Repaint the old row so its indicator clears.
+            if not self._hovered_row_rect.isNull():
+                vp.update(
+                    QRect(
+                        0,
+                        self._hovered_row_rect.y(),
+                        vp_width,
+                        self._hovered_row_rect.height(),
+                    )
+                )
+            self._hovered_row = new_row
+            self._hovered_row_rect = (
+                self.visualRect(new_idx) if new_idx.isValid() else QRect()
+            )
+            # Repaint the new row so its indicator lights up immediately.
+            if not self._hovered_row_rect.isNull():
+                vp.update(
+                    QRect(
+                        0,
+                        self._hovered_row_rect.y(),
+                        vp_width,
+                        self._hovered_row_rect.height(),
+                    )
+                )
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event: "QtCore.QEvent") -> None:
+        """Clear hover tracking when the mouse exits the widget."""
+        if not self._hovered_row_rect.isNull():
+            self.viewport().update(
+                QRect(
+                    0,
+                    self._hovered_row_rect.y(),
+                    self.viewport().width(),
+                    self._hovered_row_rect.height(),
+                )
+            )
+        self._hovered_row = -1
+        self._hovered_row_rect = QRect()
+        super().leaveEvent(event)
 
     def selectionChanged(
         self,
@@ -501,13 +715,16 @@ if __name__ == "__main__":
 
     from qtpy import QtWidgets
 
+    from .container import AYContainer
+    from .check_box import AYCheckBox
+
     from ..tester import Style, test
-    from .layouts import AYVBoxLayout
     from .table_model import (
+        HIERARCHICAL_TEST_DATA,
         TABLE_TEST_DATA,
         PaginatedTableModel,
         TableColumn,
-        make_test_fetch,
+        make_hierarchical_test_fetch,
     )
 
     def _make_button_factory(
@@ -548,39 +765,50 @@ if __name__ == "__main__":
 
     def _build() -> QtWidgets.QWidget:
         """Build test UI with one AYTableView per variant."""
-        container = QtWidgets.QWidget()
-        root_lyt = AYVBoxLayout(container, margin=8, spacing=8)
 
-        for variant in AYTableView.Variants:
-            label = QtWidgets.QLabel(f"variant: {variant.value}")
-            label.setFixedHeight(20)
-            root_lyt.addWidget(label)
+        container = AYContainer(
+            variant=AYContainer.Variants.High,
+            layout=AYContainer.Layout.VBox,
+            layout_margin=20,
+            layout_spacing=10,
+        )
 
-            fetch = make_test_fetch(_WIDGET_TEST_DATA)
-            columns = [
-                TableColumn("name", "Name", width=150),
-                TableColumn("status", "Status", width=80),
-                TableColumn("type", "Type", width=100),
-                TableColumn("author", "Author", width=100),
-                TableColumn("version", "Version", width=70),
-                TableColumn("actions", "Actions", width=80),
-            ]
-            model = PaginatedTableModel(
-                fetch_page=fetch,
-                columns=columns,
-                page_size=20,
-            )
+        # label + hierarchy switch
+        top_bar = AYContainer(
+            variant=AYContainer.Variants.High,
+            layout=AYContainer.Layout.HBox,
+        )
+        label = QtWidgets.QLabel("variant: tree mode (hierarchical)")
+        switch = AYCheckBox(
+            "Show Hierarchy", variant=AYCheckBox.Variants.Button
+        )
+        top_bar.add_widget(label)
+        top_bar.add_widget(switch)
+        container.add_widget(top_bar)
 
-            table = AYTableView(variant=variant)
-            table.setModel(model)
-            table.setMinimumHeight(200)
-            root_lyt.addWidget(table)
+        # define model
+        tree_columns = [
+            TableColumn("thumb", "Thumbnail", width=75, sortable=False),
+            TableColumn("name", "Name", width=160, sortable=True),
+            TableColumn("status", "Status", width=100, sortable=True),
+            TableColumn("type", "Type", width=100, sortable=True),
+            TableColumn("author", "Author", width=100, sortable=False),
+            TableColumn("version", "Version", width=70, sortable=True),
+        ]
+        tree_fetch = make_hierarchical_test_fetch(HIERARCHICAL_TEST_DATA)
+        tree_model = PaginatedTableModel(
+            fetch_page=tree_fetch,
+            columns=tree_columns,
+            page_size=50,
+        )
+        tree_model.set_tree_mode(False)
 
-            table.selection_changed.connect(
-                lambda sel, desel: print(
-                    f"selection changed: {[i.data() for i in sel.indexes()]}"
-                )
-            )
+        # define view
+        tree_view = AYTableView(variant=AYTableView.Variants.Low)
+        tree_view.setModel(tree_model)
+        tree_view.setMinimumHeight(280)
+        container.add_widget(tree_view)
+        switch.toggled.connect(tree_model.set_tree_mode)
 
         container.setMinimumWidth(700)
         return container

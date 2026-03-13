@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from qtpy.QtCore import (
     QModelIndex,
@@ -90,11 +89,20 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
         self._key_to_col = {col.key: idx for idx, col in enumerate(columns)}
         self.endFilterChange()
 
-    def filterAcceptsRow(  # noqa: N802
+    def _direct_match(
         self,
         source_row: int,
         source_parent: QModelIndex | QPersistentModelIndex,
     ) -> bool:
+        """Return True if a single row satisfies every active criterion.
+
+        Args:
+            source_row: Row number in the source model.
+            source_parent: Parent index in the source model.
+
+        Returns:
+            ``True`` when all criteria are satisfied (AND logic).
+        """
         if not self._criteria:
             return True
 
@@ -127,6 +135,57 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
                 return False
 
         return True
+
+    def filterAcceptsRow(  # noqa: N802
+        self,
+        source_row: int,
+        source_parent: QModelIndex | QPersistentModelIndex,
+    ) -> bool:
+        """Return True if the row (or any of its loaded children) matches.
+
+        In flat mode the recursive child check is a no-op because leaf
+        nodes have ``rowCount() == 0``.  In tree mode parent folders are
+        kept visible as long as at least one loaded descendant passes the
+        criteria, preserving the tree structure.
+
+        Args:
+            source_row: Row number in the source model.
+            source_parent: Parent index in the source model.
+
+        Returns:
+            ``True`` when the row or a descendant satisfies all criteria.
+        """
+        if not self._criteria:
+            return True
+
+        # Tentatively accept tree-mode folder nodes whose children haven't
+        # been fetched yet. We can't know whether any descendant will match
+        # until the children are loaded. PaginatedTableModel emits dataChanged
+        # for the node once its children are loaded, which causes this method
+        # to be called again with real data to decide.
+        source_model = self.sourceModel()
+        if isinstance(source_model, PaginatedTableModel) and source_model._tree_mode:
+            src_idx = source_model.index(source_row, 0, source_parent)
+            node = src_idx.internalPointer()
+            if (
+                node is not None
+                and node.row_has_children
+                and not node.children_loaded
+            ):
+                return True
+
+        if self._direct_match(source_row, source_parent):
+            return True
+
+        # Tree hierarchy: keep parent visible if any loaded child matches.
+        if source_model is None:
+            return False
+        source_index = source_model.index(source_row, 0, source_parent)
+        for child_row in range(source_model.rowCount(source_index)):
+            if self.filterAcceptsRow(child_row, source_index):
+                return True
+
+        return False
 
     def refresh_filter(self) -> None:
         """Re-apply the current filter criteria (e.g. after source data changes)."""
@@ -736,100 +795,201 @@ class AYTableFilter(AYContainer):
 # =============================================================================
 
 if __name__ == "__main__":
-    from typing import Callable
-
     from qtpy import QtWidgets
 
     from ..tester import Style, test
+    from .check_box import AYCheckBox
     from .table_model import (
-        TABLE_TEST_DATA,
+        HIERARCHICAL_TEST_DATA,
         PaginatedTableModel,
         TableColumn,
-        make_test_fetch,
+        make_hierarchical_test_fetch,
     )
-
-    def _make_button_factory(
-        label: str,
-    ) -> Callable[[QModelIndex, QWidget], QWidget]:
-        """Create a widget factory that returns a small button.
-
-        Args:
-            label: Button text.
-
-        Returns:
-            A callable suitable for WidgetFactoryRole.
-        """
-
-        def _factory(index: QModelIndex, parent: QWidget) -> QWidget:
-            from .buttons import AYButton
-
-            btn = AYButton(
-                label,
-                variant=AYButton.Variants.Text,
-                parent=parent,
-            )
-            btn.setFixedHeight(28)
-            btn.clicked.connect(
-                lambda: print(f"Button clicked: row={index.row()}")
-            )
-            return btn
-
-        return _factory
-
-    # Build test data with a widget column
-    _WIDGET_TEST_DATA: list[dict[str, Any]] = []
-    for i, row in enumerate(TABLE_TEST_DATA[:60]):
-        new_row = dict(row)
-        new_row["actions"] = ""
-        new_row["actions__widget_factory"] = _make_button_factory("Open")
-        _WIDGET_TEST_DATA.append(new_row)
+    from .tree_model import LazyTreeModel, TreeNode
+    from .tree_view import AYTreeView
 
     def _build() -> QtWidgets.QWidget:
-        """Build test UI with AYTableFilter driving an AYTableView."""
-        root = AYContainer(
-            layout=AYContainer.Layout.VBox,
-            variant=AYContainer.Variants.Low,
-            layout_margin=10,
-            layout_spacing=4,
-        )
+        """Build test UI: AYTreeView folder navigator + AYTableFilter table."""
 
-        fetch = make_test_fetch(_WIDGET_TEST_DATA)
-        columns = [
-            TableColumn("name", "Name", width=150, icon="label"),
-            TableColumn("status", "Status", width=80, icon="circle"),
-            TableColumn("type", "Type", width=100, icon="category"),
-            TableColumn("author", "Author", width=100, icon="person"),
-            TableColumn("version", "Version", width=70, icon="history"),
-            TableColumn("actions", "Actions", width=80),
+        # --- mutable state ---
+        _selected_folder: list[str | None] = [None]
+        _tree_mode: list[bool] = [False]
+
+        # All root-level rows (folders + leaves) for tree-mode "show all"
+        _all_root_rows: list[dict] = list(HIERARCHICAL_TEST_DATA.get(None, []))
+
+        # All leaf (non-folder) rows across every level for flat "show all"
+        _all_leaf_rows: list[dict] = [
+            row
+            for rows in HIERARCHICAL_TEST_DATA.values()
+            for row in rows
+            if not row.get("has_children", False)
         ]
-        model = PaginatedTableModel(
-            fetch_page=fetch,
+
+        # Wrap the hierarchical fetch so root-level calls respect the
+        # currently selected tree folder and current mode.
+        _hier_fetch = make_hierarchical_test_fetch(HIERARCHICAL_TEST_DATA)
+
+        def _table_fetch(
+            page: int,
+            page_size: int,
+            sort_key: str | None = None,
+            descending: bool = False,
+            parent_id: str | None = None,
+        ) -> list[dict]:
+            if parent_id is not None:
+                # tree-mode child expansion — pass through to real data
+                return _hier_fetch(
+                    page, page_size, sort_key, descending, parent_id
+                )
+            folder_id = _selected_folder[0]
+            if folder_id is None:
+                # nothing selected: flat → leaves only; tree → all root rows
+                rows = list(
+                    _all_root_rows if _tree_mode[0] else _all_leaf_rows
+                )
+            elif _tree_mode[0]:
+                # folder selected, tree mode: root children of that folder
+                rows = list(HIERARCHICAL_TEST_DATA.get(folder_id, []))
+            else:
+                # folder selected, flat mode: leaf children of that folder
+                rows = [
+                    r
+                    for r in HIERARCHICAL_TEST_DATA.get(folder_id, [])
+                    if not r.get("has_children", False)
+                ]
+            if sort_key:
+                rows = sorted(
+                    rows,
+                    key=lambda r: (
+                        r.get(sort_key) is None,
+                        str(r.get(sort_key, "")),
+                    ),
+                    reverse=descending,
+                )
+            start = page * page_size
+            return rows[start : start + page_size]
+
+        # --- Table model & filter ---
+        columns = [
+            TableColumn(
+                "thumb", "Thumbnail", width=75, sortable=False, icon="image"
+            ),
+            TableColumn(
+                "name",
+                "Name",
+                width=250,
+                sortable=True,
+                icon="label",
+                tree_position=True,
+            ),
+            TableColumn(
+                "status", "Status", width=100, sortable=True, icon="circle"
+            ),
+            TableColumn(
+                "type", "Type", width=100, sortable=True, icon="category"
+            ),
+            TableColumn(
+                "author", "Author", width=100, sortable=False, icon="person"
+            ),
+            TableColumn(
+                "version", "Version", width=70, sortable=True, icon="history"
+            ),
+        ]
+        table_model = PaginatedTableModel(
+            fetch_page=_table_fetch,
             columns=columns,
-            page_size=30,
+            page_size=50,
         )
 
-        filter_bar = AYTableFilter(model=model)
+        filter_bar = AYTableFilter(model=table_model)
         filter_bar.filters_changed.connect(
             lambda criteria: print(
                 "[test]  filters changed: "
                 f"{[(c.key, c.values) for c in criteria]}"
             )
         )
-        root.add_widget(filter_bar)
+
+        switch = AYCheckBox(
+            "Show Hierarchy", variant=AYCheckBox.Variants.Button
+        )
+
+        def _on_tree_mode_toggle(enabled: bool) -> None:
+            _tree_mode[0] = enabled
+            table_model.set_tree_mode(enabled)
+
+        switch.toggled.connect(_on_tree_mode_toggle)
+
+        # --- Tree model for folder navigation ---
+        def _fetch_tree_folders(parent_id: str | None) -> list[TreeNode]:
+            rows = HIERARCHICAL_TEST_DATA.get(parent_id, [])
+            return [
+                TreeNode(
+                    id=row["id"],
+                    label=row["name"],
+                    has_children=True,
+                    icon="folder",
+                    icon_color=row.get("name__color", "#f4f5f5"),
+                )
+                for row in rows
+                if row.get("has_children", False)
+            ]
+
+        folder_tree_model = LazyTreeModel(fetch_children=_fetch_tree_folders)
+        tree_view = AYTreeView(variant=AYTreeView.Variants.Low)
+        tree_view.setModel(folder_tree_model)
+        tree_view.setFixedWidth(180)
+
+        def _on_tree_selection(selected, deselected) -> None:
+            indexes = selected.indexes()
+            if indexes:
+                node = indexes[0].internalPointer()
+                folder_id = node.tree_node.id if node.tree_node else None
+                _selected_folder[0] = folder_id
+                print(f"[test]  folder selected: {folder_id!r}")
+            else:
+                _selected_folder[0] = None
+                print("[test]  no folder selected (showing all leaf rows)")
+            table_model.reset_data()
+
+        tree_view.selection_changed.connect(_on_tree_selection)
+
+        # --- Layout ---
+        outer = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.Low,
+            layout_margin=10,
+            layout_spacing=8,
+        )
+
+        right = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            layout_margin=0,
+            layout_spacing=4,
+        )
+
+        filter_row = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            layout_margin=0,
+            layout_spacing=4,
+        )
+        filter_row.add_widget(filter_bar, stretch=1)
+        filter_row.add_widget(switch)
+        right.add_widget(filter_row)
 
         table = AYTableView()
         table.setModel(filter_bar.filter_model)
-        table.setMinimumHeight(500)
-        root.add_widget(table)
-
+        table.setMinimumHeight(400)
         table.selection_changed.connect(
             lambda sel, desel: print(
-                "[test]  selection changed: "
-                f"{[i.data() for i in sel.indexes()]}"
+                f"[test]  table selection: {[i.data() for i in sel.indexes()]}"
             )
         )
+        right.add_widget(table, stretch=1)
 
-        root.setMinimumWidth(700)
-        return root
+        outer.add_widget(tree_view)
+        outer.add_widget(right, stretch=1)
+        outer.setMinimumWidth(900)
+        return outer
 
     test(_build, style=Style.AyonStyleOverCSS)

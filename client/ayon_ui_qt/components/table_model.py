@@ -8,11 +8,12 @@ from typing import Any, Callable
 import random
 
 from qtpy.QtCore import (
-    QAbstractTableModel,
+    QAbstractItemModel,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
     Qt,
+    Signal,  # type: ignore[attr-defined]
 )
 from qtpy.QtGui import QBrush, QColor
 
@@ -22,6 +23,50 @@ except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
 log = logging.getLogger(__name__)
+
+
+class _TableNode:
+    """Internal node used by PaginatedTableModel to represent a row.
+
+    Stores the row data dict, parent/child references, and per-node
+    pagination state (used in tree mode).
+    """
+
+    __slots__ = (
+        "node_id",
+        "row_data",
+        "parent",
+        "children",
+        "children_loaded",
+        "current_page",
+        "has_more",
+        "is_fetching",
+    )
+
+    def __init__(
+        self,
+        node_id: str | None,
+        row_data: dict[str, Any],
+        parent: _TableNode | None,
+    ) -> None:
+        self.node_id = node_id
+        self.row_data = row_data
+        self.parent = parent
+        self.children: list[_TableNode] = []
+        self.children_loaded: bool = False
+        self.current_page: int = 0
+        self.has_more: bool = True
+        self.is_fetching: bool = False
+
+    @property
+    def is_root(self) -> bool:
+        """Return True if this node is the invisible root."""
+        return self.parent is None
+
+    @property
+    def row_has_children(self) -> bool:
+        """Return True if the row data declares this node as a folder."""
+        return bool(self.row_data.get("has_children", False))
 
 
 @dataclass
@@ -34,6 +79,7 @@ class TableColumn:
         width: Preferred column width hint in pixels. 0 means auto.
         sortable: Whether the column can be sorted by clicking the header.
         icon: Optional material icon name shown in the filter dropdown.
+        tree_position: Whether the column is used for tree indentation.
     """
 
     key: str
@@ -41,18 +87,27 @@ class TableColumn:
     width: int = 0
     sortable: bool = True
     icon: str | None = None
+    tree_position: bool = False
 
 
-class PaginatedTableModel(QAbstractTableModel):
-    """A Qt table model that lazily loads rows page-by-page via a callback.
+class PaginatedTableModel(QAbstractItemModel):
+    """A Qt model that lazily loads rows page-by-page via a callback.
 
     Rows are fetched on demand using Qt's canFetchMore / fetchMore
     mechanism.  Each call to fetchMore retrieves one page of data from
     the supplied ``fetch_page`` callable.
 
+    In **flat mode** (default) the model behaves like a plain table:
+    no disclosure triangles, no nesting.  In **tree mode** rows whose
+    dict contains ``"has_children": True`` become expandable folders;
+    expanding them triggers a fresh ``fetch_page`` call with the
+    folder's ``"id"`` value passed as ``parent_id``.
+
     Args:
-        fetch_page: Callable that takes ``(page_number, page_size)`` and
-            returns a list of row dicts.  Page numbers are 0-based.
+        fetch_page: Callable with signature
+            ``(page, page_size, sort_key, descending, parent_id) ->
+            list[dict]``.  ``parent_id`` is ``None`` for root-level
+            items and the row's ``"id"`` value for nested items.
         columns: Column definitions.  When ``None``, columns are inferred
             from the keys of the first fetched row.
         page_size: Number of rows per page.
@@ -60,11 +115,12 @@ class PaginatedTableModel(QAbstractTableModel):
     """
 
     WidgetFactoryRole: int = Qt.ItemDataRole.UserRole + 10
+    tree_mode_changed = Signal(bool)
 
     def __init__(
         self,
         fetch_page: Callable[
-            [int, int, str | None, bool], list[dict[str, Any]]
+            [int, int, str | None, bool, str | None], list[dict[str, Any]]
         ],
         columns: list[TableColumn] | None = None,
         page_size: int = 50,
@@ -73,7 +129,9 @@ class PaginatedTableModel(QAbstractTableModel):
         """Initialise the model and fetch the first page.
 
         Args:
-            fetch_page: Callable ``(page, page_size) -> list[dict]``.
+            fetch_page: Callable
+                ``(page, page_size, sort_key, descending, parent_id)
+                -> list[dict]``.
             columns: Explicit column definitions, or ``None`` to infer.
             page_size: Rows per page.
             parent: Parent QObject.
@@ -83,14 +141,19 @@ class PaginatedTableModel(QAbstractTableModel):
         self._explicit_columns: list[TableColumn] | None = columns
         self._columns: list[TableColumn] = columns or []
         self._page_size: int = page_size
-        self._rows: list[dict[str, Any]] = []
-        self._current_page: int = 0
-        self._has_more: bool = True
-        self._is_fetching: bool = False
         self._sort_column: int = -1
         self._sort_order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
+        self._tree_mode: bool = False
+        self._tree_position: int = -1
 
-        self._fetch_next_page()
+        # Internal node tree.  _all_nodes prevents Python GC from collecting
+        # nodes that are held only via QModelIndex.internalPointer().
+        self._root: _TableNode = _TableNode(
+            node_id=None, row_data={}, parent=None
+        )
+        self._all_nodes: set[_TableNode] = {self._root}
+
+        self._fetch_next_page(self._root)
 
     # Properties --------------------------------------------------------------
 
@@ -105,47 +168,159 @@ class PaginatedTableModel(QAbstractTableModel):
 
     @property
     def page_count(self) -> int:
-        """Return the number of pages fetched so far.
+        """Return the number of root pages fetched so far.
 
         Returns:
-            Current page index (pages fetched = _current_page).
+            Current root page index.
         """
-        return self._current_page
+        return self._root.current_page
 
-    # QAbstractTableModel overrides -------------------------------------------
+    @property
+    def tree_position(self) -> int:
+        """Return the current tree column index, or 0 if tree mode is off."""
+        if self._tree_position == -1:
+            self._tree_position = 0
+            for i, col in enumerate(self._columns):
+                if col.tree_position:
+                    self._tree_position = i
+                    break
+        return self._tree_position if self._tree_mode else 0
+
+    # QAbstractItemModel interface --------------------------------------------
+
+    def index(  # noqa: N802
+        self,
+        row: int,
+        column: int,
+        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
+    ) -> QModelIndex:
+        """Return a model index for row/column under parent.
+
+        Args:
+            row: Row number under parent.
+            column: Column number.
+            parent: Parent index (invalid = root).
+
+        Returns:
+            Valid QModelIndex, or invalid if out of range.
+        """
+        if not self.hasIndex(row, column, parent):
+            return QModelIndex()
+        parent_node = self._node_from_index(parent)
+        if row >= len(parent_node.children):
+            return QModelIndex()
+        return self.createIndex(row, column, parent_node.children[row])
+
+    def parent(  # type: ignore[override]
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> QModelIndex:
+        """Return the parent index of the given index.
+
+        Args:
+            index: Child index.
+
+        Returns:
+            Parent QModelIndex, or invalid for root-level items.
+        """
+        if not index.isValid():
+            return QModelIndex()
+        node: _TableNode = index.internalPointer()  # type: ignore[assignment]
+        parent_node = node.parent
+        if parent_node is None or parent_node.is_root:
+            return QModelIndex()
+        grandparent = parent_node.parent
+        row = grandparent.children.index(parent_node)  # type: ignore[union-attr]
+        return self.createIndex(row, 0, parent_node)
 
     def rowCount(  # noqa: N802
         self,
         parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
     ) -> int:
-        """Return the number of rows in the model.
+        """Return the number of loaded children under parent.
 
         Args:
-            parent: Parent index; returns 0 for valid parents (flat
-                table).
+            parent: Parent index (invalid = root).
 
         Returns:
-            Number of loaded rows, or 0 if parent is valid.
+            Number of loaded child rows.
         """
-        if parent.isValid():
+        if parent.column() > 0:
             return 0
-        return len(self._rows)
+        return len(self._node_from_index(parent).children)
 
     def columnCount(  # noqa: N802
         self,
         parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
     ) -> int:
-        """Return the number of columns in the model.
+        """Return the number of columns.
 
         Args:
-            parent: Parent index; returns 0 for valid parents.
+            parent: Unused; column count is the same for all nodes.
 
         Returns:
-            Number of columns, or 0 if parent is valid.
+            Number of columns.
         """
-        if parent.isValid():
-            return 0
         return len(self._columns)
+
+    def hasChildren(  # noqa: N802
+        self,
+        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
+    ) -> bool:
+        """Return whether the node at parent has or can have children.
+
+        Controls whether Qt draws a disclosure triangle even before
+        children are loaded.
+
+        Args:
+            parent: Parent index (invalid = root).
+
+        Returns:
+            True if the node has loaded children, has more pages, or
+            (in tree mode only) the row data declares ``has_children``.
+        """
+        node = self._node_from_index(parent)
+        if node.is_root:
+            return bool(node.children) or node.has_more
+        if not self._tree_mode:
+            return False
+        if node.children_loaded:
+            return bool(node.children)
+        return node.row_has_children
+
+    def canFetchMore(  # noqa: N802
+        self,
+        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
+    ) -> bool:
+        """Return whether more rows can be fetched for parent.
+
+        Args:
+            parent: Parent index (invalid = root).
+
+        Returns:
+            ``True`` when more pages are available for this node.
+        """
+        node = self._node_from_index(parent)
+        if node.is_root:
+            return node.has_more
+        if not self._tree_mode:
+            return False
+        if not node.row_has_children:
+            return False
+        if not node.children_loaded:
+            return True
+        return node.has_more
+
+    def fetchMore(  # noqa: N802
+        self,
+        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
+    ) -> None:
+        """Fetch the next page of rows for parent.
+
+        Args:
+            parent: Parent index (invalid = root).
+        """
+        self._fetch_next_page(self._node_from_index(parent))
 
     def data(
         self,
@@ -163,14 +338,14 @@ class PaginatedTableModel(QAbstractTableModel):
         """
         if not index.isValid():
             return None
-        row = index.row()
-        col = index.column()
-        if row < 0 or row >= len(self._rows):
+        node: _TableNode | None = index.internalPointer()  # type: ignore[assignment]
+        if node is None:
             return None
+        col = index.column()
         if col < 0 or col >= len(self._columns):
             return None
 
-        row_dict = self._rows[row]
+        row_dict = node.row_data
         col_key = self._columns[col].key
 
         if role == Qt.ItemDataRole.DisplayRole:
@@ -227,38 +402,12 @@ class PaginatedTableModel(QAbstractTableModel):
                 return self._columns[section].label
         return None
 
-    def canFetchMore(  # noqa: N802
-        self,
-        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
-    ) -> bool:
-        """Return whether more rows can be fetched.
-
-        Args:
-            parent: Parent index; only the root (invalid) index may
-                fetch more.
-
-        Returns:
-            ``True`` when more pages are available.
-        """
-        if parent.isValid():
-            return False
-        return self._has_more
-
-    def fetchMore(  # noqa: N802
-        self,
-        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
-    ) -> None:
-        """Fetch the next page of rows.
-
-        Args:
-            parent: Parent index (unused; rows are fetched for root).
-        """
-        self._fetch_next_page()
-
     def sort(
         self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder
     ) -> None:
         """Set the active sort column and order, then reload data.
+
+        Sorting always resets from page 0 at all levels.
 
         Args:
             column: Zero-based index of the column to sort by. If out of
@@ -273,6 +422,20 @@ class PaginatedTableModel(QAbstractTableModel):
 
     # Public interface --------------------------------------------------------
 
+    def set_tree_mode(self, enabled: bool) -> None:
+        """Switch between flat table mode and hierarchical tree mode.
+
+        Emits ``tree_mode_changed`` and reloads from page 0.
+
+        Args:
+            enabled: ``True`` to enable tree mode, ``False`` for flat.
+        """
+        if self._tree_mode == enabled:
+            return
+        self._tree_mode = enabled
+        self.tree_mode_changed.emit(enabled)
+        self.reset_data()
+
     def set_page(self, page: int) -> None:
         """Reset the model and begin fetching from the given page.
 
@@ -280,13 +443,12 @@ class PaginatedTableModel(QAbstractTableModel):
             page: 0-based page number to start from.
         """
         self.beginResetModel()
-        self._rows = []
-        self._has_more = True
-        self._current_page = page
-        self._is_fetching = False
+        self._root = _TableNode(node_id=None, row_data={}, parent=None)
+        self._root.current_page = page
+        self._all_nodes = {self._root}
         self._columns = self._explicit_columns or []
         self.endResetModel()
-        self._fetch_next_page()
+        self._fetch_next_page(self._root)
 
     def set_page_size(self, size: int) -> None:
         """Update the page size and reset the model from page 0.
@@ -309,18 +471,17 @@ class PaginatedTableModel(QAbstractTableModel):
     def reset_data(self) -> None:
         """Reset the model and re-fetch from page 0."""
         self.beginResetModel()
-        self._rows = []
-        self._has_more = True
-        self._current_page = 0
-        self._is_fetching = False
+        self._root = _TableNode(node_id=None, row_data={}, parent=None)
+        self._all_nodes = {self._root}
         self._columns = self._explicit_columns or []
         self.endResetModel()
-        self._fetch_next_page()
+        self._fetch_next_page(self._root)
 
     def get_distinct_values(self, key: str) -> list[str]:
         """Return sorted distinct non-empty string values for a column.
 
-        Scans currently loaded rows only.
+        In flat mode scans root-level rows; in tree mode scans all
+        loaded nodes across all levels.
 
         Args:
             key: Column key to inspect.
@@ -329,8 +490,13 @@ class PaginatedTableModel(QAbstractTableModel):
             Sorted list of unique string values found in loaded rows.
         """
         seen: set[str] = set()
-        for row in self._rows:
-            val = row.get(key)
+        nodes = (
+            self._all_nodes if self._tree_mode else set(self._root.children)
+        )
+        for node in nodes:
+            if node.is_root:
+                continue
+            val = node.row_data.get(key)
             if val is not None:
                 s = str(val).strip()
                 if s:
@@ -339,22 +505,50 @@ class PaginatedTableModel(QAbstractTableModel):
 
     # Internal helpers --------------------------------------------------------
 
-    def _fetch_next_page(self) -> None:
-        """Fetch the next page from the data source and append rows.
+    def _node_from_index(
+        self, index: QModelIndex | QPersistentModelIndex
+    ) -> _TableNode:
+        """Return the internal node for a model index.
 
-        Calls ``self._fetch_page(current_page, page_size)``.  On error
-        the exception is logged and fetching is stopped.  Sets
-        ``_has_more`` to ``False`` when the result is empty or shorter
-        than the page size.
+        Args:
+            index: A valid or invalid QModelIndex.
 
-        A re-entrancy guard (``_is_fetching``) prevents recursive calls
-        triggered by ``endInsertRows()`` signalling the view, which
-        would otherwise call ``fetchMore`` / ``_fetch_next_page`` again
-        before the current invocation finishes.
+        Returns:
+            The corresponding _TableNode; returns root for invalid
+            indexes.
         """
-        if self._is_fetching:
+        if not index.isValid():
+            return self._root
+        return index.internalPointer()  # type: ignore[return-value]
+
+    def _index_for_node(self, node: _TableNode) -> QModelIndex:
+        """Return the QModelIndex that identifies node (column 0).
+
+        Args:
+            node: A non-root table node.
+
+        Returns:
+            Valid QModelIndex for non-root nodes, invalid for root.
+        """
+        if node.is_root:
+            return QModelIndex()
+        parent = node.parent
+        row = parent.children.index(node)  # type: ignore[union-attr]
+        return self.createIndex(row, 0, node)
+
+    def _fetch_next_page(self, node: _TableNode) -> None:
+        """Fetch the next page of children for *node* and insert them.
+
+        Uses a per-node re-entrancy guard (``node.is_fetching``) to
+        prevent recursive invocations triggered by ``endInsertRows``.
+
+        Args:
+            node: The parent node whose next page of children to fetch.
+        """
+        if node.is_fetching:
             return
-        self._is_fetching = True
+        _was_children_loaded = node.children_loaded
+        node.is_fetching = True
         try:
             try:
                 sort_key = None
@@ -362,46 +556,65 @@ class PaginatedTableModel(QAbstractTableModel):
                     sort_key = self._columns[self._sort_column].key
 
                 results = self._fetch_page(
-                    self._current_page,
+                    node.current_page,
                     self._page_size,
                     sort_key,
                     self._sort_order == Qt.SortOrder.DescendingOrder,
+                    node.node_id,
                 )
             except Exception:
                 log.exception(
-                    "Error fetching page %d (page_size=%d)",
-                    self._current_page,
+                    "Error fetching page %d (page_size=%d, parent_id=%r)",
+                    node.current_page,
                     self._page_size,
+                    node.node_id,
                 )
-                self._has_more = False
+                node.has_more = False
                 return
 
             if not results:
-                self._has_more = False
+                node.has_more = False
+                node.children_loaded = True
                 return
 
             if not self._columns and self._explicit_columns is None:
                 self._columns = self._infer_columns(results[0])
 
-            first_new = len(self._rows)
+            parent_index = self._index_for_node(node)
+            first_new = len(node.children)
             last_new = first_new + len(results) - 1
-            self.beginInsertRows(QModelIndex(), first_new, last_new)
-            self._rows.extend(results)
+            self.beginInsertRows(parent_index, first_new, last_new)
+            for row_data in results:
+                child = _TableNode(
+                    node_id=row_data.get("id"),
+                    row_data=row_data,
+                    parent=node,
+                )
+                node.children.append(child)
+                self._all_nodes.add(child)
             self.endInsertRows()
 
+            node.children_loaded = True
             if len(results) < self._page_size:
-                self._has_more = False
+                node.has_more = False
 
-            self._current_page += 1
+            node.current_page += 1
         finally:
-            self._is_fetching = False
+            node.is_fetching = False
+
+        # On the first child-load for a non-root node, emit dataChanged so
+        # proxy models (e.g. AYTableFilterProxyModel) re-evaluate this row's
+        # filter status now that real children are available.
+        if not node.is_root and not _was_children_loaded and node.children_loaded:
+            idx = self._index_for_node(node)
+            self.dataChanged.emit(idx, idx)
 
     @staticmethod
     def _infer_columns(row: dict[str, Any]) -> list[TableColumn]:
         """Infer column definitions from a sample row dictionary.
 
-        Keys ending with ``__icon``, ``__color``, or ``__widget_factory``
-        are excluded.
+        Reserved keys (``id``, ``has_children``) and decorator suffixes
+        (``__icon``, ``__color``, ``__widget_factory``) are excluded.
 
         Args:
             row: A representative row dictionary.
@@ -411,6 +624,8 @@ class PaginatedTableModel(QAbstractTableModel):
         """
         columns: list[TableColumn] = []
         for key in row:
+            if key in ("id", "has_children"):
+                continue
             if key.endswith(("__icon", "__color", "__widget_factory")):
                 continue
             label = key.replace("_", " ").title()
@@ -483,8 +698,10 @@ TABLE_TEST_DATA: list[dict[str, Any]] = [
 
 def make_test_fetch(
     data: list[dict[str, Any]],
-) -> Callable[[int, int, str | None, bool], list[dict[str, Any]]]:
-    """Create a fetch_page callback from static data.
+) -> Callable[[int, int, str | None, bool, str | None], list[dict[str, Any]]]:
+    """Create a flat fetch_page callback from static data.
+
+    ``parent_id`` is accepted but ignored — all data lives at root level.
 
     Args:
         data: The full dataset to paginate.
@@ -498,6 +715,7 @@ def make_test_fetch(
         page_size: int,
         sort_key: str | None,
         descending: bool,
+        parent_id: str | None = None,  # noqa: ARG001
     ) -> list[dict[str, Any]]:
         print(
             f"[test]  Fetching page {page} (page_size={page_size}, "
@@ -507,6 +725,196 @@ def make_test_fetch(
         if sort_key:
             rows = sorted(
                 data,
+                key=lambda r: (
+                    r.get(sort_key) is None,
+                    str(r.get(sort_key, "")),
+                ),
+                reverse=descending,
+            )
+        start = page * page_size
+        end = start + page_size
+        return rows[start:end]
+
+    return _fetch
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical test data
+# ---------------------------------------------------------------------------
+
+_FOLDER_ICON = "folder"
+_FOLDER_COLOR = "#8898a8"
+
+
+def _make_hierarchical_test_data(
+    n: int,
+    subfolders_per_root: int = 8,
+) -> dict[str | None, list[dict[str, Any]]]:
+    """Generate hierarchical test data with a configurable number of leaf entries.
+
+    Two root folders (Assets, Shots) are always present.  Under each,
+    ``subfolders_per_root`` sub-folders are generated from a fixed name
+    pool.  Leaf entries are distributed as evenly as possible across all
+    sub-folders.
+
+    The function is deterministic: the same arguments always produce the
+    same dataset because a seeded :class:`random.Random` instance is
+    used internally.
+
+    Args:
+        n: Total number of leaf entries to generate.
+        subfolders_per_root: Number of sub-folders to create under each
+            root folder.  Capped at 10 for asset folders (the size of
+            the name pool); shot folders are auto-named so there is no
+            cap.
+
+    Returns:
+        A mapping of parent_id -> list[row_dict] suitable for use with
+        :func:`_make_hierarchical_test_fetch`.
+    """
+    rng = random.Random(42)
+
+    _statuses = [
+        ("Not ready", "fiber_new", "#434a56"),
+        ("Ready to start", "timer", "#bababa"),
+        ("In progress", "play_arrow", "#3498db"),
+        ("Pending review", "visibility", "#ff9b0a"),
+        ("Approved", "task_alt", "#00f0b4"),
+        ("On hold", "back_hand", "#fa6e46"),
+        ("Omitted", "block", "#cb1a1a"),
+    ]
+    _asset_folder_pool = [
+        "Hero",
+        "Villain",
+        "Sidekick",
+        "Creature",
+        "NPC_A",
+        "NPC_B",
+        "Prop_Vehicle",
+        "Prop_Furniture",
+        "Environment_City",
+        "Environment_Forest",
+    ]
+    _asset_task_names = ["model", "rig", "lookdev", "texture", "layout"]
+    _asset_types = ["Model", "Texture", "Rig", "Look-dev"]
+    _shot_task_names = [
+        "Animation",
+        "Lighting",
+        "Compositing",
+        "Grading",
+        "FX",
+    ]
+    _shot_types = ["Animation", "Lighting", "Compositing", "Grading"]
+    _authors = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Grace"]
+
+    num_asset = min(subfolders_per_root, len(_asset_folder_pool))
+    asset_names = _asset_folder_pool[:num_asset]
+    asset_ids = [name.lower() for name in asset_names]
+
+    num_shots = subfolders_per_root
+    shot_names = [f"SH{(i + 1) * 10:03d}" for i in range(num_shots)]
+    shot_ids = [name.lower() for name in shot_names]
+
+    total_subfolders = num_asset + num_shots
+    base, remainder = divmod(n, total_subfolders)
+    counts = [
+        base + (1 if i < remainder else 0) for i in range(total_subfolders)
+    ]
+    asset_counts = counts[:num_asset]
+    shot_counts = counts[num_asset:]
+
+    def _make_entries(
+        parent_id: str,
+        count: int,
+        task_names: list[str],
+        task_types: list[str],
+    ) -> list[dict[str, Any]]:
+        entries = []
+        for i in range(count):
+            status, icon, color = rng.choice(_statuses)
+            entries.append(
+                {
+                    "id": f"{parent_id}_{i:04d}",
+                    "name": rng.choice(task_names),
+                    "name__icon": "package_2",
+                    "status": status,
+                    "status__icon": icon,
+                    "status__color": color,
+                    "type": rng.choice(task_types),
+                    "author": rng.choice(_authors),
+                    "version": f"v{rng.randint(1, 20):03d}",
+                    "thumb": "",  # placeholder for thumbnail column
+                    "thumb__icon": "panorama",  # placeholder for thumbnail column
+                }
+            )
+        return entries
+
+    def _folder_row(folder_id: str, folder_name: str) -> dict[str, Any]:
+        return {
+            "id": folder_id,
+            "name": folder_name,
+            "has_children": True,
+            "name__icon": _FOLDER_ICON,
+            "name__color": _FOLDER_COLOR,
+        }
+
+    result: dict[str | None, list[dict[str, Any]]] = {
+        None: [
+            _folder_row("assets", "Assets"),
+            _folder_row("shots", "Shots"),
+        ],
+        "assets": [
+            _folder_row(fid, name) for fid, name in zip(asset_ids, asset_names)
+        ],
+        "shots": [
+            _folder_row(sid, name) for sid, name in zip(shot_ids, shot_names)
+        ],
+    }
+
+    for folder_id, count in zip(asset_ids, asset_counts):
+        result[folder_id] = _make_entries(
+            folder_id, count, _asset_task_names, _asset_types
+        )
+    for shot_id, count in zip(shot_ids, shot_counts):
+        result[shot_id] = _make_entries(
+            shot_id, count, _shot_task_names, _shot_types
+        )
+
+    return result
+
+
+HIERARCHICAL_TEST_DATA = _make_hierarchical_test_data(500)
+
+
+def make_hierarchical_test_fetch(
+    data: dict[str | None, list[dict[str, Any]]],
+) -> Callable[[int, int, str | None, bool, str | None], list[dict[str, Any]]]:
+    """Create a fetch_page callback from hierarchical test data.
+
+    Args:
+        data: Mapping of parent_id -> list[row_dict].
+              ``None`` key holds the root-level rows.
+
+    Returns:
+        A callable suitable for PaginatedTableModel in tree mode.
+    """
+
+    def _fetch(
+        page: int,
+        page_size: int,
+        sort_key: str | None,
+        descending: bool,
+        parent_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        print(
+            f"[test]  Fetching page {page} (page_size={page_size}, "
+            f"sort_key={sort_key!r}, descending={descending}, "
+            f"parent_id={parent_id!r})"
+        )
+        rows = list(data.get(parent_id, []))
+        if sort_key:
+            rows = sorted(
+                rows,
                 key=lambda r: (
                     r.get(sort_key) is None,
                     str(r.get(sort_key, "")),
@@ -530,6 +938,5 @@ if __name__ == "__main__":
     model = PaginatedTableModel(fetch_page=fetch, page_size=25)
     print(f"[test]  Rows: {model.rowCount()}, Columns: {model.columnCount()}")
     print(f"[test]  Columns: {[c.label for c in model.columns]}")
-    print(
-        f"[test]  Has more: {model.canFetchMore(model.index(0, 0).parent())}"
-    )
+    has_more = model.canFetchMore()
+    print(f"[test]  Has more: {has_more}")
