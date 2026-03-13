@@ -445,6 +445,9 @@
                     "border-radius": 0,
                     "border-width": 0
                 },
+                "criterion": {
+                    "background-color": "--md-ref-palette-neutral-variant25"
+                },
                 "debug-r": {
                     "background-color": "#664444"
                 },

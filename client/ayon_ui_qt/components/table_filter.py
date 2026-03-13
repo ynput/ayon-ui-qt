@@ -51,6 +51,7 @@ class FilterCriterion:
     attribute_label: str
     values: list[str] = field(default_factory=list)
     use_substring: bool = False
+    exclude: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +164,10 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
         # for the node once its children are loaded, which causes this method
         # to be called again with real data to decide.
         source_model = self.sourceModel()
-        if isinstance(source_model, PaginatedTableModel) and source_model._tree_mode:
+        if (
+            isinstance(source_model, PaginatedTableModel)
+            and source_model._tree_mode
+        ):
             src_idx = source_model.index(source_row, 0, source_parent)
             node = src_idx.internalPointer()
             if (
@@ -208,7 +212,9 @@ class _FilterDropdown(AYFrame):
         closed: Emitted when the popup is dismissed.
     """
 
-    criterion_ready = Signal(str, list, bool)  # key, values, use_substring
+    criterion_ready = Signal(
+        str, list, bool, bool
+    )  # key, values, use_substring
     closed = Signal()
 
     def __init__(
@@ -307,13 +313,9 @@ class _FilterDropdown(AYFrame):
         self._back_btn.clicked.connect(self._go_to_attribute_page)
         footer.add_widget(self._back_btn)
         footer.addStretch()
-        self._exclude_checkbox = AYButton(
+        self._exclude_checkbox = AYCheckBox(
             "Excludes",
-            variant=AYButton.Variants.Filled,
-            checkable=True,
-            icon="toggle_off",
-            icon_on="toggle_on",
-            icon_size=20,
+            variant=AYCheckBox.Variants.Button,
         )
         footer.add_widget(self._exclude_checkbox)
         self._apply_btn = AYButton(
@@ -504,7 +506,11 @@ class _FilterDropdown(AYFrame):
             ]
             use_substring = False
 
-        self.criterion_ready.emit(self._current_key, values, use_substring)
+        excludes = self._exclude_checkbox.isChecked()
+
+        self.criterion_ready.emit(
+            self._current_key, values, use_substring, excludes
+        )
         self.close()
 
     # ------------------------------------------------------------------
@@ -579,12 +585,20 @@ class _CriterionBadge(AYContainer):
         super().__init__(
             parent=parent,
             layout=AYContainer.Layout.HBox,
-            variant=AYContainer.Variants.Low_Framed,
+            variant=AYContainer.Variants.Criterion,
             layout_margin=2,
-            layout_spacing=2,
+            layout_spacing=4,
         )
         self._criterion = criterion
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        front_icon = AYLabel(
+            icon="check_small"
+            if not criterion.exclude
+            else "do_not_disturb_on",
+            icon_size=16 if not criterion.exclude else 12,
+        )
+        self.add_widget(front_icon)
 
         values_text = (
             " or ".join(criterion.values) if criterion.values else "…"
@@ -738,10 +752,7 @@ class AYTableFilter(AYContainer):
     # ------------------------------------------------------------------
 
     def _on_criterion_ready(
-        self,
-        key: str,
-        values: list[str],
-        use_substring: bool,
+        self, key: str, values: list[str], use_substring: bool, excludes: bool
     ) -> None:
         if not values:
             # Empty apply — remove existing criterion for this key if any
@@ -767,6 +778,7 @@ class AYTableFilter(AYContainer):
                         attribute_label=label,
                         values=values,
                         use_substring=use_substring,
+                        exclude=excludes,
                     )
                 )
 
