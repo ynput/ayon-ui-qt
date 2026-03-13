@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from qtpy.QtCore import Qt
-from qtpy.QtGui import QPainter, QPaintEvent
+from qtpy.QtGui import QColor, QPainter, QPaintEvent, QPalette
 from qtpy.QtWidgets import (
     QScrollArea,
     QScrollBar,
@@ -28,19 +28,25 @@ class AYScrollBar(QScrollBar):
         super().__init__(*args, **kwargs)
         self.setStyle(get_ayon_style())
 
-    def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            # from .. import get_ayon_style
+    def initStyleOption(self, option: QStyleOptionSlider) -> None:
+        super().initStyleOption(option)
+        SC = QStyle.SubControl
+        option.subControls = (
+            SC.SC_All
+            & ~SC.SC_ScrollBarAddLine
+            & ~SC.SC_ScrollBarSubLine
+            & ~SC.SC_ScrollBarFirst
+        )
+        option.palette = self.variant_palette
 
-            p = QPainter(self)
-            option = QStyleOptionSlider()
-            self.initStyleOption(option)
-            option.subControls = QStyle.SubControl.SC_All
-            get_ayon_style().drawComplexControl(
-                QStyle.ComplexControl.CC_ScrollBar, option, p, self
-            )
-            return
-        super().paintEvent(arg__1)
+    def paintEvent(self, arg__1: QPaintEvent) -> None:
+        p = QPainter(self)
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        get_ayon_style().drawComplexControl(
+            QStyle.ComplexControl.CC_ScrollBar, option, p, self
+        )
+        return
 
 
 class AYScrollArea(QScrollArea):
