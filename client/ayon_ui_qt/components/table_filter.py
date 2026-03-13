@@ -189,8 +189,7 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
 
     def refresh_filter(self) -> None:
         """Re-apply the current filter criteria (e.g. after source data changes)."""
-        self.beginFilterChange()
-        self.endFilterChange()
+        self.invalidateFilter()
 
 
 # ---------------------------------------------------------------------------
