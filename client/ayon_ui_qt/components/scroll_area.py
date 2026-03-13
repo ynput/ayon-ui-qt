@@ -37,7 +37,6 @@ class AYScrollBar(QScrollBar):
             & ~SC.SC_ScrollBarSubLine
             & ~SC.SC_ScrollBarFirst
         )
-        option.palette = self.variant_palette
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         p = QPainter(self)
