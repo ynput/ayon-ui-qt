@@ -1045,11 +1045,6 @@ class CheckboxDrawer:
             variant=variant,
             state=state,
         )
-        option.direction = (
-            Qt.LayoutDirection.LeftToRight
-            if style.get("indicator-position", "left") == "left"
-            else Qt.LayoutDirection.RightToLeft
-        )
 
         if style.get("background-color"):
             painter.save()
@@ -1058,6 +1053,59 @@ class CheckboxDrawer:
             radius = style.get("border-radius", 0)
             painter.drawRoundedRect(option.rect, radius, radius)
             painter.restore()
+
+        if style.get("indicator-position", "left") == "right":
+            # Manually draw a centred [label  toggle] group so that padding is
+            # equal on both sides, instead of relying on Qt's layout direction.
+            s = self.style_inst
+            ind_w = s.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, widget
+            )
+            ind_h = s.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorHeight, option, widget
+            )
+            spacing = s.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, widget
+            )
+
+            text = getattr(option, "text", "")
+            fm = option.fontMetrics
+            text_w = fm.horizontalAdvance(text) if text else 0
+            text_h = fm.height()
+
+            total_w = text_w + (spacing + ind_w if text_w else ind_w)
+
+            rect = option.rect
+            cx = rect.center().x()
+            cy = rect.center().y()
+            x = cx - total_w // 2
+
+            painter.save()
+            if text:
+                painter.setPen(
+                    QColor(style["color"])
+                    if style.get("color")
+                    else option.palette.color(QPalette.ColorRole.WindowText)
+                )
+                text_rect = QRect(
+                    x, cy - text_h // 2, text_w, text_h
+                )
+                painter.drawText(
+                    text_rect,
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                    text,
+                )
+
+            toggle_opt = QStyleOption(option)
+            toggle_opt.rect = QRect(
+                x + text_w + (spacing if text_w else 0),
+                cy - ind_h // 2,
+                ind_w,
+                ind_h,
+            )
+            self.draw_toggle(toggle_opt, painter, widget)
+            painter.restore()
+            return
 
         if style.get("color"):
             option.palette.setColor(
