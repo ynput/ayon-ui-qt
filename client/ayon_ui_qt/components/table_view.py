@@ -424,7 +424,8 @@ class AYTableView(QTreeView):
         """Set up header section sizes from model column hints.
 
         Args:
-            model: The data model.
+            model: The data model (may be a proxy wrapping a
+                :class:`PaginatedTableModel`).
         """
         header = self.header()
         if header is None:
@@ -443,16 +444,21 @@ class AYTableView(QTreeView):
         if col_count == 0:
             return
 
+        # Unwrap proxy to access PaginatedTableModel column definitions.
+        source: Any = model
+        if isinstance(model, QSortFilterProxyModel):
+            source = model.sourceModel()
+
         # Check if model provides column width hints.
         has_hints = False
-        if isinstance(model, PaginatedTableModel):
-            for col_def in model.columns:
+        if isinstance(source, PaginatedTableModel):
+            for col_def in source.columns:
                 if col_def.width > 0:
                     has_hints = True
                     break
 
-        if has_hints and isinstance(model, PaginatedTableModel):
-            for i, col_def in enumerate(model.columns):
+        if has_hints and isinstance(source, PaginatedTableModel):
+            for i, col_def in enumerate(source.columns):
                 if i >= col_count:
                     break
                 if col_def.width > 0:
@@ -477,10 +483,10 @@ class AYTableView(QTreeView):
         # would create behind our guard.
         header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
-        if isinstance(model, PaginatedTableModel):
+        if isinstance(source, PaginatedTableModel):
             header.sortIndicatorChanged.connect(
                 lambda section, order: self._on_sort_indicator_changed(
-                    section, order, model
+                    section, order, source
                 )
             )
 
@@ -789,7 +795,7 @@ if __name__ == "__main__":
         # define model
         tree_columns = [
             TableColumn("thumb", "Thumbnail", width=75, sortable=False),
-            TableColumn("name", "Name", width=160, sortable=True),
+            TableColumn("name", "Name", width=160, sortable=True, tree_position=True),
             TableColumn("status", "Status", width=100, sortable=True),
             TableColumn("type", "Type", width=100, sortable=True),
             TableColumn("author", "Author", width=100, sortable=False),
