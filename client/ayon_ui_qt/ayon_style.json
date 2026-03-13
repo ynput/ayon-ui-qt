@@ -589,7 +589,7 @@
                     "header-sort-indicator-size": 18,
                     "disabled-opacity": 0.5,
                     "hover": {
-                        "background-color": "--md-sys-color-surface-container-high-dark"
+                        "background-color": "--color-table-row-hover"
                     },
                     "selected": {
                         "background-color": "--md-sys-color-primary-container-dark",
@@ -768,6 +768,7 @@
         "--md-ref-palette-neutral-variant99": "#fcfcff",
         "--md-ref-palette-neutral-variant100": "#ffffff",
         "--color-table-row": "#1d2026",
+        "--color-table-row-hover": "#22252b",
         "--color-table-row-item": "#1a1c21",
         "--color-table-text": "#dedede",
         "qt-active-window": "--md-sys-color-background-dark",
