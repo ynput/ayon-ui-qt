@@ -21,14 +21,14 @@ from qtpy.QtWidgets import (
 )
 
 from .buttons import AYButton
+from .check_box import AYCheckBox
 from .container import AYContainer
 from .frame import AYFrame
 from .label import AYLabel
-from .layouts import AYVBoxLayout, AYHBoxLayout
+from .layouts import AYHBoxLayout, AYVBoxLayout
 from .line_edit import AYLineEdit
 from .table_model import PaginatedTableModel, TableColumn
 from .table_view import AYTableView
-
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -440,10 +440,7 @@ class _FilterDropdown(AYFrame):
         self._value_buttons = {}
 
         # Clear previous content
-        while self._value_content_layout.count():
-            item = self._value_content_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+        self._value_content_layout.clear()
 
         distinct = self._model.get_distinct_values(key)
 
@@ -808,7 +805,6 @@ if __name__ == "__main__":
     from qtpy import QtWidgets
 
     from ..tester import Style, test
-    from .check_box import AYCheckBox
     from .table_model import (
         HIERARCHICAL_TEST_DATA,
         PaginatedTableModel,
