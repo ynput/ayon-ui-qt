@@ -225,9 +225,19 @@ class AYTableView(QTreeView):
 
     The header is visible and styled via TableHeaderDrawer.
 
-    When a PaginatedTableModel is set, cells that provide a
-    WidgetFactoryRole value get an embedded QWidget via
-    setIndexWidget().
+    When a PaginatedTableModel is set, columns that carry a
+    ``widget_factory`` on their :class:`TableColumn` definition get a
+    persistent editor in every row via ``openPersistentEditor``.  Qt
+    calls ``setEditorData`` automatically whenever the model emits
+    ``dataChanged`` for those cells, so server-push updates reach the
+    widgets without any extra wiring.
+
+    In tree mode, persistent editors are opened lazily — only for rows
+    whose parent node is already expanded.  Rows under collapsed nodes
+    receive their editors when the user (or code) expands that node,
+    via the ``expanded`` signal handler.  This avoids creating widgets
+    for the entire off-screen tree when Qt's layout pass eagerly
+    triggers :meth:`fetchMore` for all visible nodes.
 
     Args:
         parent: Optional parent widget.
@@ -320,6 +330,11 @@ class AYTableView(QTreeView):
         # tree mode.  Restored row-by-row as data is (re-)loaded in tree mode.
         self._expanded_node_ids: set[str] = set()
 
+        # Open persistent editors for already-loaded children when a tree node
+        # is expanded.  Complements _on_rows_inserted, which handles the case
+        # where data is loaded after the node is already expanded (async mode).
+        self.expanded.connect(self._on_item_expanded)
+
     def _sync_viewport_palette(self) -> None:
         """Apply the variant background colour to the viewport."""
         style = get_ayon_style()
@@ -368,8 +383,8 @@ class AYTableView(QTreeView):
         # Configure header from column width hints.
         self._configure_header(model)
 
-        # Install embedded widgets for existing rows.
-        self._install_widgets_for_range(0, model.rowCount() - 1)
+        # Open persistent editors for widget-factory columns in existing rows.
+        self._open_persistent_editors_for_range(0, model.rowCount() - 1)
 
         # Connect to rowsInserted for lazy-loaded rows.
         conn = model.rowsInserted.connect(self._on_rows_inserted)
@@ -592,28 +607,73 @@ class AYTableView(QTreeView):
         first: int,
         last: int,
     ) -> None:
-        """Install embedded widgets for newly inserted rows.
+        """Open persistent editors and restore expansion for newly inserted rows.
 
         Args:
             parent: Parent index; supports non-root parents in tree mode.
             first: First inserted row index.
             last: Last inserted row index.
         """
-        self._install_widgets_for_range(first, last, parent)
+        self._open_persistent_editors_for_range(first, last, parent)
         self._restore_expansion_in_range(parent, first, last)
 
-    def _install_widgets_for_range(
+    def _on_item_expanded(self, index: QModelIndex) -> None:
+        """Open persistent editors for the children of a just-expanded node.
+
+        Called when a tree node is expanded by the user or by code.  Handles
+        the case where the children were already loaded before the node was
+        expanded (no ``rowsInserted`` fires in that case).
+
+        For children loaded *after* expansion (async fetch), the
+        ``rowsInserted`` → ``_on_rows_inserted`` path takes care of opening
+        the editors, because the parent is already marked expanded by then.
+
+        Args:
+            index: The index of the node that was just expanded.
+        """
+        display_model = self.model()
+        if display_model is None:
+            return
+        source: Any = (
+            display_model.sourceModel()
+            if isinstance(display_model, QSortFilterProxyModel)
+            else display_model
+        )
+        if not isinstance(source, PaginatedTableModel):
+            return
+        widget_cols = [
+            i for i, col in enumerate(source.columns)
+            if col.widget_factory is not None
+        ]
+        if not widget_cols:
+            return
+        n_children = display_model.rowCount(index)
+        for row in range(n_children):
+            for col in widget_cols:
+                child_idx = display_model.index(row, col, index)
+                self.openPersistentEditor(child_idx)
+
+    def _open_persistent_editors_for_range(
         self,
         first_row: int,
         last_row: int,
         parent: QModelIndex = QModelIndex(),
     ) -> None:
-        """Scan a row range and install embedded widgets.
+        """Open persistent editors for widget-factory columns in a row range.
 
-        For each cell in the range, checks the WidgetFactoryRole.
-        If a callable is returned, it is called with
-        ``(model_index, self)`` and the resulting widget is set
-        via ``setIndexWidget()``.
+        Calls ``openPersistentEditor`` for every cell whose column carries
+        a ``widget_factory``.  Qt closes persistent editors automatically
+        on ``beginResetModel``, so no manual cleanup is needed on sort or
+        data resets.
+
+        In tree mode, editors are opened only for rows whose *parent* is
+        already expanded (i.e., the rows are actually visible).  Rows under
+        collapsed nodes are skipped; they will be handled by
+        :meth:`_on_item_expanded` when the user expands the parent.  This
+        prevents the synchronous layout cascade where creating widgets for
+        visible-but-not-yet-expanded nodes triggers Qt to eagerly call
+        ``fetchMore`` for every visible node, recursively loading the entire
+        tree.
 
         Args:
             first_row: First row to scan (inclusive).
@@ -624,23 +684,28 @@ class AYTableView(QTreeView):
         if model is None:
             return
 
-        col_count = model.columnCount()
+        # Determine which columns need persistent editors.
+        source: Any = model
+        if isinstance(model, QSortFilterProxyModel):
+            source = model.sourceModel()
+        if not isinstance(source, PaginatedTableModel):
+            return
+        widget_cols = [
+            i for i, col in enumerate(source.columns)
+            if col.widget_factory is not None
+        ]
+        if not widget_cols:
+            return
+
+        # In tree mode skip rows under a collapsed parent — their editors will
+        # be opened by _on_item_expanded when the parent is expanded.
+        if parent.isValid() and not self.isExpanded(parent):
+            return
+
         for row in range(first_row, last_row + 1):
-            for col in range(col_count):
+            for col in widget_cols:
                 idx = model.index(row, col, parent)
-                factory = idx.data(PaginatedTableModel.WidgetFactoryRole)
-                if factory is not None and callable(factory):
-                    try:
-                        widget = factory(idx, self)
-                    except Exception:
-                        log.exception(
-                            "Widget factory failed for row=%d col=%d",
-                            row,
-                            col,
-                        )
-                        continue
-                    if isinstance(widget, QWidget):
-                        self.setIndexWidget(idx, widget)
+                self.openPersistentEditor(idx)
 
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
         """Track the hovered row and force-repaint it when it changes.
@@ -727,7 +792,6 @@ if __name__ == "__main__":
     from ..tester import Style, test
     from .table_model import (
         HIERARCHICAL_TEST_DATA,
-        TABLE_TEST_DATA,
         PaginatedTableModel,
         TableColumn,
         make_hierarchical_test_fetch,
@@ -742,7 +806,7 @@ if __name__ == "__main__":
             label: Button text.
 
         Returns:
-            A callable suitable for WidgetFactoryRole.
+            A callable suitable for ``TableColumn.widget_factory``.
         """
 
         def _factory(index: QModelIndex, parent: QWidget) -> QWidget:
@@ -760,14 +824,6 @@ if __name__ == "__main__":
             return btn
 
         return _factory
-
-    # Build test data with a widget column
-    _WIDGET_TEST_DATA: list[dict[str, Any]] = []
-    for i, row in enumerate(TABLE_TEST_DATA[:60]):
-        new_row = dict(row)
-        new_row["actions"] = ""
-        new_row["actions__widget_factory"] = _make_button_factory("Open")
-        _WIDGET_TEST_DATA.append(new_row)
 
     def _build() -> QtWidgets.QWidget:
         """Build test UI with one AYTableView per variant."""
@@ -792,7 +848,7 @@ if __name__ == "__main__":
         top_bar.add_widget(switch)
         container.add_widget(top_bar)
 
-        # define model
+        # define model — "actions" column uses a widget factory
         tree_columns = [
             TableColumn("thumb", "Thumbnail", width=75, sortable=False),
             TableColumn("name", "Name", width=160, sortable=True, tree_position=True),
@@ -800,6 +856,10 @@ if __name__ == "__main__":
             TableColumn("type", "Type", width=100, sortable=True),
             TableColumn("author", "Author", width=100, sortable=False),
             TableColumn("version", "Version", width=70, sortable=True),
+            TableColumn(
+                "actions", "Actions", width=90, sortable=False,
+                widget_factory=_make_button_factory("Open"),
+            ),
         ]
         tree_fetch = make_hierarchical_test_fetch(HIERARCHICAL_TEST_DATA)
         tree_model = PaginatedTableModel(

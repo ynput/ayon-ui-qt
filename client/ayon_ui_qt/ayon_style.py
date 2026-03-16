@@ -2318,9 +2318,14 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
     """Item delegate for AYTableView that paints cells directly, bypassing QSS.
 
     Reads style data from the AYTableView style entry to draw cell
-    backgrounds (hover, selected) and text/icons. Cells that provide
-    a WidgetFactoryRole value are skipped — the embedded widget covers
-    them.
+    backgrounds (hover, selected) and text/icons.
+
+    Columns that carry a ``widget_factory`` on their :class:`TableColumn`
+    definition get a persistent editor via :meth:`createEditor`.  Qt calls
+    :meth:`setEditorData` both when the editor is first opened and
+    automatically whenever the model emits ``dataChanged`` for that index,
+    so server-push updates reach live widgets without extra wiring.
+    User edits are written back via :meth:`setModelData`.
 
     Args:
         parent: The parent widget (expected to be an AYTableView instance).
@@ -2363,6 +2368,89 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             h = 32
         return QtCore.QSize(option.rect.width(), h)
 
+    def createEditor(
+        self,
+        parent: QWidget,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QWidget | None:
+        """Return a widget for widget-factory columns; None otherwise.
+
+        The returned widget is kept open permanently by the view via
+        ``openPersistentEditor``.  Qt calls :meth:`setEditorData` once
+        here and again automatically on every ``dataChanged`` emission
+        for this index, so server-push updates reach the widget for free.
+
+        Args:
+            parent: Parent widget (viewport).
+            option: Style option for the cell.
+            index: Model index identifying the cell.
+
+        Returns:
+            A QWidget created by the column's ``widget_factory``, or
+            ``None`` if the column has no factory.
+        """
+        from .components.table_model import PaginatedTableModel
+
+        src_model = index.model()
+        if hasattr(src_model, "sourceModel"):
+            src_model = src_model.sourceModel()
+        if not isinstance(src_model, PaginatedTableModel):
+            return None
+        col = index.column()
+        cols = src_model.columns
+        if col < 0 or col >= len(cols):
+            return None
+        factory = cols[col].widget_factory
+        if factory is None:
+            return None
+        return factory(index, parent)  # type: ignore[return-value]
+
+    def setEditorData(
+        self,
+        editor: QWidget,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Push current model data into *editor* when the model changes.
+
+        Called by Qt when the persistent editor is first opened and
+        automatically whenever the model emits ``dataChanged`` for this
+        index — server-push updates propagate to live widgets for free.
+
+        This default implementation is a no-op suited to action widgets
+        (e.g. buttons) that do not reflect model data.  Override or
+        replace this method for data-reflecting widgets: read
+        ``index.data(Qt.DisplayRole)`` (or a custom role) and push the
+        value into *editor*.
+
+        Args:
+            editor: The persistent editor widget.
+            index: Model index whose data changed.
+        """
+
+    def setModelData(
+        self,
+        editor: QWidget,
+        model: QtCore.QAbstractItemModel,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Write committed user input from *editor* back to *model*.
+
+        Called by Qt when the user commits an edit (e.g. presses Enter
+        or the editor loses focus).
+
+        This default implementation is a no-op suited to action widgets
+        that do not write back to the model.  For interactive widget
+        columns, read the current value from *editor* and call
+        ``model.setData(index, value, Qt.EditRole)`` to propagate the
+        change upstream (e.g. to the server).
+
+        Args:
+            editor: The persistent editor widget.
+            model: The data model.
+            index: Model index to write to.
+        """
+
     def paint(
         self,
         painter: QPainter,
@@ -2370,12 +2458,17 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
         index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
     ) -> None:
         """Paint a table cell directly, bypassing QStyle."""
-        # Skip painting for cells with embedded widgets
+        # Skip painting for cells covered by a persistent editor widget.
         from .components.table_model import PaginatedTableModel
 
-        widget_factory = index.data(PaginatedTableModel.WidgetFactoryRole)
-        if widget_factory is not None:
-            return
+        src_model = index.model()
+        if hasattr(src_model, "sourceModel"):
+            src_model = src_model.sourceModel()
+        if isinstance(src_model, PaginatedTableModel):
+            col = index.column()
+            cols = src_model.columns
+            if 0 <= col < len(cols) and cols[col].widget_factory is not None:
+                return
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

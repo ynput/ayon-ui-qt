@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from qtpy.QtCore import QModelIndex
 from qtpy.QtWidgets import QWidget
 
+import ayon_ui_qt as _ayon_ui_qt_pkg
 from widget_test import WidgetTest
+from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.table_view import AYTableView
 from ayon_ui_qt.components.table_model import (
     PaginatedTableModel,
@@ -19,22 +24,90 @@ from ayon_ui_qt.components.container import AYContainer
 # Sample data
 # ---------------------------------------------------------------------------
 
+
+def _thumbnail_file_cacher(key: str) -> Path | str:
+    rsrc_dir = Path(_ayon_ui_qt_pkg.__file__).parent / "resources"
+    for ext in ("jpg", "png"):
+        p = rsrc_dir / f"{key}.{ext}"
+        if p.exists():
+            return p
+    return ""
+
+
+def _thumbnail_factory(
+    index: QModelIndex, parent: QWidget
+) -> AYEntityThumbnail:
+    return AYEntityThumbnail(
+        src="SMPTE_Color_Bars",
+        file_cacher=_thumbnail_file_cacher,
+        size=(66, 32),
+        parent=parent,
+    )
+
+
 _COLUMNS = [
-    TableColumn(key="name",    label="Name",    width=160, sortable=True),
-    TableColumn(key="task",    label="Task",    width=120, sortable=True),
-    TableColumn(key="status",  label="Status",  width=100, sortable=True),
-    TableColumn(key="assignee",label="Assignee",width=120, sortable=False),
+    TableColumn(
+        key="thumb",
+        label="Thumbnail",
+        width=90,
+        sortable=False,
+        widget_factory=_thumbnail_factory,
+    ),
+    TableColumn(key="name", label="Name", width=160, sortable=True),
+    TableColumn(key="task", label="Task", width=120, sortable=True),
+    TableColumn(key="status", label="Status", width=100, sortable=True),
+    TableColumn(key="assignee", label="Assignee", width=120, sortable=False),
 ]
 
 _ROWS = [
-    {"name": "hero_model_v003",  "task": "Modeling",    "status": "Approved",        "assignee": "Alice"},
-    {"name": "hero_rig_v001",    "task": "Rigging",     "status": "In progress",     "assignee": "Bob"},
-    {"name": "hero_lookdev_v002","task": "Lookdev",     "status": "Pending review",  "assignee": "Carol"},
-    {"name": "bg_arch_v005",     "task": "Modeling",    "status": "Approved",        "assignee": "Dave"},
-    {"name": "bg_lookdev_v001",  "task": "Lookdev",     "status": "Not ready",       "assignee": "Alice"},
-    {"name": "camera_anim_v010", "task": "Animation",   "status": "In progress",     "assignee": "Eve"},
-    {"name": "crowd_anim_v002",  "task": "Animation",   "status": "On hold",         "assignee": "Bob"},
-    {"name": "vfx_smoke_v004",   "task": "FX",          "status": "Approved",        "assignee": "Frank"},
+    {
+        "name": "hero_model_v003",
+        "task": "Modeling",
+        "status": "Approved",
+        "assignee": "Alice",
+    },
+    {
+        "name": "hero_rig_v001",
+        "task": "Rigging",
+        "status": "In progress",
+        "assignee": "Bob",
+    },
+    {
+        "name": "hero_lookdev_v002",
+        "task": "Lookdev",
+        "status": "Pending review",
+        "assignee": "Carol",
+    },
+    {
+        "name": "bg_arch_v005",
+        "task": "Modeling",
+        "status": "Approved",
+        "assignee": "Dave",
+    },
+    {
+        "name": "bg_lookdev_v001",
+        "task": "Lookdev",
+        "status": "Not ready",
+        "assignee": "Alice",
+    },
+    {
+        "name": "camera_anim_v010",
+        "task": "Animation",
+        "status": "In progress",
+        "assignee": "Eve",
+    },
+    {
+        "name": "crowd_anim_v002",
+        "task": "Animation",
+        "status": "On hold",
+        "assignee": "Bob",
+    },
+    {
+        "name": "vfx_smoke_v004",
+        "task": "FX",
+        "status": "Approved",
+        "assignee": "Frank",
+    },
 ]
 
 
@@ -49,6 +122,7 @@ def _make_fetch(rows):
         start = page_number * page_size
         end = start + page_size
         return rows[start:end]
+
     return fetch_page
 
 
@@ -96,11 +170,20 @@ class TableViewTest(WidgetTest):
 
 
 _TREE_COLUMNS = [
-    TableColumn(key="name",   label="Name",    width=160, sortable=True),
-    TableColumn(key="status", label="Status",  width=100, sortable=True),
-    TableColumn(key="type",   label="Type",    width=100, sortable=True),
-    TableColumn(key="author", label="Author",  width=100, sortable=False),
-    TableColumn(key="version",label="Version", width=70,  sortable=True),
+    TableColumn(
+        key="thumb",
+        label="Thumbnail",
+        width=90,
+        sortable=False,
+        widget_factory=_thumbnail_factory,
+    ),
+    TableColumn(
+        key="name", label="Name", width=160, sortable=True, tree_position=True
+    ),
+    TableColumn(key="status", label="Status", width=100, sortable=True),
+    TableColumn(key="type", label="Type", width=100, sortable=True),
+    TableColumn(key="author", label="Author", width=100, sortable=False),
+    TableColumn(key="version", label="Version", width=70, sortable=True),
 ]
 
 

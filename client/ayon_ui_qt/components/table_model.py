@@ -82,6 +82,14 @@ class TableColumn:
         sortable: Whether the column can be sorted by clicking the header.
         icon: Optional material icon name shown in the filter dropdown.
         tree_position: Whether the column is used for tree indentation.
+        widget_factory: Optional callable ``(index, parent) -> QWidget``.
+            When set, the delegate opens a persistent editor for every
+            cell in this column instead of painting text/icons.  The
+            factory receives the display-model ``QModelIndex`` and the
+            viewport widget as ``parent``.  ``setEditorData`` is called
+            automatically by Qt whenever the model emits ``dataChanged``
+            for that index, so server-push updates reach the widget
+            without any extra wiring.
     """
 
     key: str
@@ -90,6 +98,7 @@ class TableColumn:
     sortable: bool = True
     icon: str | None = None
     tree_position: bool = False
+    widget_factory: "Callable[[Any, Any], Any] | None" = None
 
 
 class PaginatedTableModel(QAbstractItemModel):
@@ -119,7 +128,6 @@ class PaginatedTableModel(QAbstractItemModel):
         parent: Optional parent QObject.
     """
 
-    WidgetFactoryRole: int = Qt.ItemDataRole.UserRole + 10
     tree_mode_changed = Signal(bool)
     loading_changed = Signal(bool)  # True while any fetch is in-flight
     page_fetched = Signal(int, int)  # (page_number, total_root_rows_loaded)
@@ -398,10 +406,6 @@ class PaginatedTableModel(QAbstractItemModel):
                 return QBrush(QColor(color))
             return None
 
-        if role == self.WidgetFactoryRole:
-            factory_key = f"{col_key}__widget_factory"
-            return row_dict.get(factory_key)
-
         if role == Qt.ItemDataRole.UserRole:
             return row_dict
 
@@ -606,15 +610,14 @@ class PaginatedTableModel(QAbstractItemModel):
                 enqueued.  Used to discard stale results.
             results: Row dicts returned by _fetch_page, or None on error.
         """
-        # Always release the fetching guard so the node is never stuck
-        # in-flight, even for stale callbacks.
-        node.is_fetching = False
-
-        # Discard if the model has been reset since this task was queued.
+        # Stale callback: release the guard and discard.
         # Do NOT decrement _pending_tasks for stale callbacks — the
         # reset_data() call already set the counter to 0 for the new
         # context.  Decrementing here would corrupt the new context's count.
         if context_id != self._context_id or node not in self._all_nodes:
+            # Always release the fetching guard so the node is never stuck
+            # in-flight, even for stale callbacks.
+            node.is_fetching = False
             log.debug(
                 "Discarding stale fetch result for node %r (ctx %s vs %s)",
                 node.node_id,
@@ -624,6 +627,11 @@ class PaginatedTableModel(QAbstractItemModel):
             return
 
         # Confirmed current-context callback: update the in-flight counter.
+        # Keep is_fetching=True until ALL model mutations below are finished.
+        # endInsertRows() emits rowsInserted synchronously, which can cause
+        # Qt's tree-view slot to call canFetchMore/fetchMore re-entrantly.
+        # The guard must still be set at that point so _fetch_next_page
+        # returns immediately and avoids a recursive re-fetch of the same page.
         self._pending_tasks = max(0, self._pending_tasks - 1)
 
         _was_children_loaded = node.children_loaded
@@ -636,6 +644,7 @@ class PaginatedTableModel(QAbstractItemModel):
             )
             node.has_more = False
             node.children_loaded = True
+            node.is_fetching = False
             # Emit loading state after updating node state.
             self._update_loading_state()
             return
@@ -643,6 +652,7 @@ class PaginatedTableModel(QAbstractItemModel):
         if not results:
             node.has_more = False
             node.children_loaded = True
+            node.is_fetching = False
             self._update_loading_state()
             return
 
@@ -669,6 +679,12 @@ class PaginatedTableModel(QAbstractItemModel):
 
         fetched_page = node.current_page
         node.current_page += 1
+
+        # Release the re-entrancy guard now that all model mutations are done.
+        # Any canFetchMore/fetchMore calls that arrived re-entrantly during
+        # endInsertRows were blocked by is_fetching=True; they can now proceed
+        # on the next event-loop iteration if the node still has more pages.
+        node.is_fetching = False
 
         # Emit loading-state signals AFTER rows are in the model so that
         # any slot reacting to is_loading=False already sees the new rows.
@@ -748,8 +764,7 @@ class PaginatedTableModel(QAbstractItemModel):
         """Infer column definitions from a sample row dictionary.
 
         Reserved keys (``id``, ``has_children``) and decorator suffixes
-        (``__icon``, ``__color``, ``__fill``, ``__widget_factory``) are
-        excluded.
+        (``__icon``, ``__color``, ``__fill``) are excluded.
 
         Args:
             row: A representative row dictionary.
@@ -762,7 +777,7 @@ class PaginatedTableModel(QAbstractItemModel):
             if key in ("id", "has_children"):
                 continue
             if key.endswith(
-                ("__icon", "__color", "__fill", "__widget_factory")
+                ("__icon", "__color", "__fill")
             ):
                 continue
             label = key.replace("_", " ").title()
