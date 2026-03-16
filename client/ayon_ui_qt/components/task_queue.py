@@ -142,8 +142,9 @@ class AsyncTaskQueue(QThread):
     task_failed = Signal(str, str)  # (task_name, error_message)
     task_cancelled = Signal(str, str)  # (task_name, context_id)
     queue_empty = Signal()
-    # Signal for invoking callbacks on main thread
-    invoke_callback = Signal(object, object)  # (callback_func, result)
+    # No-arg ping signal: tells the main thread to drain _callback_queue.
+    # Never passes Python objects through Qt's cross-thread signal system.
+    invoke_callback = Signal()
 
     def __init__(self, parent: Any = None) -> None:
         """Initialize the async task queue.
@@ -153,6 +154,10 @@ class AsyncTaskQueue(QThread):
         """
         super().__init__(parent)
         self._task_queue: queue.PriorityQueue = queue.PriorityQueue()
+        # Thread-safe Python queue for ferrying (callback, result) pairs.
+        # Using Python's own ref-counting rather than Qt's marshaling avoids
+        # PySide6 issues with Python-callable arguments in QueuedConnection.
+        self._callback_queue: queue.SimpleQueue = queue.SimpleQueue()
         self._running: bool = False
         self._paused: threading.Event = threading.Event()
         self._paused.set()  # Start unpaused
@@ -161,26 +166,28 @@ class AsyncTaskQueue(QThread):
         self._current_context: str = ""
         self._context_lock: threading.Lock = threading.Lock()
 
-        # Connect signal to invoke callbacks on main thread
+        # Connect the no-arg ping to the drain slot on the main thread.
         self.invoke_callback.connect(
-            self._execute_callback_on_main_thread,
-            Qt.QueuedConnection,  # Ensure execution on main thread
+            self._drain_callback_queue,
+            Qt.QueuedConnection,
         )
 
-    @Slot(object, object)
-    def _execute_callback_on_main_thread(
-        self, callback: Callable, result: Any
-    ) -> None:
-        """Execute callback on main thread via Qt signal.
+    @Slot()
+    def _drain_callback_queue(self) -> None:
+        """Drain all pending (callback, result) pairs on the main thread.
 
-        Args:
-            callback: The callback function to execute.
-            result: The result to pass to the callback.
+        Called via a QueuedConnection so it always runs on the Qt main
+        thread regardless of which thread emitted invoke_callback.
         """
-        try:
-            callback(result)
-        except Exception as e:
-            log.exception("Callback execution failed: %s", e)
+        while True:
+            try:
+                callback, result = self._callback_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                callback(result)
+            except Exception as e:
+                log.exception("Callback execution failed: %s", e)
 
     def run(self) -> None:
         """Main worker loop - runs in separate thread.
@@ -224,7 +231,10 @@ class AsyncTaskQueue(QThread):
     ) -> None:
         """Invoke callback safely with unified error handling.
 
-        Always uses signal-based invocation for thread safety.
+        Pushes (callback, result) onto a Python SimpleQueue so that
+        Python callables never travel through Qt's cross-thread
+        signal marshaling (which is unreliable for arbitrary callables
+        in PySide6).  A no-arg ping signal then wakes the main thread.
 
         Args:
             callback: The callback function to invoke.
@@ -232,9 +242,8 @@ class AsyncTaskQueue(QThread):
             task_name: Name of the task (for logging).
         """
         try:
-            # Emit signal to execute callback on main thread
-            # Qt signals automatically marshal across threads
-            self.invoke_callback.emit(callback, result)
+            self._callback_queue.put_nowait((callback, result))
+            self.invoke_callback.emit()
         except Exception as e:
             log.exception(
                 "Error invoking callback for %s: %s",
@@ -352,6 +361,10 @@ class AsyncTaskQueue(QThread):
 
         This will finish the current task and then exit the worker loop.
         Waits up to 5 seconds for the thread to finish.
+
+        Any pending (callback, result) pairs left in ``_callback_queue``
+        are discarded so that stale model callbacks from a previous test
+        (or a discarded context) cannot fire after teardown.
         """
         log.debug("Stopping task queue worker")
         self._running = False
@@ -360,6 +373,15 @@ class AsyncTaskQueue(QThread):
         # Wait for thread to finish (timeout after 5 seconds)
         if not self.wait(5000):
             log.warning("Task queue worker did not stop within timeout")
+
+        # Discard any pending callbacks.  Any invoke_callback ping events
+        # already in the Qt event queue will call _drain_callback_queue,
+        # which will safely find an empty queue and return immediately.
+        while True:
+            try:
+                self._callback_queue.get_nowait()
+            except queue.Empty:
+                break
 
     def is_paused(self) -> bool:
         """Check if the worker is currently paused.
@@ -418,7 +440,7 @@ class AsyncTaskQueue(QThread):
         affected_count = 0
         items_to_keep = []
 
-        while not self._task_queue.empty():
+        while True:
             try:
                 priority, task = self._task_queue.get_nowait()
                 keep, emit_signal = predicate(task, task.context_id)
@@ -492,3 +514,66 @@ class AsyncTaskQueue(QThread):
             )
 
         return removed_count
+
+
+# ---------------------------------------------------------------------------
+# Module-level shared singleton
+# ---------------------------------------------------------------------------
+
+_shared_queue: AsyncTaskQueue | None = None
+
+
+def get_task_queue() -> AsyncTaskQueue:
+    """Return the shared AsyncTaskQueue, creating and starting it on first use.
+
+    The queue is a module-level singleton so all components (table models,
+    tree models, etc.) share one worker thread.
+
+    On first creation the queue is automatically connected to
+    ``QApplication.aboutToQuit`` so it stops cleanly when the application
+    exits — no manual :func:`shutdown_task_queue` call is required.
+
+    Returns:
+        The running shared :class:`AsyncTaskQueue` instance.
+    """
+    global _shared_queue
+    if _shared_queue is None:
+        from qtpy.QtWidgets import QApplication  # local import avoids circular
+
+        _shared_queue = AsyncTaskQueue()
+        _shared_queue.start()
+        log.debug("Shared task queue started")
+
+        app = QApplication.instance()
+        if app is not None:
+            # Guard: connect at most once to avoid accumulating
+            # connections during test runs where the queue is
+            # repeatedly created and destroyed.
+            try:
+                app.aboutToQuit.disconnect(shutdown_task_queue)
+            except RuntimeError:
+                pass  # was not connected yet
+            app.aboutToQuit.connect(shutdown_task_queue)
+        else:
+            log.warning(
+                "get_task_queue() called before QApplication exists; "
+                "automatic shutdown will not be registered."
+            )
+
+    return _shared_queue
+
+
+def shutdown_task_queue() -> None:
+    """Stop and discard the shared :class:`AsyncTaskQueue`.
+
+    Called automatically when the ``QApplication`` emits ``aboutToQuit``
+    (wired by :func:`get_task_queue` on first use).  Safe to call
+    manually before that if an early teardown is needed; subsequent calls
+    are no-ops.  After this call :func:`get_task_queue` will create a
+    fresh queue on next access.
+    """
+    global _shared_queue
+    if _shared_queue is not None:
+        _shared_queue.stop()
+        _shared_queue = None
+        log.debug("Shared task queue stopped")

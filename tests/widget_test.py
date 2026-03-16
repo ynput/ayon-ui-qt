@@ -43,3 +43,27 @@ class WidgetTest:
         Default implementation returns an empty list (initial snapshot only).
         """
         return []
+
+    def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
+        """Block until the widget's data has finished loading.
+
+        Called by the test runner immediately after the widget is shown
+        and after each step, before the snapshot is taken.
+
+        The default implementation is a no-op.  Override in subclasses
+        that need to wait for data to appear:
+
+        * **Synchronous / ``no_async=True`` models** — call
+          ``QApplication.processEvents()`` to flush pending paint events::
+
+              def wait_loaded(self, qtbot) -> None:
+                  from qtpy.QtWidgets import QApplication
+                  QApplication.processEvents()
+
+        * **Truly async models** — use ``qtbot.waitUntil`` to block until
+          the model signals that all in-flight fetches have completed::
+
+              def wait_loaded(self, qtbot) -> None:
+                  qtbot.waitUntil(lambda: not self._model.is_loading)
+        """
+        return

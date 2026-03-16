@@ -69,9 +69,12 @@ class TableViewTest(WidgetTest):
             fetch_page=_make_fetch(_ROWS),
             columns=_COLUMNS,
             page_size=50,
+            no_async=True,
         )
         self._view = AYTableView(variant=AYTableView.Variants.Default)
         self._view.setModel(model)
+        model.setParent(self._view)
+        self._model = model
         self._view.setMinimumHeight(240)
 
         root.add_widget(self._view, stretch=1)
@@ -81,6 +84,12 @@ class TableViewTest(WidgetTest):
         """Select the first row to show the selection highlight."""
         idx = self._view.model().index(0, 0)
         self._view.setCurrentIndex(idx)
+
+    def wait_loaded(self, qtbot) -> None:
+        """Flush pending paint events; data was loaded synchronously."""
+        from qtpy.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
     def steps(self):
         return [self.select_first_row]
@@ -113,12 +122,14 @@ class TableViewTreeTest(WidgetTest):
             fetch_page=fetch,
             columns=_TREE_COLUMNS,
             page_size=50,
+            no_async=True,
         )
         model.set_tree_mode(True)
 
-        self._model = model
         self._view = AYTableView(variant=AYTableView.Variants.Default)
         self._view.setModel(model)
+        model.setParent(self._view)
+        self._model = model
         self._view.setMinimumHeight(280)
 
         root.add_widget(self._view, stretch=1)
@@ -128,6 +139,12 @@ class TableViewTreeTest(WidgetTest):
         """Expand the first root folder (Assets)."""
         idx = self._model.index(0, 0)
         self._view.expand(idx)
+
+    def wait_loaded(self, qtbot) -> None:
+        """Flush pending paint events; data was loaded synchronously."""
+        from qtpy.QtWidgets import QApplication
+
+        QApplication.processEvents()
 
     def steps(self):
         return [self.expand_assets]

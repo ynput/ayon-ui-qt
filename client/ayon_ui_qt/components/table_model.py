@@ -22,6 +22,8 @@ try:
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
+from .task_queue import AsyncTask, get_task_queue
+
 log = logging.getLogger(__name__)
 
 
@@ -111,11 +113,18 @@ class PaginatedTableModel(QAbstractItemModel):
         columns: Column definitions.  When ``None``, columns are inferred
             from the keys of the first fetched row.
         page_size: Number of rows per page.
+        no_async: When ``True``, pages are fetched synchronously on the
+            main thread instead of via the :class:`AsyncTaskQueue`.
+            Useful in tests to avoid worker-thread/paint-event races.
         parent: Optional parent QObject.
     """
 
     WidgetFactoryRole: int = Qt.ItemDataRole.UserRole + 10
     tree_mode_changed = Signal(bool)
+    loading_changed = Signal(bool)       # True while any fetch is in-flight
+    page_fetched = Signal(int, int)      # (page_number, total_root_rows_loaded)
+    fetch_error = Signal(str)            # error message when a fetch fails
+    pending_count_changed = Signal(int)  # number of in-flight fetch tasks
 
     def __init__(
         self,
@@ -124,6 +133,7 @@ class PaginatedTableModel(QAbstractItemModel):
         ],
         columns: list[TableColumn] | None = None,
         page_size: int = 50,
+        no_async: bool = False,
         parent: QObject | None = None,
     ) -> None:
         """Initialise the model and fetch the first page.
@@ -134,6 +144,9 @@ class PaginatedTableModel(QAbstractItemModel):
                 -> list[dict]``.
             columns: Explicit column definitions, or ``None`` to infer.
             page_size: Rows per page.
+            no_async: When ``True``, fetch pages synchronously on the
+                calling thread instead of via the AsyncTaskQueue worker.
+                Useful in tests to avoid worker-thread/paint-event races.
             parent: Parent QObject.
         """
         super().__init__(parent)
@@ -152,6 +165,12 @@ class PaginatedTableModel(QAbstractItemModel):
             node_id=None, row_data={}, parent=None
         )
         self._all_nodes: set[_TableNode] = {self._root}
+
+        # Async fetch state
+        self._no_async: bool = no_async
+        self._reset_counter: int = 0
+        self._context_id: str = f"ptm_{id(self)}_v0"
+        self._pending_tasks: int = 0
 
         self._fetch_next_page(self._root)
 
@@ -174,6 +193,15 @@ class PaginatedTableModel(QAbstractItemModel):
             Current root page index.
         """
         return self._root.current_page
+
+    @property
+    def is_loading(self) -> bool:
+        """Return True while at least one fetch task is in-flight.
+
+        Returns:
+            True if any page fetch is currently pending or running.
+        """
+        return self._pending_tasks > 0
 
     @property
     def tree_position(self) -> int:
@@ -443,6 +471,13 @@ class PaginatedTableModel(QAbstractItemModel):
         Args:
             page: 0-based page number to start from.
         """
+        old_ctx = self._context_id
+        if not self._no_async:
+            get_task_queue().clear_context_tasks(old_ctx)
+        self._reset_counter += 1
+        self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
+        self._pending_tasks = 0
+        self._update_loading_state()
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._root.current_page = page
@@ -471,6 +506,13 @@ class PaginatedTableModel(QAbstractItemModel):
 
     def reset_data(self) -> None:
         """Reset the model and re-fetch from page 0."""
+        old_ctx = self._context_id
+        if not self._no_async:
+            get_task_queue().clear_context_tasks(old_ctx)
+        self._reset_counter += 1
+        self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
+        self._pending_tasks = 0
+        self._update_loading_state()
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._all_nodes = {self._root}
@@ -537,71 +579,97 @@ class PaginatedTableModel(QAbstractItemModel):
         row = parent.children.index(node)  # type: ignore[union-attr]
         return self.createIndex(row, 0, node)
 
-    def _fetch_next_page(self, node: _TableNode) -> None:
-        """Fetch the next page of children for *node* and insert them.
+    def _update_loading_state(self) -> None:
+        """Emit loading-progress signals based on current pending task count."""
+        self.pending_count_changed.emit(self._pending_tasks)
+        self.loading_changed.emit(self._pending_tasks > 0)
 
-        Uses a per-node re-entrancy guard (``node.is_fetching``) to
-        prevent recursive invocations triggered by ``endInsertRows``.
+    def _on_page_ready(
+        self,
+        node: _TableNode,
+        context_id: str,
+        results: list[dict[str, Any]] | None,
+    ) -> None:
+        """Handle fetch results on the main thread.
+
+        Called via Qt.QueuedConnection from AsyncTaskQueue so it always
+        executes on the Qt main thread, making it safe to call Qt model
+        mutation methods.
 
         Args:
-            node: The parent node whose next page of children to fetch.
+            node: The node whose page was fetched.
+            context_id: The context_id that was active when the task was
+                enqueued.  Used to discard stale results.
+            results: Row dicts returned by _fetch_page, or None on error.
         """
-        if node.is_fetching:
+        # Always release the fetching guard so the node is never stuck
+        # in-flight, even for stale callbacks.
+        node.is_fetching = False
+
+        # Discard if the model has been reset since this task was queued.
+        # Do NOT decrement _pending_tasks for stale callbacks — the
+        # reset_data() call already set the counter to 0 for the new
+        # context.  Decrementing here would corrupt the new context's count.
+        if context_id != self._context_id or node not in self._all_nodes:
+            log.debug(
+                "Discarding stale fetch result for node %r (ctx %s vs %s)",
+                node.node_id,
+                context_id,
+                self._context_id,
+            )
             return
+
+        # Confirmed current-context callback: update the in-flight counter.
+        self._pending_tasks = max(0, self._pending_tasks - 1)
+
         _was_children_loaded = node.children_loaded
-        node.is_fetching = True
-        try:
-            try:
-                sort_key = None
-                if 0 <= self._sort_column < len(self._columns):
-                    sort_key = self._columns[self._sort_column].key
 
-                results = self._fetch_page(
-                    node.current_page,
-                    self._page_size,
-                    sort_key,
-                    self._sort_order == Qt.SortOrder.DescendingOrder,
-                    node.node_id,
-                )
-            except Exception:
-                log.exception(
-                    "Error fetching page %d (page_size=%d, parent_id=%r)",
-                    node.current_page,
-                    self._page_size,
-                    node.node_id,
-                )
-                node.has_more = False
-                return
-
-            if not results:
-                node.has_more = False
-                node.children_loaded = True
-                return
-
-            if not self._columns and self._explicit_columns is None:
-                self._columns = self._infer_columns(results[0])
-
-            parent_index = self._index_for_node(node)
-            first_new = len(node.children)
-            last_new = first_new + len(results) - 1
-            self.beginInsertRows(parent_index, first_new, last_new)
-            for row_data in results:
-                child = _TableNode(
-                    node_id=row_data.get("id"),
-                    row_data=row_data,
-                    parent=node,
-                )
-                node.children.append(child)
-                self._all_nodes.add(child)
-            self.endInsertRows()
-
+        if results is None:
+            # Task failed — fetch_error already logged by AsyncTaskQueue.
+            self.fetch_error.emit(
+                f"Failed to fetch page {node.current_page} "
+                f"(parent_id={node.node_id!r})"
+            )
+            node.has_more = False
             node.children_loaded = True
-            if len(results) < self._page_size:
-                node.has_more = False
+            # Emit loading state after updating node state.
+            self._update_loading_state()
+            return
 
-            node.current_page += 1
-        finally:
-            node.is_fetching = False
+        if not results:
+            node.has_more = False
+            node.children_loaded = True
+            self._update_loading_state()
+            return
+
+        if not self._columns and self._explicit_columns is None:
+            self._columns = self._infer_columns(results[0])
+
+        parent_index = self._index_for_node(node)
+        first_new = len(node.children)
+        last_new = first_new + len(results) - 1
+        self.beginInsertRows(parent_index, first_new, last_new)
+        for row_data in results:
+            child = _TableNode(
+                node_id=row_data.get("id"),
+                row_data=row_data,
+                parent=node,
+            )
+            node.children.append(child)
+            self._all_nodes.add(child)
+        self.endInsertRows()
+
+        node.children_loaded = True
+        if len(results) < self._page_size:
+            node.has_more = False
+
+        fetched_page = node.current_page
+        node.current_page += 1
+
+        # Emit loading-state signals AFTER rows are in the model so that
+        # any slot reacting to is_loading=False already sees the new rows.
+        self._update_loading_state()
+        self.page_fetched.emit(fetched_page, len(self._root.children))
 
         # On the first child-load for a non-root node, emit dataChanged so
         # proxy models (e.g. AYTableFilterProxyModel) re-evaluate this row's
@@ -613,6 +681,63 @@ class PaginatedTableModel(QAbstractItemModel):
         ):
             idx = self._index_for_node(node)
             self.dataChanged.emit(idx, idx)
+
+    def _fetch_next_page(self, node: _TableNode) -> None:
+        """Enqueue an async task to fetch the next page of children for *node*.
+
+        Uses a per-node re-entrancy guard (``node.is_fetching``) to
+        prevent duplicate tasks.  The actual data-fetch runs in the
+        shared :class:`AsyncTaskQueue` worker thread; results are
+        delivered back on the main thread via :meth:`_on_page_ready`.
+
+        Priority is 1 (High) for the first page of any node (``page==0``)
+        and 5 (Normal) for subsequent pages.
+
+        Args:
+            node: The parent node whose next page of children to fetch.
+        """
+        if node.is_fetching:
+            return
+        node.is_fetching = True
+
+        sort_key = None
+        if 0 <= self._sort_column < len(self._columns):
+            sort_key = self._columns[self._sort_column].key
+        descending = self._sort_order == Qt.SortOrder.DescendingOrder
+
+        page = node.current_page
+        page_size = self._page_size
+        node_id = node.node_id
+        ctx = self._context_id
+
+        priority = 1 if page == 0 else 5  # High for first page, Normal after
+
+        self._pending_tasks += 1
+        self._update_loading_state()
+
+        if self._no_async:
+            # Synchronous path: fetch inline and deliver result immediately.
+            # Used in tests to avoid cross-thread paint-event races.
+            try:
+                result = self._fetch_page(
+                    page, page_size, sort_key, descending, node_id
+                )
+            except Exception:
+                result = None
+            self._on_page_ready(node, ctx, result)
+            return
+
+        task = AsyncTask(
+            name=f"fetch_page_{node_id or 'root'}_{page}",
+            function=lambda: self._fetch_page(
+                page, page_size, sort_key, descending, node_id
+            ),
+            callback=lambda result: self._on_page_ready(node, ctx, result),
+            priority=priority,
+            context_id=ctx,
+            cancellable=True,
+        )
+        get_task_queue().enqueue(task)
 
     @staticmethod
     def _infer_columns(row: dict[str, Any]) -> list[TableColumn]:

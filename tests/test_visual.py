@@ -61,6 +61,7 @@ def test_initial(widget_test_cls: Type[WidgetTest], qtbot, image_regression):
     qtbot.addWidget(widget)
     widget.show()
     qtbot.waitExposed(widget)
+    wt.wait_loaded(qtbot)
 
     image_regression.check(
         capture_widget(widget),
@@ -104,10 +105,12 @@ def test_steps(widget_test_cls: Type[WidgetTest], step_index: int, qtbot, image_
     qtbot.addWidget(widget)
     widget.show()
     qtbot.waitExposed(widget)
+    wt.wait_loaded(qtbot)
 
     steps = wt.steps()
     for i in range(step_index + 1):
         steps[i]()
+        wt.wait_loaded(qtbot)
         qtbot.wait(10)  # process pending events / repaints
 
     step_fn = steps[step_index]

@@ -4,6 +4,7 @@ Sets QT_QPA_PLATFORM=offscreen before any Qt import so tests run headless.
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -33,6 +34,23 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="After the run, open a Qt window showing failed image comparisons.",
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_task_queue_between_tests():
+    """Shut down the AsyncTaskQueue singleton after every test.
+
+    Prevents the worker thread from carrying stale queued callbacks
+    into the next test, which can cause use-after-free segfaults when
+    those callbacks try to access already-destroyed Qt model/view objects.
+    """
+    yield
+    try:
+        from ayon_ui_qt.components.task_queue import shutdown_task_queue
+
+        shutdown_task_queue()
+    except Exception as err:
+        logging.exception("Error shutting down task queue after test: %s", err)
 
 
 @pytest.fixture(autouse=True)
