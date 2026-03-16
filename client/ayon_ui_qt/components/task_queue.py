@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import Any, Callable
@@ -165,6 +166,10 @@ class AsyncTaskQueue(QThread):
         self._counter_lock: threading.Lock = threading.Lock()
         self._current_context: str = ""
         self._context_lock: threading.Lock = threading.Lock()
+        # Serialises drain-and-rebuild operations in _filter_queue so that
+        # the worker thread cannot dequeue a task between two get_nowait()
+        # calls while the main thread is rebuilding the queue.
+        self._queue_lock: threading.Lock = threading.Lock()
 
         # Connect the no-arg ping to the drain slot on the main thread.
         self.invoke_callback.connect(
@@ -205,8 +210,20 @@ class AsyncTaskQueue(QThread):
             self._paused.wait()
 
             try:
-                # Get task with timeout to check _running periodically
-                priority, task = self._task_queue.get(timeout=0.5)
+                # Acquire the queue lock before dequeuing so that
+                # _filter_queue drain-and-rebuild on the main thread is
+                # atomic with respect to this get() call.
+                with self._queue_lock:
+                    try:
+                        priority, task = self._task_queue.get_nowait()
+                    except queue.Empty:
+                        task = None
+
+                if task is None:
+                    # Nothing ready right now; sleep briefly to avoid
+                    # busy-waiting, then re-check _running.
+                    time.sleep(0.05)
+                    continue
 
                 # Process the task
                 self._process_task(task)
@@ -218,9 +235,6 @@ class AsyncTaskQueue(QThread):
                 if self._task_queue.empty():
                     self.queue_empty.emit()
 
-            except queue.Empty:
-                # Timeout is expected - allows checking _running flag
-                continue
             except Exception as e:
                 log.exception("Unexpected error in worker loop: %s", e)
 
@@ -430,6 +444,11 @@ class AsyncTaskQueue(QThread):
         with filtered items. This is a generic helper for both cancel
         and clear operations.
 
+        The entire drain-and-rebuild is performed while holding
+        ``_queue_lock`` so that the worker thread cannot dequeue a task
+        between two ``get_nowait()`` calls, making the operation atomic
+        with respect to the worker.
+
         Args:
             predicate: Function that takes (task, context_id) and returns
                 (keep_in_queue, emit_cancelled_signal).
@@ -440,24 +459,27 @@ class AsyncTaskQueue(QThread):
         affected_count = 0
         items_to_keep = []
 
-        while True:
-            try:
-                priority, task = self._task_queue.get_nowait()
-                keep, emit_signal = predicate(task, task.context_id)
+        with self._queue_lock:
+            while True:
+                try:
+                    priority, task = self._task_queue.get_nowait()
+                    keep, emit_signal = predicate(task, task.context_id)
 
-                if keep:
-                    items_to_keep.append((priority, task))
-                else:
-                    affected_count += 1
-                    if emit_signal:
-                        self.task_cancelled.emit(task.name, task.context_id)
+                    if keep:
+                        items_to_keep.append((priority, task))
+                    else:
+                        affected_count += 1
+                        if emit_signal:
+                            self.task_cancelled.emit(
+                                task.name, task.context_id
+                            )
 
-            except queue.Empty:
-                break
+                except queue.Empty:
+                    break
 
-        # Rebuild queue with remaining items
-        for item in items_to_keep:
-            self._task_queue.put(item)
+            # Rebuild queue with remaining items
+            for item in items_to_keep:
+                self._task_queue.put(item)
 
         return affected_count
 

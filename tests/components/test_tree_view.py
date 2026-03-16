@@ -58,6 +58,10 @@ class TreeViewTest(WidgetTest):
         )
 
         self._views: list[AYTreeView] = []
+        # Keep a strong reference to each model; they have no QObject
+        # parent so Python's GC would otherwise collect them while Qt
+        # still holds raw pointers via QModelIndex.internalPointer().
+        self._models: list[LazyTreeModel] = []
         for variant in AYTreeView.Variants:
             col = AYContainer(
                 layout=AYContainer.Layout.VBox,
@@ -65,7 +69,8 @@ class TreeViewTest(WidgetTest):
                 layout_spacing=4,
             )
             col.add_widget(AYLabel(f"Variant: {variant.name}"))
-            model = LazyTreeModel(fetch_children=_fetch)
+            model = LazyTreeModel(fetch_children=_fetch, no_async=True)
+            self._models.append(model)
             view = AYTreeView(variant=variant)
             view.setModel(model)
             view.expandAll()
@@ -79,6 +84,11 @@ class TreeViewTest(WidgetTest):
         """Collapse all nodes to show unexpanded root items."""
         for view in self._views:
             view.collapseAll()
+
+    def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
+        """Flush pending paint events; data was loaded synchronously."""
+        from qtpy.QtWidgets import QApplication
+        QApplication.processEvents()
 
     def steps(self):
         return [self.collapse_all]

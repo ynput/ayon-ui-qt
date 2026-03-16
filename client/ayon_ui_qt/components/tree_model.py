@@ -9,14 +9,18 @@ from typing import Callable
 from qtpy.QtCore import (
     QAbstractItemModel,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     Qt,
+    Signal,  # type: ignore[attr-defined]
 )
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
+
+from .task_queue import AsyncTask, get_task_queue
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +65,7 @@ class _InternalNode:
         self.parent: _InternalNode | None = parent
         self.children: list[_InternalNode] = []
         self.children_loaded: bool = False
+        self.is_fetching: bool = False
 
     @property
     def is_root(self) -> bool:
@@ -72,12 +77,27 @@ class LazyTreeModel(QAbstractItemModel):
     """Qt model that lazily loads children via a callback.
 
     Children are fetched on demand using Qt's canFetchMore/fetchMore
-    protocol. The root level is loaded immediately on construction.
+    protocol. The root level is loaded asynchronously on construction.
 
     Args:
         fetch_children: Callable that takes a parent node ID (``None``
             for root) and returns a list of :class:`TreeNode` instances.
+        no_async: When ``True``, children are fetched synchronously on
+            the main thread instead of via the :class:`AsyncTaskQueue`.
+            Useful in tests to avoid worker-thread/paint-event races.
         parent: Optional parent QObject.
+
+    .. warning::
+        **Async mode and ``expandAll()``**: Because root children are
+        fetched asynchronously, calling ``view.expandAll()`` immediately
+        after constructing the model will silently expand nothing —
+        ``hasChildren()`` returns ``False`` until the first fetch
+        completes.  Connect to :attr:`loading_changed` and call
+        ``expandAll()`` once it emits ``False``::
+
+            model.loading_changed.connect(
+                lambda loading: view.expandAll() if not loading else None
+            )
 
     Example::
 
@@ -89,47 +109,151 @@ class LazyTreeModel(QAbstractItemModel):
         model = LazyTreeModel(fetch_children=fetch)
     """
 
+    loading_changed = Signal(bool)  # True while any fetch is in-flight
+    fetch_error = Signal(str)  # error message when a fetch fails
+    pending_count_changed = Signal(int)  # number of in-flight fetch tasks
+
     def __init__(
         self,
         fetch_children: Callable[[str | None], list[TreeNode]],
-        parent: object | None = None,
+        no_async: bool = False,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._fetch_children = fetch_children
+        self._no_async: bool = no_async
+        self._reset_counter: int = 0
+        self._context_id: str = f"ltm_{id(self)}_v0"
+        self._pending_tasks: int = 0
         self._root = _InternalNode(tree_node=None, parent=None)
-        self._root.children_loaded = True
-        self._load_children(self._root)
+        # _all_nodes keeps every node reachable so Python's GC does not
+        # collect objects that are held only via QModelIndex.internalPointer().
+        self._all_nodes: set[_InternalNode] = {self._root}
+        self._fetch_children_async(self._root)
 
-    def _do_fetch_children(self, node: _InternalNode) -> list[_InternalNode]:
-        """Fetch children for a node via the callback.
+    def _update_loading_state(self) -> None:
+        """Emit loading-progress signals based on current pending task count."""
+        self.pending_count_changed.emit(self._pending_tasks)
+        self.loading_changed.emit(self._pending_tasks > 0)
+
+    def _index_for_node(self, node: _InternalNode) -> QModelIndex:
+        """Return the QModelIndex that identifies node (column 0).
 
         Args:
-            node: The parent node to fetch children for.
+            node: A non-root internal node.
 
         Returns:
-            List of newly created internal nodes.
+            Valid QModelIndex for non-root nodes, invalid for root.
         """
-        parent_id = None if node.is_root else node.tree_node.id  # type: ignore[union-attr]
-        try:
-            tree_nodes = self._fetch_children(parent_id)
-        except Exception:
-            log.exception(
-                "fetch_children raised for parent_id=%r",
-                parent_id,
-            )
-            tree_nodes = []
-        return [_InternalNode(tree_node=tn, parent=node) for tn in tree_nodes]
+        if node.is_root:
+            return QModelIndex()
+        parent = node.parent
+        row = parent.children.index(node)  # type: ignore[union-attr]
+        return self.createIndex(row, 0, node)
 
-    def _load_children(self, node: _InternalNode) -> None:
-        """Fetch and attach children for the given internal node.
+    def _on_children_ready(
+        self,
+        node: _InternalNode,
+        context_id: str,
+        results: list[TreeNode] | None,
+    ) -> None:
+        """Handle fetch results on the main thread.
+
+        Called via Qt.QueuedConnection from AsyncTaskQueue so it always
+        executes on the Qt main thread, making it safe to call Qt model
+        mutation methods.
 
         Args:
-            node: The node whose children should be loaded.
+            node: The node whose children were fetched.
+            context_id: The context_id active when the task was enqueued.
+                Used to discard stale results.
+            results: TreeNode list returned by fetch_children, or None on
+                error.
         """
-        children = self._do_fetch_children(node)
-        # print(f"    _load_children: {node} -> {children}")
-        node.children = children
-        node.children_loaded = True
+        # Always release the fetching guard so the node is never stuck
+        # in-flight, even for stale callbacks.
+        node.is_fetching = False
+
+        # Discard stale results (model was reset while this task was running).
+        if context_id != self._context_id or node not in self._all_nodes:
+            log.debug(
+                "Discarding stale fetch result for node %r (ctx %s vs %s)",
+                node.tree_node.id if node.tree_node else "root",
+                context_id,
+                self._context_id,
+            )
+            return
+
+        self._pending_tasks = max(0, self._pending_tasks - 1)
+
+        if results is None:
+            node_id = node.tree_node.id if node.tree_node else "root"
+            self.fetch_error.emit(
+                f"Failed to fetch children for node {node_id!r}"
+            )
+            # Do NOT set children_loaded=True on error so that the
+            # caller can retry by calling reset().  The node stays in
+            # a "not loaded" state; is_fetching was already cleared
+            # above so a subsequent fetchMore() or reset() can re-try.
+            self._update_loading_state()
+            return
+
+        new_nodes = [
+            _InternalNode(tree_node=tn, parent=node) for tn in results
+        ]
+        if new_nodes:
+            parent_index = self._index_for_node(node)
+            self.beginInsertRows(parent_index, 0, len(new_nodes) - 1)
+            node.children = new_nodes
+            for child in new_nodes:
+                self._all_nodes.add(child)
+            node.children_loaded = True
+            self.endInsertRows()
+        else:
+            node.children_loaded = True
+
+        self._update_loading_state()
+
+    def _fetch_children_async(self, node: _InternalNode) -> None:
+        """Enqueue an async task to fetch children for *node*.
+
+        Uses a per-node re-entrancy guard (``node.is_fetching``) to
+        prevent duplicate tasks.  Results are delivered back on the main
+        thread via :meth:`_on_children_ready`.
+
+        Args:
+            node: The node whose children to fetch.
+        """
+        if node.is_fetching or node.children_loaded:
+            return
+        node.is_fetching = True
+
+        parent_id = None if node.is_root else node.tree_node.id  # type: ignore[union-attr]
+        ctx = self._context_id
+
+        self._pending_tasks += 1
+        self._update_loading_state()
+
+        if self._no_async:
+            try:
+                result: list[TreeNode] | None = self._fetch_children(parent_id)
+            except Exception:
+                log.exception(
+                    "fetch_children raised for parent_id=%r", parent_id
+                )
+                result = None
+            self._on_children_ready(node, ctx, result)
+            return
+
+        task = AsyncTask(
+            name=f"fetch_children_{parent_id or 'root'}",
+            function=lambda: self._fetch_children(parent_id),
+            callback=lambda result: self._on_children_ready(node, ctx, result),
+            priority=1,
+            context_id=ctx,
+            cancellable=True,
+        )
+        get_task_queue().enqueue(task)
 
     def _node_from_index(
         self, index: QModelIndex | QPersistentModelIndex
@@ -305,17 +429,7 @@ class LazyTreeModel(QAbstractItemModel):
         Args:
             parent: The parent index whose children should be loaded.
         """
-        node = self._node_from_index(parent)
-        if node.children_loaded:
-            return
-        children = self._do_fetch_children(node)
-        if children:
-            self.beginInsertRows(parent, 0, len(children) - 1)
-            node.children = children
-            node.children_loaded = True
-            self.endInsertRows()
-        else:
-            node.children_loaded = True
+        self._fetch_children_async(self._node_from_index(parent))
 
     def get_node_id(self, index: QModelIndex) -> str | None:
         """Return the TreeNode.id for the given model index.
@@ -333,13 +447,31 @@ class LazyTreeModel(QAbstractItemModel):
             return None
         return node.tree_node.id
 
+    @property
+    def is_loading(self) -> bool:
+        """Return True while at least one fetch task is in-flight."""
+        return self._pending_tasks > 0
+
     def reset(self) -> None:
-        """Reset the model to its initial state."""
+        """Reset the model to its initial state and re-fetch root children.
+
+        This is the recommended recovery path after a failed root fetch
+        (i.e. when :attr:`fetch_error` was emitted for the root node).
+        """
+        old_ctx = self._context_id
+        if not self._no_async:
+            get_task_queue().clear_context_tasks(old_ctx)
+        self._reset_counter += 1
+        self._context_id = f"ltm_{id(self)}_v{self._reset_counter}"
+        self._pending_tasks = 0
         self.beginResetModel()
         self._root = _InternalNode(tree_node=None, parent=None)
-        self._root.children_loaded = True
-        self._load_children(self._root)
+        self._all_nodes = {self._root}
         self.endResetModel()
+        # Emit loading signals *after* endResetModel so that any slot
+        # connected to loading_changed observes a consistent model state.
+        self._update_loading_state()
+        self._fetch_children_async(self._root)
 
 
 # --------------- fake data for testing --------------------------------

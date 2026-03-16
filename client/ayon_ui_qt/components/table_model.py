@@ -121,9 +121,9 @@ class PaginatedTableModel(QAbstractItemModel):
 
     WidgetFactoryRole: int = Qt.ItemDataRole.UserRole + 10
     tree_mode_changed = Signal(bool)
-    loading_changed = Signal(bool)       # True while any fetch is in-flight
-    page_fetched = Signal(int, int)      # (page_number, total_root_rows_loaded)
-    fetch_error = Signal(str)            # error message when a fetch fails
+    loading_changed = Signal(bool)  # True while any fetch is in-flight
+    page_fetched = Signal(int, int)  # (page_number, total_root_rows_loaded)
+    fetch_error = Signal(str)  # error message when a fetch fails
     pending_count_changed = Signal(int)  # number of in-flight fetch tasks
 
     def __init__(
@@ -477,13 +477,15 @@ class PaginatedTableModel(QAbstractItemModel):
         self._reset_counter += 1
         self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
         self._pending_tasks = 0
-        self._update_loading_state()
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._root.current_page = page
         self._all_nodes = {self._root}
         self._columns = self._explicit_columns or []
         self.endResetModel()
+        # Emit loading signals *after* endResetModel so that any slot
+        # connected to loading_changed observes a consistent model state.
+        self._update_loading_state()
         self._fetch_next_page(self._root)
 
     def set_page_size(self, size: int) -> None:
@@ -512,12 +514,14 @@ class PaginatedTableModel(QAbstractItemModel):
         self._reset_counter += 1
         self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
         self._pending_tasks = 0
-        self._update_loading_state()
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._all_nodes = {self._root}
         self._columns = self._explicit_columns or []
         self.endResetModel()
+        # Emit loading signals *after* endResetModel so that any slot
+        # connected to loading_changed observes a consistent model state.
+        self._update_loading_state()
         self._fetch_next_page(self._root)
 
     def get_distinct_values(self, key: str) -> list[str]:
