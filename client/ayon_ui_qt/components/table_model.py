@@ -359,7 +359,8 @@ class PaginatedTableModel(QAbstractItemModel):
             icon_name = row_dict.get(icon_key)
             if icon_name:
                 icon_color = row_dict.get(f"{col_key}__color", "#ffffff")
-                return get_icon(icon_name, color=icon_color)
+                icon_fill = row_dict.get(f"{col_key}__icon_fill", False)
+                return get_icon(icon_name, color=icon_color, fill=icon_fill)
             return None
 
         if role == Qt.ItemDataRole.ForegroundRole:
@@ -605,7 +606,11 @@ class PaginatedTableModel(QAbstractItemModel):
         # On the first child-load for a non-root node, emit dataChanged so
         # proxy models (e.g. AYTableFilterProxyModel) re-evaluate this row's
         # filter status now that real children are available.
-        if not node.is_root and not _was_children_loaded and node.children_loaded:
+        if (
+            not node.is_root
+            and not _was_children_loaded
+            and node.children_loaded
+        ):
             idx = self._index_for_node(node)
             self.dataChanged.emit(idx, idx)
 
@@ -614,7 +619,8 @@ class PaginatedTableModel(QAbstractItemModel):
         """Infer column definitions from a sample row dictionary.
 
         Reserved keys (``id``, ``has_children``) and decorator suffixes
-        (``__icon``, ``__color``, ``__widget_factory``) are excluded.
+        (``__icon``, ``__color``, ``__fill``, ``__widget_factory``) are
+        excluded.
 
         Args:
             row: A representative row dictionary.
@@ -626,7 +632,9 @@ class PaginatedTableModel(QAbstractItemModel):
         for key in row:
             if key in ("id", "has_children"):
                 continue
-            if key.endswith(("__icon", "__color", "__widget_factory")):
+            if key.endswith(
+                ("__icon", "__color", "__fill", "__widget_factory")
+            ):
                 continue
             label = key.replace("_", " ").title()
             columns.append(TableColumn(key=key, label=label))

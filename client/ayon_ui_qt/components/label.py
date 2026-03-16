@@ -35,6 +35,7 @@ class AYLabel(QtWidgets.QLabel):
         icon_color: str = "",
         icon_size: int = 20,
         icon_text_spacing=6,
+        icon_fill=False,
         text_color: str = "",
         rel_text_size: int = 0,
         bold: bool = False,
@@ -47,6 +48,7 @@ class AYLabel(QtWidgets.QLabel):
         self._icon = icon
         self._icon_color = icon_color
         self._icon_size = icon_size
+        self._icon_fill = icon_fill
         self._icon_text_spacing = icon_text_spacing
         self._rel_text_size = rel_text_size
         self._text_color = text_color
@@ -84,7 +86,11 @@ class AYLabel(QtWidgets.QLabel):
                 self._icon_color
                 or self.palette().color(self.foregroundRole()).name()
             )
-            icn: QIcon = get_icon(self._icon, color=icon_color)
+            icn: QIcon = get_icon(
+                self._icon,
+                color=icon_color,
+                fill=self._icon_fill,
+            )
             self.setPixmap(icn.pixmap(QSize(self._icon_size, self._icon_size)))
 
     def _ensure_font_setup(self) -> None:

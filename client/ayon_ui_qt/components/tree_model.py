@@ -38,6 +38,7 @@ class TreeNode:
     has_children: bool = False
     icon: str = ""
     icon_color: str = "#f4f5f5"
+    icon_fill: bool = False
     data: dict = field(default_factory=dict)
 
 
@@ -245,7 +246,11 @@ class LazyTreeModel(QAbstractItemModel):
             return node.tree_node.label if node.tree_node else None
         elif role == Qt.ItemDataRole.DecorationRole:
             if node.tree_node and node.tree_node.icon:
-                return get_icon(node.tree_node.icon, node.tree_node.icon_color)
+                return get_icon(
+                    node.tree_node.icon,
+                    node.tree_node.icon_color,
+                    fill=node.tree_node.icon_fill,
+                )
         elif role == Qt.ItemDataRole.UserRole:
             if node.tree_node and node.tree_node.data:
                 return node.tree_node.data

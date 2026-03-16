@@ -25,6 +25,7 @@ class AYButton(QtWidgets.QPushButton):
         icon_on: str | None = None,
         icon_size: int = 16,
         icon_color: str | None = None,
+        icon_fill=False,
         checkable=False,
         tooltip: str = "",
         name_id: str = "",
@@ -45,6 +46,7 @@ class AYButton(QtWidgets.QPushButton):
         self._icon_color = QtGui.QColor(
             icon_color or style_dict.get("color", "#ffffff")
         )
+        self._icon_fill = icon_fill
         # Adjust the icon color to have enough contrast with the background
         self._contrast_color = contrast_color
         if (
@@ -152,6 +154,7 @@ class AYButton(QtWidgets.QPushButton):
                 color_off=self._icon_color,
                 icon_name_on=self._icon_on,
                 color_on=self._icon_color,
+                fill=self._icon_fill,
             )
         else:
             icn = get_icon(
@@ -159,6 +162,7 @@ class AYButton(QtWidgets.QPushButton):
                 color_off=self._icon_color,
                 icon_name_on=self._icon,
                 color_on=self._icon_hover_color,
+                fill=self._icon_fill,
             )
         self.setIcon(icn)
 

@@ -331,6 +331,7 @@ class AYComboBox(QtWidgets.QComboBox):
             icon = get_icon(
                 icon_name,
                 color=bg_color if inverted else fg_color,
+                # TODO: add fill support to get_icon and pass self._icon_fill here
             )
         return icon
 
@@ -613,6 +614,7 @@ if __name__ == "__main__":
                 item.setIcon(
                     get_icon(
                         icon_name, color_normal=bg_color, color_selected=color
+                        # TODO: add fill support to get_icon and pass self._icon_fill here
                     )
                 )
                 item.setData(icon_name, self.IconNameRole)
