@@ -19,7 +19,7 @@ from typing import Dict, Optional, Union
 from qtpy import QtCore, QtGui, QtWidgets
 
 from .structures import IconOptions, Position
-from .utils import get_char_mapping, get_icon_name_char, _get_font_name
+from .utils import get_char_mapping, _get_font_name_filled, _get_font_name
 
 
 class _Cache:
@@ -53,7 +53,12 @@ class CharIconPainter:
 
         draw_size = round(rect.height() * options.scale_factor)
 
-        painter.setFont(iconic.get_font(draw_size))
+        font = iconic.get_font(
+            draw_size,
+            options.get_fill_for_state(state, mode)
+        )
+
+        painter.setFont(font)
         if options.offset is not None:
             rect = QtCore.QRect(rect)
             rect.translate(
@@ -131,9 +136,12 @@ class IconicFont(QtCore.QObject):
     def get_charmap(self) -> Dict[str, int]:
         return get_char_mapping()
 
-    def get_font(self, size: int) -> QtGui.QFont:
+    def get_font(self, size: int, filled: bool) -> QtGui.QFont:
         """Return a QFont corresponding to the given size."""
-        font = QtGui.QFont(_get_font_name())
+        if filled:
+            font = QtGui.QFont(_get_font_name_filled())
+        else:
+            font = QtGui.QFont(_get_font_name())
         font.setPixelSize(round(size))
         return font
 
@@ -160,37 +168,11 @@ class IconicFont(QtCore.QObject):
         opacity: Optional[float] = None,
         scale_factor: Optional[float] = None,
         offset: Optional[Position] = None,
-        hflip: Optional[bool] = False,
-        vflip: Optional[bool] = False,
-        rotate: Optional[int] = 0,
-        icon_name_normal: Optional[str] = None,
-        icon_name_active: Optional[str] = None,
-        icon_name_selected: Optional[str] = None,
-        icon_name_disabled: Optional[str] = None,
-        icon_name_on: Optional[str] = None,
-        icon_name_off: Optional[str] = None,
-        icon_name_on_normal: Optional[str] = None,
-        icon_name_off_normal: Optional[str] = None,
-        icon_name_on_active: Optional[str] = None,
-        icon_name_off_active: Optional[str] = None,
-        icon_name_on_selected: Optional[str] = None,
-        icon_name_off_selected: Optional[str] = None,
-        icon_name_on_disabled: Optional[str] = None,
-        icon_name_off_disabled: Optional[str] = None,
-        color_normal: Optional[Union[QtGui.QColor, str]] = None,
-        color_active: Optional[Union[QtGui.QColor, str]] = None,
-        color_selected: Optional[Union[QtGui.QColor, str]] = None,
-        color_disabled: Optional[Union[QtGui.QColor, str]] = None,
-        color_on: Optional[Union[QtGui.QColor, str]] = None,
-        color_off: Optional[Union[QtGui.QColor, str]] = None,
-        color_on_normal: Optional[Union[QtGui.QColor, str]] = None,
-        color_off_normal: Optional[Union[QtGui.QColor, str]] = None,
-        color_on_active: Optional[Union[QtGui.QColor, str]] = None,
-        color_off_active: Optional[Union[QtGui.QColor, str]] = None,
-        color_on_selected: Optional[Union[QtGui.QColor, str]] = None,
-        color_off_selected: Optional[Union[QtGui.QColor, str]] = None,
-        color_on_disabled: Optional[Union[QtGui.QColor, str]] = None,
-        color_off_disabled: Optional[Union[QtGui.QColor, str]] = None,
+        hflip: bool = False,
+        vflip: bool = False,
+        rotate: int = 0,
+        fill: bool = True,
+        **kwargs
     ) -> QtGui.QIcon:
         """Return a QIcon object corresponding to the provided icon name."""
         if QtWidgets.QApplication.instance() is None:
@@ -208,34 +190,8 @@ class IconicFont(QtCore.QObject):
             hflip=hflip,
             vflip=vflip,
             rotate=rotate,
-            icon_name_normal=icon_name_normal,
-            icon_name_active=icon_name_active,
-            icon_name_selected=icon_name_selected,
-            icon_name_disabled=icon_name_disabled,
-            icon_name_on=icon_name_on,
-            icon_name_off=icon_name_off,
-            icon_name_on_normal=icon_name_on_normal,
-            icon_name_off_normal=icon_name_off_normal,
-            icon_name_on_active=icon_name_on_active,
-            icon_name_off_active=icon_name_off_active,
-            icon_name_on_selected=icon_name_on_selected,
-            icon_name_off_selected=icon_name_off_selected,
-            icon_name_on_disabled=icon_name_on_disabled,
-            icon_name_off_disabled=icon_name_off_disabled,
-            color_normal=color_normal,
-            color_active=color_active,
-            color_selected=color_selected,
-            color_disabled=color_disabled,
-            color_on=color_on,
-            color_off=color_off,
-            color_on_normal=color_on_normal,
-            color_off_normal=color_off_normal,
-            color_on_active=color_on_active,
-            color_off_active=color_off_active,
-            color_on_selected=color_on_selected,
-            color_off_selected=color_off_selected,
-            color_on_disabled=color_on_disabled,
-            color_off_disabled=color_off_disabled,
+            fill=fill,
+            **kwargs
         )
         cache_key = options.identifier
         if cache_key in self._icon_cache:
