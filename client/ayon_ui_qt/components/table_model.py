@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 import random
@@ -176,8 +177,7 @@ class PaginatedTableModel(QAbstractItemModel):
 
         # Async fetch state
         self._no_async: bool = no_async
-        self._reset_counter: int = 0
-        self._context_id: str = f"ptm_{id(self)}_v0"
+        self._request_id: str = self._generate_request_id()
         self._pending_tasks: int = 0
 
         self._fetch_next_page(self._root)
@@ -475,11 +475,10 @@ class PaginatedTableModel(QAbstractItemModel):
         Args:
             page: 0-based page number to start from.
         """
-        old_ctx = self._context_id
+        old_request_id = self._request_id
         if not self._no_async:
-            get_task_queue().clear_context_tasks(old_ctx)
-        self._reset_counter += 1
-        self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
+            get_task_queue().clear_context_tasks(old_request_id)
+        self._request_id = self._generate_request_id()
         self._pending_tasks = 0
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
@@ -512,11 +511,10 @@ class PaginatedTableModel(QAbstractItemModel):
 
     def reset_data(self) -> None:
         """Reset the model and re-fetch from page 0."""
-        old_ctx = self._context_id
+        old_request_id = self._request_id
         if not self._no_async:
-            get_task_queue().clear_context_tasks(old_ctx)
-        self._reset_counter += 1
-        self._context_id = f"ptm_{id(self)}_v{self._reset_counter}"
+            get_task_queue().clear_context_tasks(old_request_id)
+        self._request_id = self._generate_request_id()
         self._pending_tasks = 0
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
@@ -572,6 +570,11 @@ class PaginatedTableModel(QAbstractItemModel):
             return self._root
         return index.internalPointer()  # type: ignore[return-value]
 
+    @staticmethod
+    def _generate_request_id() -> str:
+        """Return a unique request identifier for task-queue scoping."""
+        return str(uuid.uuid1())
+
     def _index_for_node(self, node: _TableNode) -> QModelIndex:
         """Return the QModelIndex that identifies node (column 0).
 
@@ -595,7 +598,7 @@ class PaginatedTableModel(QAbstractItemModel):
     def _on_page_ready(
         self,
         node: _TableNode,
-        context_id: str,
+        request_id: str,
         results: list[dict[str, Any]] | None,
     ) -> None:
         """Handle fetch results on the main thread.
@@ -606,7 +609,7 @@ class PaginatedTableModel(QAbstractItemModel):
 
         Args:
             node: The node whose page was fetched.
-            context_id: The context_id that was active when the task was
+            request_id: The request id that was active when the task was
                 enqueued.  Used to discard stale results.
             results: Row dicts returned by _fetch_page, or None on error.
         """
@@ -614,15 +617,15 @@ class PaginatedTableModel(QAbstractItemModel):
         # Do NOT decrement _pending_tasks for stale callbacks — the
         # reset_data() call already set the counter to 0 for the new
         # context.  Decrementing here would corrupt the new context's count.
-        if context_id != self._context_id or node not in self._all_nodes:
+        if request_id != self._request_id or node not in self._all_nodes:
             # Always release the fetching guard so the node is never stuck
             # in-flight, even for stale callbacks.
             node.is_fetching = False
             log.debug(
-                "Discarding stale fetch result for node %r (ctx %s vs %s)",
+                "Discarding stale fetch result for node %r (request %s vs %s)",
                 node.node_id,
-                context_id,
-                self._context_id,
+                request_id,
+                self._request_id,
             )
             return
 
@@ -728,9 +731,9 @@ class PaginatedTableModel(QAbstractItemModel):
         page = node.current_page
         page_size = self._page_size
         node_id = node.node_id
-        ctx = self._context_id
+        request_id = self._request_id
 
-        priority = 1 if page == 0 else 5  # High for first page, Normal after
+        priority = 1 if page == 0 else 2  # High for first page, Normal after
 
         self._pending_tasks += 1
         self._update_loading_state()
@@ -744,7 +747,7 @@ class PaginatedTableModel(QAbstractItemModel):
                 )
             except Exception:
                 result = None
-            self._on_page_ready(node, ctx, result)
+            self._on_page_ready(node, request_id, result)
             return
 
         task = AsyncTask(
@@ -752,9 +755,11 @@ class PaginatedTableModel(QAbstractItemModel):
             function=lambda: self._fetch_page(
                 page, page_size, sort_key, descending, node_id
             ),
-            callback=lambda result: self._on_page_ready(node, ctx, result),
+            callback=lambda result: self._on_page_ready(
+                node, request_id, result
+            ),
             priority=priority,
-            context_id=ctx,
+            context_id=request_id,
             cancellable=True,
         )
         get_task_queue().enqueue(task)
@@ -776,9 +781,7 @@ class PaginatedTableModel(QAbstractItemModel):
         for key in row:
             if key in ("id", "has_children"):
                 continue
-            if key.endswith(
-                ("__icon", "__color", "__fill")
-            ):
+            if key.endswith(("__icon", "__color", "__fill")):
                 continue
             label = key.replace("_", " ").title()
             columns.append(TableColumn(key=key, label=label))

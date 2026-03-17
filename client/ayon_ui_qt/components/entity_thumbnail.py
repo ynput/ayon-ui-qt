@@ -44,11 +44,16 @@ class AYEntityThumbnail(QPushButton):
     def set_thumbnail(self, name: Path | str):
         """Set the thumbnail image for the button."""
         self._src = name
-        if not Path(self._src).exists() and self._file_cacher:
+        if not Path(self._src).exists():
+            # self._src could be a cache key
             ic = ImageCache.get_instance()
-            self._src = ic.get(
-                str(self._src), partial(self._file_cacher, self._src)
-            )
+            if self._file_cacher:
+                self._src = ic.get(
+                    str(self._src), partial(self._file_cacher, self._src)
+                )
+            else:
+                if ic.has(str(self._src)):
+                    self._src = ic.get_path(str(self._src)) or ""
         if Path(self._src).exists():
             pxm = QPixmap(str(self._src))
             qicon = QIcon()
@@ -59,19 +64,17 @@ class AYEntityThumbnail(QPushButton):
             self.setIcon(QIcon())
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            p = QPainter(self)
-            option = QStyleOptionButton()
-            self.initStyleOption(option)
-            # override rect set by stylesheet
-            size = QSize(*self._size)
-            self.setFixedSize(size)
-            option.rect = QRect(0, 0, size.width(), size.height())
-            # draw
-            return get_ayon_style().drawControl(
-                QStyle.ControlElement.CE_PushButton, option, p, self
-            )
-        super().paintEvent(arg__1)
+        p = QPainter(self)
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        # override rect set by stylesheet
+        size = QSize(*self._size)
+        self.setFixedSize(size)
+        option.rect = QRect(0, 0, size.width(), size.height())
+        # draw
+        return get_ayon_style().drawControl(
+            QStyle.ControlElement.CE_PushButton, option, p, self
+        )
 
 
 if __name__ == "__main__":

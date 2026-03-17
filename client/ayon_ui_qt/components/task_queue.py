@@ -1,9 +1,13 @@
 """Priority-based async task queue backed by a QThread worker.
 
 This module provides a generic priority-based task queue system that runs in a
-separate thread to prevent blocking the Qt main event loop. It includes
-context tracking and cancellation support for handling state transitions such
-as user navigation between different items.
+separate thread to prevent blocking the Qt main event loop.
+
+Each task carries an optional ``context_id`` label. External components can
+call :meth:`AsyncTaskQueue.clear_context_tasks` to remove all pending tasks
+for a given context when the associated state becomes stale (e.g. a selection
+change).  Multiple distinct context IDs can coexist in the queue at the same
+time.
 """
 
 from __future__ import annotations
@@ -39,10 +43,11 @@ class AsyncTask:
             1 = High (User-initiated operations)
             5 = Normal (Background fetches)
             10 = Low (Prefetching)
-        context_id: Identifier for the context this task belongs to.
-            When context changes, tasks with old context_id can be
-            cancelled.
-        cancellable: If True, task can be cancelled when context changes.
+        context_id: Optional label grouping related tasks. Pass the same
+            id to :meth:`AsyncTaskQueue.clear_context_tasks` to remove all
+            pending tasks for that group at once.
+        cancellable: If True, the task can be removed by
+            :meth:`AsyncTaskQueue.clear_context_tasks`.
 
     Example:
         task = AsyncTask(
@@ -126,6 +131,10 @@ class AsyncTaskQueue(QThread):
         task_cancelled: Emitted when task is cancelled (task_name, ctx_id).
         queue_empty: Emitted when all tasks are processed.
 
+    Multiple :attr:`~AsyncTask.context_id` values can coexist in the queue.
+    Call :meth:`clear_context_tasks` to remove all pending tasks for a given
+    context when external state changes make them irrelevant.
+
     Example:
         queue = AsyncTaskQueue()
         queue.task_completed.connect(handle_completion)
@@ -133,6 +142,9 @@ class AsyncTaskQueue(QThread):
 
         task = AsyncTask(...)
         queue.enqueue(task)
+
+        # When the context is no longer relevant:
+        queue.clear_context_tasks(context_id)
 
         # Later...
         queue.stop()
@@ -164,8 +176,6 @@ class AsyncTaskQueue(QThread):
         self._paused.set()  # Start unpaused
         self._task_counter: int = 0
         self._counter_lock: threading.Lock = threading.Lock()
-        self._current_context: str = ""
-        self._context_lock: threading.Lock = threading.Lock()
         # Serialises drain-and-rebuild operations in _filter_queue so that
         # the worker thread cannot dequeue a task between two get_nowait()
         # calls while the main thread is rebuilding the queue.
@@ -278,25 +288,6 @@ class AsyncTaskQueue(QThread):
         # Check if task is cancelled before processing
         if task.is_cancelled():
             log.debug("Skipping cancelled task: %s", task.name)
-            self.task_cancelled.emit(task.name, task.context_id)
-            return
-
-        # Check if context is still current
-        with self._context_lock:
-            current = self._current_context
-
-        if (
-            task.context_id
-            and current
-            and task.context_id != current
-            and task.cancellable
-        ):
-            log.debug(
-                "Skipping task %s (context changed: %s -> %s)",
-                task.name,
-                task.context_id,
-                current,
-            )
             self.task_cancelled.emit(task.name, task.context_id)
             return
 
@@ -413,28 +404,6 @@ class AsyncTaskQueue(QThread):
         """
         return self._task_queue.qsize()
 
-    def set_current_context(self, context_id: str) -> None:
-        """Set the current active context.
-
-        When the context changes, tasks for different contexts may be
-        cancelled or deprioritized. This method automatically cancels
-        tasks belonging to the old context.
-
-        Args:
-            context_id: The new context identifier.
-        """
-        with self._context_lock:
-            old_context = self._current_context
-            self._current_context = context_id
-
-            if old_context and old_context != context_id:
-                log.debug(
-                    "Context changed: %s -> %s",
-                    old_context,
-                    context_id,
-                )
-                self._cancel_context_tasks(old_context)
-
     def _filter_queue(
         self, predicate: Callable[[AsyncTask, str], tuple[bool, bool]]
     ) -> int:
@@ -482,31 +451,6 @@ class AsyncTaskQueue(QThread):
                 self._task_queue.put(item)
 
         return affected_count
-
-    def _cancel_context_tasks(self, context_id: str) -> None:
-        """Cancel all pending tasks for a specific context.
-
-        Note: This only marks tasks as cancelled. They are actually
-        skipped during processing in _process_task().
-
-        Args:
-            context_id: Context identifier to cancel tasks for.
-        """
-
-        def should_cancel(task: AsyncTask, ctx: str) -> tuple[bool, bool]:
-            """Return (keep_in_queue, emit_signal)."""
-            if task.context_id == context_id and task.cancellable:
-                task.cancel()
-                return (True, True)  # Keep but mark cancelled
-            return (True, False)  # Keep, no signal
-
-        cancelled_count = self._filter_queue(should_cancel)
-        if cancelled_count > 0:
-            log.debug(
-                "Cancelled %d tasks for context: %s",
-                cancelled_count,
-                context_id,
-            )
 
     def clear_context_tasks(self, context_id: str) -> int:
         """Completely remove tasks for a specific context from queue.
