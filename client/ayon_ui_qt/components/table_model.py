@@ -1,4 +1,26 @@
-"""Paginated Qt table model with lazy loading support."""
+"""Paginated Qt table model with lazy loading support.
+
+Tree-mode batch fetching
+------------------------
+When a subtree is expanded, Qt calls ``fetchMore()`` for every child node
+that declares ``has_children=True``.  Those calls all arrive in the same
+event-loop tick.  Without batching each call produces a separate async
+task and therefore a separate server round-trip.
+
+Supply the optional *fetch_page_batch* callback to collapse all of those
+calls into a single round-trip::
+
+    def fetch_batch(
+        requests: list[BatchFetchRequest],
+    ) -> dict[str | None, list[dict]]:
+        # One HTTP call for all parent_ids in the batch.
+        ...
+
+The model accumulates pending fetch requests during an event-loop tick,
+dispatches them as one :class:`AsyncTask` via a zero-delay
+``QTimer.singleShot(0)``, and fans out the results to the per-node
+``_on_page_ready`` handler when they arrive.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +36,7 @@ from qtpy.QtCore import (
     QObject,
     QPersistentModelIndex,
     Qt,
+    QTimer,
     Signal,  # type: ignore[attr-defined]
 )
 from qtpy.QtGui import QBrush, QColor
@@ -73,6 +96,32 @@ class _TableNode:
 
 
 @dataclass
+class BatchFetchRequest:
+    """Describes a single child-page request within a batch fetch call.
+
+    A list of these is passed to the optional *fetch_page_batch* callback
+    of :class:`PaginatedTableModel`.  Each entry corresponds to one node
+    whose children need to be fetched; the callback should return a dict
+    mapping each ``parent_id`` to its list of row dicts.
+
+    Attributes:
+        page: Page number (0-based).
+        page_size: Maximum number of rows to return.
+        sort_key: Column key for server-side sorting, or ``None``.
+        descending: ``True`` for descending sort order.
+        parent_id: The ``"id"`` value of the parent row, or ``None`` for
+            the invisible root (never used in batch – root is always
+            fetched individually).
+    """
+
+    page: int
+    page_size: int
+    sort_key: str | None
+    descending: bool
+    parent_id: str | None
+
+
+@dataclass
 class TableColumn:
     """Describes a single column in a PaginatedTableModel.
 
@@ -115,11 +164,24 @@ class PaginatedTableModel(QAbstractItemModel):
     expanding them triggers a fresh ``fetch_page`` call with the
     folder's ``"id"`` value passed as ``parent_id``.
 
+    **Batch fetching** (tree mode only): when *fetch_page_batch* is
+    supplied, all ``fetchMore()`` calls that arrive in the same
+    event-loop tick (e.g. Qt calling ``fetchMore`` for every child of a
+    just-expanded folder) are coalesced into a single
+    :class:`BatchFetchRequest` list and dispatched as one async task.
+    This reduces N sibling fetches from N server round-trips to one.
+
     Args:
         fetch_page: Callable with signature
             ``(page, page_size, sort_key, descending, parent_id) ->
             list[dict]``.  ``parent_id`` is ``None`` for root-level
             items and the row's ``"id"`` value for nested items.
+        fetch_page_batch: Optional callable with signature
+            ``(requests: list[BatchFetchRequest]) ->
+            dict[parent_id, list[dict]]``.  When supplied, tree-mode
+            child fetches are batched into a single call per event-loop
+            tick instead of one call per node.  The root-level fetch
+            always uses *fetch_page* and is never batched.
         columns: Column definitions.  When ``None``, columns are inferred
             from the keys of the first fetched row.
         page_size: Number of rows per page.
@@ -140,6 +202,13 @@ class PaginatedTableModel(QAbstractItemModel):
         fetch_page: Callable[
             [int, int, str | None, bool, str | None], list[dict[str, Any]]
         ],
+        fetch_page_batch: (
+            Callable[
+                [list[BatchFetchRequest]],
+                dict[str | None, list[dict[str, Any]]],
+            ]
+            | None
+        ) = None,
         columns: list[TableColumn] | None = None,
         page_size: int = 50,
         no_async: bool = False,
@@ -151,6 +220,10 @@ class PaginatedTableModel(QAbstractItemModel):
             fetch_page: Callable
                 ``(page, page_size, sort_key, descending, parent_id)
                 -> list[dict]``.
+            fetch_page_batch: Optional batch callable
+                ``(requests: list[BatchFetchRequest]) ->
+                dict[parent_id, list[dict]]``.  When provided, non-root
+                child fetches are coalesced per event-loop tick.
             columns: Explicit column definitions, or ``None`` to infer.
             page_size: Rows per page.
             no_async: When ``True``, fetch pages synchronously on the
@@ -160,6 +233,13 @@ class PaginatedTableModel(QAbstractItemModel):
         """
         super().__init__(parent)
         self._fetch_page = fetch_page
+        self._fetch_page_batch: (
+            Callable[
+                [list[BatchFetchRequest]],
+                dict[str | None, list[dict[str, Any]]],
+            ]
+            | None
+        ) = fetch_page_batch
         self._explicit_columns: list[TableColumn] | None = columns
         self._columns: list[TableColumn] = columns or []
         self._page_size: int = page_size
@@ -179,6 +259,11 @@ class PaginatedTableModel(QAbstractItemModel):
         self._no_async: bool = no_async
         self._request_id: str = self._generate_request_id()
         self._pending_tasks: int = 0
+
+        # Batch-fetch coalescing state (populated by _fetch_next_page when
+        # _fetch_page_batch is set, consumed by _dispatch_batch).
+        self._pending_batch_nodes: list[_TableNode] = []
+        self._batch_scheduled: bool = False
 
         self._fetch_next_page(self._root)
 
@@ -480,6 +565,8 @@ class PaginatedTableModel(QAbstractItemModel):
             get_task_queue().clear_context_tasks(old_request_id)
         self._request_id = self._generate_request_id()
         self._pending_tasks = 0
+        self._pending_batch_nodes = []
+        self._batch_scheduled = False
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._root.current_page = page
@@ -516,6 +603,8 @@ class PaginatedTableModel(QAbstractItemModel):
             get_task_queue().clear_context_tasks(old_request_id)
         self._request_id = self._generate_request_id()
         self._pending_tasks = 0
+        self._pending_batch_nodes = []
+        self._batch_scheduled = False
         self.beginResetModel()
         self._root = _TableNode(node_id=None, row_data={}, parent=None)
         self._all_nodes = {self._root}
@@ -713,8 +802,14 @@ class PaginatedTableModel(QAbstractItemModel):
         shared :class:`AsyncTaskQueue` worker thread; results are
         delivered back on the main thread via :meth:`_on_page_ready`.
 
+        When *fetch_page_batch* is configured and *node* is not the
+        invisible root, the node is added to ``_pending_batch_nodes`` and
+        a zero-delay timer schedules :meth:`_dispatch_batch`.  This
+        coalesces all sibling fetches that arrive in the same event-loop
+        tick into a single server call.
+
         Priority is 1 (High) for the first page of any node (``page==0``)
-        and 5 (Normal) for subsequent pages.
+        and 2 (Normal) for subsequent pages.
 
         Args:
             node: The parent node whose next page of children to fetch.
@@ -737,6 +832,16 @@ class PaginatedTableModel(QAbstractItemModel):
 
         self._pending_tasks += 1
         self._update_loading_state()
+
+        # Batch path: coalesce non-root child fetches when a batch
+        # callback is available.  The root is always fetched individually
+        # because it is the first call and nothing can be batched with it.
+        if self._fetch_page_batch is not None and not node.is_root:
+            self._pending_batch_nodes.append(node)
+            if not self._batch_scheduled:
+                self._batch_scheduled = True
+                QTimer.singleShot(0, self._dispatch_batch)
+            return
 
         if self._no_async:
             # Synchronous path: fetch inline and deliver result immediately.
@@ -763,6 +868,100 @@ class PaginatedTableModel(QAbstractItemModel):
             cancellable=True,
         )
         get_task_queue().enqueue(task)
+
+    def _dispatch_batch(self) -> None:
+        """Dispatch all accumulated pending batch-fetch requests.
+
+        Called via ``QTimer.singleShot(0)`` so it runs on the main thread
+        at the start of the next event-loop iteration, after all
+        ``fetchMore()`` calls for the current expansion wave have been
+        collected into ``_pending_batch_nodes``.
+
+        The method creates one :class:`AsyncTask` (or runs synchronously
+        when ``no_async=True``) carrying all pending requests.  Results
+        are fanned out to the per-node ``_on_page_ready`` handler via
+        :meth:`_on_batch_ready`.
+        """
+        self._batch_scheduled = False
+        nodes = list(self._pending_batch_nodes)
+        self._pending_batch_nodes = []
+
+        if not nodes:
+            return
+
+        sort_key = None
+        if 0 <= self._sort_column < len(self._columns):
+            sort_key = self._columns[self._sort_column].key
+        descending = self._sort_order == Qt.SortOrder.DescendingOrder
+        request_id = self._request_id
+
+        requests = [
+            BatchFetchRequest(
+                page=node.current_page,
+                page_size=self._page_size,
+                sort_key=sort_key,
+                descending=descending,
+                parent_id=node.node_id,
+            )
+            for node in nodes
+        ]
+
+        log.debug(
+            "Dispatching batch of %d fetch requests (request=%s)",
+            len(requests),
+            request_id,
+        )
+
+        assert self._fetch_page_batch is not None  # guarded by caller
+        batch_fn = self._fetch_page_batch
+
+        if self._no_async:
+            try:
+                result: dict[str | None, list[dict[str, Any]]] | None = (
+                    batch_fn(requests)
+                )
+            except Exception:
+                log.exception("Batch fetch raised")
+                result = None
+            self._on_batch_ready(nodes, request_id, result)
+            return
+
+        task = AsyncTask(
+            name=f"fetch_batch_{len(nodes)}_nodes",
+            function=lambda: batch_fn(requests),
+            callback=lambda res: self._on_batch_ready(nodes, request_id, res),
+            priority=1,
+            context_id=request_id,
+            cancellable=True,
+        )
+        get_task_queue().enqueue(task)
+
+    def _on_batch_ready(
+        self,
+        nodes: list[_TableNode],
+        request_id: str,
+        results: dict[str | None, list[dict[str, Any]]] | None,
+    ) -> None:
+        """Fan out batch results to per-node handlers.
+
+        Delegates each node's slice of the results to :meth:`_on_page_ready`
+        so that all existing insertion, loading-state, and dataChanged
+        logic is reused without duplication.
+
+        Args:
+            nodes: The nodes whose children were requested in the batch.
+            request_id: The request id active when the batch was dispatched.
+                Used to discard stale results.
+            results: Mapping of ``parent_id -> list[row_dict]`` returned by
+                the batch callback, or ``None`` on error.
+        """
+        for node in nodes:
+            node_results: list[dict[str, Any]] | None
+            if results is None:
+                node_results = None
+            else:
+                node_results = results.get(node.node_id, [])
+            self._on_page_ready(node, request_id, node_results)
 
     @staticmethod
     def _infer_columns(row: dict[str, Any]) -> list[TableColumn]:
@@ -1081,6 +1280,49 @@ def make_hierarchical_test_fetch(
         return rows[start:end]
 
     return _fetch
+
+
+def make_hierarchical_test_fetch_batch(
+    data: dict[str | None, list[dict[str, Any]]],
+) -> Callable[
+    [list[BatchFetchRequest]], dict[str | None, list[dict[str, Any]]]
+]:
+    """Create a *fetch_page_batch* callback from hierarchical test data.
+
+    Wraps :func:`make_hierarchical_test_fetch` so that several child
+    fetch requests are resolved in one call, mimicking a batched server
+    API.  Use together with ``fetch_page_batch=`` on
+    :class:`PaginatedTableModel` to exercise the batch code path.
+
+    Args:
+        data: Mapping of parent_id -> list[row_dict].
+              ``None`` key holds the root-level rows.
+
+    Returns:
+        A callable suitable for ``PaginatedTableModel(fetch_page_batch=…)``
+        in tree mode.
+    """
+    single_fetch = make_hierarchical_test_fetch(data)
+
+    def _batch_fetch(
+        requests: list[BatchFetchRequest],
+    ) -> dict[str | None, list[dict[str, Any]]]:
+        print(
+            f"[test]  Batch fetch for {len(requests)} parent(s): "
+            f"{[r.parent_id for r in requests]!r}"
+        )
+        return {
+            req.parent_id: single_fetch(
+                req.page,
+                req.page_size,
+                req.sort_key,
+                req.descending,
+                req.parent_id,
+            )
+            for req in requests
+        }
+
+    return _batch_fetch
 
 
 if __name__ == "__main__":
