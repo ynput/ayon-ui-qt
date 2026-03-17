@@ -141,7 +141,6 @@ class AYTableHeader(QHeaderView):
             and self.sortIndicatorSection() == logical_index
         ):
             # do not draw sort indicator if column is not sortable
-            model = self.model()
             is_sortable = True
             if isinstance(model, PaginatedTableModel):
                 cols = model.columns
@@ -294,6 +293,23 @@ class AYTableView(QTreeView):
         self.setHorizontalScrollBar(hsb)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
+        # Viewport-aware persistent-editor management (open-only strategy).
+        # Tracks every QPersistentModelIndex for which openPersistentEditor
+        # has already been called so the same editor is never opened twice.
+        # Editors are never explicitly closed while scrolling: once built,
+        # a dormant off-screen persistent editor costs near zero (Qt skips
+        # its paintEvent), whereas re-creating it on scroll-back would cause
+        # widget churn and redundant async thumbnail re-fetches.
+        self._active_editor_pmis: set[QtCore.QPersistentModelIndex] = set()
+        # Single-shot, zero-interval timer — fires once per event-loop
+        # iteration so multiple rowsInserted bursts produce a single
+        # _sync_viewport_editors call instead of one per batch.
+        self._editor_sync_timer = QtCore.QTimer(self)
+        self._editor_sync_timer.setSingleShot(True)
+        self._editor_sync_timer.setInterval(0)
+        self._editor_sync_timer.timeout.connect(self._sync_viewport_editors)
+        vsb.valueChanged.connect(self._schedule_editor_sync)
+
         # Flat table — no tree features.
         self.setRootIsDecorated(False)
         self.setItemsExpandable(False)
@@ -333,7 +349,7 @@ class AYTableView(QTreeView):
         # Open persistent editors for already-loaded children when a tree node
         # is expanded.  Complements _on_rows_inserted, which handles the case
         # where data is loaded after the node is already expanded (async mode).
-        self.expanded.connect(self._on_item_expanded)
+        self.expanded.connect(self._schedule_editor_sync)
 
     def _sync_viewport_palette(self) -> None:
         """Apply the variant background colour to the viewport."""
@@ -375,6 +391,11 @@ class AYTableView(QTreeView):
                 pass
         self._model_connections.clear()
 
+        # Clear viewport-editor tracking — the old model's editors are
+        # invalidated by the model swap.
+        self._active_editor_pmis.clear()
+        self._editor_sync_timer.stop()
+
         super().setModel(model)
 
         if model is None:
@@ -383,13 +404,18 @@ class AYTableView(QTreeView):
         # Configure header from column width hints.
         self._configure_header(model)
 
-        # Open persistent editors for widget-factory columns in existing rows.
-        self._open_persistent_editors_for_range(0, model.rowCount() - 1)
+        # Schedule viewport-aware editor opening for existing rows.
+        self._schedule_editor_sync()
 
         # Connect to rowsInserted for lazy-loaded rows.
         conn = model.rowsInserted.connect(self._on_rows_inserted)
         if conn is not None:
             self._model_connections.append((model, conn))
+
+        # Clear editor tracking on model reset so stale PMIs don't linger.
+        conn_reset = model.modelReset.connect(self._on_model_reset)
+        if conn_reset is not None:
+            self._model_connections.append((model, conn_reset))
 
         # Connect to the source PaginatedTableModel for tree mode changes.
         source: Any = model
@@ -413,14 +439,10 @@ class AYTableView(QTreeView):
             self._save_expansion_state()
         style = get_ayon_style()
         tbl_style = style.model.get_style("AYTableView", self._variant_str)
-        model = (
-            self.model().sourceModel()
-            if isinstance(self.model(), QSortFilterProxyModel)
-            else self.model()
-        )
+        source = self._source_model()
         tree_pos = (
-            model.tree_position
-            if isinstance(model, PaginatedTableModel)
+            source.tree_position
+            if isinstance(source, PaginatedTableModel)
             else 0
         )
         if tree_mode:
@@ -434,6 +456,28 @@ class AYTableView(QTreeView):
             self.setIndentation(0)
         # Set the tree position to the column specified by the model.
         self.setTreePosition(tree_pos)
+
+    def _source_model(self) -> QtCore.QAbstractItemModel | None:
+        """Return the underlying source model, unwrapping any proxy layer.
+
+        Returns:
+            The source model, or ``None`` if no model is set.
+        """
+        model = self.model()
+        if isinstance(model, QSortFilterProxyModel):
+            return model.sourceModel()
+        return model
+
+    def _repaint_row(self, row_rect: QRect) -> None:
+        """Repaint the full viewport width for a given row rect.
+
+        Args:
+            row_rect: Visual rect of the row to repaint.
+        """
+        if row_rect.isNull():
+            return
+        vp = self.viewport()
+        vp.update(QRect(0, row_rect.y(), vp.width(), row_rect.height()))
 
     def _configure_header(self, model: QtCore.QAbstractItemModel) -> None:
         """Set up header section sizes from model column hints.
@@ -465,14 +509,11 @@ class AYTableView(QTreeView):
             source = model.sourceModel()
 
         # Check if model provides column width hints.
-        has_hints = False
-        if isinstance(source, PaginatedTableModel):
-            for col_def in source.columns:
-                if col_def.width > 0:
-                    has_hints = True
-                    break
+        has_hints = isinstance(source, PaginatedTableModel) and any(
+            col_def.width > 0 for col_def in source.columns
+        )
 
-        if has_hints and isinstance(source, PaginatedTableModel):
+        if has_hints:
             for i, col_def in enumerate(source.columns):
                 if i >= col_count:
                     break
@@ -614,98 +655,109 @@ class AYTableView(QTreeView):
             first: First inserted row index.
             last: Last inserted row index.
         """
-        self._open_persistent_editors_for_range(first, last, parent)
+        self._schedule_editor_sync()
         self._restore_expansion_in_range(parent, first, last)
 
-    def _on_item_expanded(self, index: QModelIndex) -> None:
-        """Open persistent editors for the children of a just-expanded node.
+    # ------------------------------------------------------------------
+    # Viewport-aware persistent-editor helpers
+    # ------------------------------------------------------------------
 
-        Called when a tree node is expanded by the user or by code.  Handles
-        the case where the children were already loaded before the node was
-        expanded (no ``rowsInserted`` fires in that case).
+    def _schedule_editor_sync(self) -> None:
+        """Schedule :meth:`_sync_viewport_editors` on the next event loop.
 
-        For children loaded *after* expansion (async fetch), the
-        ``rowsInserted`` → ``_on_rows_inserted`` path takes care of opening
-        the editors, because the parent is already marked expanded by then.
-
-        Args:
-            index: The index of the node that was just expanded.
+        Multiple calls within the same event-loop iteration collapse into
+        a single sync because the timer is single-shot and we only start
+        it when it is not already active.
         """
-        display_model = self.model()
-        if display_model is None:
-            return
-        source: Any = (
-            display_model.sourceModel()
-            if isinstance(display_model, QSortFilterProxyModel)
-            else display_model
-        )
-        if not isinstance(source, PaginatedTableModel):
-            return
-        widget_cols = [
-            i for i, col in enumerate(source.columns)
-            if col.widget_factory is not None
-        ]
-        if not widget_cols:
-            return
-        n_children = display_model.rowCount(index)
-        for row in range(n_children):
-            for col in widget_cols:
-                child_idx = display_model.index(row, col, index)
-                self.openPersistentEditor(child_idx)
+        if not self._editor_sync_timer.isActive():
+            self._editor_sync_timer.start()
 
-    def _open_persistent_editors_for_range(
-        self,
-        first_row: int,
-        last_row: int,
-        parent: QModelIndex = QModelIndex(),
-    ) -> None:
-        """Open persistent editors for widget-factory columns in a row range.
+    def _on_model_reset(self) -> None:
+        """Clear editor tracking after a model reset.
 
-        Calls ``openPersistentEditor`` for every cell whose column carries
-        a ``widget_factory``.  Qt closes persistent editors automatically
-        on ``beginResetModel``, so no manual cleanup is needed on sort or
-        data resets.
+        Qt automatically closes all persistent editors on
+        ``beginResetModel``, so ``_active_editor_pmis`` would hold stale
+        entries.  Clearing it ensures :meth:`_sync_viewport_editors` starts
+        from a clean slate, then schedules a sync so visible rows get their
+        editors back.
+        """
+        self._active_editor_pmis.clear()
+        self._schedule_editor_sync()
 
-        In tree mode, editors are opened only for rows whose *parent* is
-        already expanded (i.e., the rows are actually visible).  Rows under
-        collapsed nodes are skipped; they will be handled by
-        :meth:`_on_item_expanded` when the user expands the parent.  This
-        prevents the synchronous layout cascade where creating widgets for
-        visible-but-not-yet-expanded nodes triggers Qt to eagerly call
-        ``fetchMore`` for every visible node, recursively loading the entire
-        tree.
+    def _get_visible_widget_indexes(self) -> list[QModelIndex]:
+        """Return display-model indexes for visible cells with widget factories.
 
-        Args:
-            first_row: First row to scan (inclusive).
-            last_row: Last row to scan (inclusive).
-            parent: Parent index (invalid = root level).
+        Uses :meth:`QTreeView.indexBelow` to walk visible rows from the
+        topmost visible item downwards, stopping as soon as the visual rect
+        passes the viewport bottom.  Works correctly in both flat and tree
+        mode.
+
+        Returns:
+            List of valid ``QModelIndex`` objects, one per (row, col) pair
+            that is both visible and belongs to a widget-factory column.
         """
         model = self.model()
         if model is None:
-            return
-
-        # Determine which columns need persistent editors.
-        source: Any = model
-        if isinstance(model, QSortFilterProxyModel):
-            source = model.sourceModel()
+            return []
+        source: Any = self._source_model()
         if not isinstance(source, PaginatedTableModel):
-            return
+            return []
         widget_cols = [
-            i for i, col in enumerate(source.columns)
+            i
+            for i, col in enumerate(source.columns)
             if col.widget_factory is not None
         ]
         if not widget_cols:
-            return
+            return []
 
-        # In tree mode skip rows under a collapsed parent — their editors will
-        # be opened by _on_item_expanded when the parent is expanded.
-        if parent.isValid() and not self.isExpanded(parent):
-            return
+        vp_rect = self.viewport().rect()
+        # indexAt() returns an invalid index when the viewport is empty.
+        top_idx = self.indexAt(
+            QtCore.QPoint(vp_rect.left(), vp_rect.top() + 1)
+        )
+        if not top_idx.isValid():
+            return []
+        # Normalise to column 0 so indexBelow() works predictably.
+        top_idx = model.index(top_idx.row(), 0, top_idx.parent())
 
-        for row in range(first_row, last_row + 1):
-            for col in widget_cols:
-                idx = model.index(row, col, parent)
-                self.openPersistentEditor(idx)
+        results: list[QModelIndex] = []
+        idx = top_idx
+        while idx.isValid():
+            visual = self.visualRect(idx)
+            if visual.top() > vp_rect.bottom():
+                break
+            if not visual.isEmpty():
+                for col in widget_cols:
+                    col_idx = model.index(idx.row(), col, idx.parent())
+                    if col_idx.isValid():
+                        results.append(col_idx)
+            idx = self.indexBelow(idx)
+
+        return results
+
+    def _sync_viewport_editors(self) -> None:
+        """Open persistent editors for rows that just became visible.
+
+        Called via :attr:`_editor_sync_timer` (single-shot, zero interval)
+        so that bursts of ``rowsInserted`` signals collapse into a single
+        call per event-loop iteration.  Also triggered on vertical scroll.
+
+        Uses an **open-only** strategy: opens editors for visible rows that
+        do not yet have one, but never closes editors for rows that have
+        scrolled out of view.  A dormant off-screen persistent editor costs
+        near zero (Qt skips its ``paintEvent``), while re-creating it on
+        scroll-back would cause widget churn and redundant thumbnail
+        re-fetches.
+
+        :attr:`_active_editor_pmis` grows monotonically within a model
+        lifetime and is reset by :meth:`_on_model_reset` so stale entries
+        from a previous model do not block new editors after a reset.
+        """
+        for idx in self._get_visible_widget_indexes():
+            pmi = QtCore.QPersistentModelIndex(idx)
+            if pmi.isValid() and pmi not in self._active_editor_pmis:
+                self.openPersistentEditor(pmi)  # type: ignore[arg-type]
+                self._active_editor_pmis.add(pmi)
 
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
         """Track the hovered row and force-repaint it when it changes.
@@ -719,45 +771,19 @@ class AYTableView(QTreeView):
         new_idx = self.indexAt(event.pos())
         new_row = new_idx.row() if new_idx.isValid() else -1
         if new_row != self._hovered_row:
-            vp = self.viewport()
-            vp_width = vp.width()
             # Repaint the old row so its indicator clears.
-            if not self._hovered_row_rect.isNull():
-                vp.update(
-                    QRect(
-                        0,
-                        self._hovered_row_rect.y(),
-                        vp_width,
-                        self._hovered_row_rect.height(),
-                    )
-                )
+            self._repaint_row(self._hovered_row_rect)
             self._hovered_row = new_row
             self._hovered_row_rect = (
                 self.visualRect(new_idx) if new_idx.isValid() else QRect()
             )
             # Repaint the new row so its indicator lights up immediately.
-            if not self._hovered_row_rect.isNull():
-                vp.update(
-                    QRect(
-                        0,
-                        self._hovered_row_rect.y(),
-                        vp_width,
-                        self._hovered_row_rect.height(),
-                    )
-                )
+            self._repaint_row(self._hovered_row_rect)
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event: "QtCore.QEvent") -> None:
         """Clear hover tracking when the mouse exits the widget."""
-        if not self._hovered_row_rect.isNull():
-            self.viewport().update(
-                QRect(
-                    0,
-                    self._hovered_row_rect.y(),
-                    self.viewport().width(),
-                    self._hovered_row_rect.height(),
-                )
-            )
+        self._repaint_row(self._hovered_row_rect)
         self._hovered_row = -1
         self._hovered_row_rect = QRect()
         super().leaveEvent(event)
@@ -851,13 +877,18 @@ if __name__ == "__main__":
         # define model — "actions" column uses a widget factory
         tree_columns = [
             TableColumn("thumb", "Thumbnail", width=75, sortable=False),
-            TableColumn("name", "Name", width=160, sortable=True, tree_position=True),
+            TableColumn(
+                "name", "Name", width=160, sortable=True, tree_position=True
+            ),
             TableColumn("status", "Status", width=100, sortable=True),
             TableColumn("type", "Type", width=100, sortable=True),
             TableColumn("author", "Author", width=100, sortable=False),
             TableColumn("version", "Version", width=70, sortable=True),
             TableColumn(
-                "actions", "Actions", width=90, sortable=False,
+                "actions",
+                "Actions",
+                width=90,
+                sortable=False,
                 widget_factory=_make_button_factory("Open"),
             ),
         ]
