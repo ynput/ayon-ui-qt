@@ -1,7 +1,19 @@
-"""Priority-based async task queue backed by a QThread worker.
+"""Priority-based async task queue backed by a dispatch QThread + worker pool.
 
-This module provides a generic priority-based task queue system that runs in a
-separate thread to prevent blocking the Qt main event loop.
+This module provides a generic priority-based task queue system.  A single
+*dispatch* ``QThread`` dequeues tasks from a ``PriorityQueue`` and submits
+them to a ``ThreadPoolExecutor``  (default: 4 workers) so that independent
+fetches — for instance all children of simultaneously-expanded tree nodes —
+run **in parallel** rather than serially.
+
+Key optimisations vs. the original single-worker design:
+
+* **No polling sleep** – the dispatch loop blocks on a ``threading.Event``
+  that is set by :meth:`AsyncTaskQueue.enqueue` the instant a new task
+  arrives, so there is zero idle wait between tree-expansion waves.
+* **Parallel execution** – up to ``num_workers`` fetch tasks run at the
+  same time, halving the effective latency when expanding N sibling nodes
+  from O(N × round-trip) to O(round-trip / num_workers × N).
 
 Each task carries an optional ``context_id`` label. External components can
 call :meth:`AsyncTaskQueue.clear_context_tasks` to remove all pending tasks
@@ -12,10 +24,10 @@ time.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import queue
 import threading
-import time
 from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import Any, Callable
@@ -23,6 +35,9 @@ from typing import Any, Callable
 from qtpy.QtCore import Qt, QThread, Signal, Slot
 
 log = logging.getLogger(__name__)
+
+# Number of parallel pool workers created by default.
+_DEFAULT_NUM_WORKERS: int = 4
 
 
 @dataclass
@@ -118,12 +133,24 @@ class AsyncTask:
 
 
 class AsyncTaskQueue(QThread):
-    """Worker thread that processes async tasks from a priority queue.
+    """Dispatch thread + pool that processes async tasks from a priority queue.
 
-    This worker runs in a separate thread and processes tasks from a
-    priority queue. It supports pausing, resuming, context switching,
-    and graceful shutdown. Tasks are processed cooperatively, allowing
-    cancellation checks between task executions.
+    A single ``QThread`` (the *dispatch loop*) continuously dequeues the
+    highest-priority task and submits it to an internal
+    ``ThreadPoolExecutor`` so that multiple tasks can execute in parallel.
+
+    This removes two performance bottlenecks that made multi-level tree
+    expansion slow in the original single-worker design:
+
+    1. **No idle polling** – instead of sleeping 50 ms when the queue is
+       empty, the dispatch loop blocks on a ``threading.Event`` that
+       :meth:`enqueue` sets immediately, so there is zero dead time between
+       a tree-level's results arriving on the main thread, new
+       ``fetchMore`` calls being enqueued, and those fetches starting.
+
+    2. **Parallel execution** – up to ``num_workers`` fetches run
+       concurrently, so expanding a folder with N children takes
+       ``ceil(N / num_workers)`` round-trips instead of N.
 
     Signals:
         task_completed: Emitted when a task finishes (task_name, result).
@@ -134,6 +161,10 @@ class AsyncTaskQueue(QThread):
     Multiple :attr:`~AsyncTask.context_id` values can coexist in the queue.
     Call :meth:`clear_context_tasks` to remove all pending tasks for a given
     context when external state changes make them irrelevant.
+
+    Args:
+        num_workers: Number of parallel pool workers (default 4).
+        parent: Optional parent QObject.
 
     Example:
         queue = AsyncTaskQueue()
@@ -159,10 +190,16 @@ class AsyncTaskQueue(QThread):
     # Never passes Python objects through Qt's cross-thread signal system.
     invoke_callback = Signal()
 
-    def __init__(self, parent: Any = None) -> None:
-        """Initialize the async task queue.
+    def __init__(
+        self,
+        parent: Any = None,
+        num_workers: int = _DEFAULT_NUM_WORKERS,
+    ) -> None:
+        """Initialise the dispatch thread and pool.
 
         Args:
+            num_workers: Number of parallel pool workers. Defaults to
+                :data:`_DEFAULT_NUM_WORKERS` (4).
             parent: Optional parent QObject.
         """
         super().__init__(parent)
@@ -180,6 +217,11 @@ class AsyncTaskQueue(QThread):
         # the worker thread cannot dequeue a task between two get_nowait()
         # calls while the main thread is rebuilding the queue.
         self._queue_lock: threading.Lock = threading.Lock()
+        # Set by enqueue() to wake the dispatch loop immediately instead of
+        # waiting for the polling timeout.
+        self._task_available: threading.Event = threading.Event()
+        self._num_workers: int = num_workers
+        self._executor: concurrent.futures.ThreadPoolExecutor | None = None
 
         # Connect the no-arg ping to the drain slot on the main thread.
         self.invoke_callback.connect(
@@ -205,50 +247,125 @@ class AsyncTaskQueue(QThread):
                 log.exception("Callback execution failed: %s", e)
 
     def run(self) -> None:
-        """Main worker loop - runs in separate thread.
+        """Dispatch loop – runs in the QThread context.
 
-        This method runs in the worker thread context and continuously
-        processes tasks from the queue until stopped. It checks the
-        pause state before each task and handles queue.Empty exceptions
-        gracefully.
+        Dequeues the highest-priority pending task and submits it to the
+        thread pool.  Blocks on ``_task_available`` when the queue is empty
+        so it wakes the instant :meth:`enqueue` adds a new task, eliminating
+        the 50 ms polling delay of the previous single-worker design.
         """
         self._running = True
-        log.debug("Task queue worker started")
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._num_workers,
+            thread_name_prefix="ayon_task_worker",
+        )
+        log.debug(
+            "Task queue dispatch loop started (num_workers=%d)",
+            self._num_workers,
+        )
 
-        while self._running:
-            # Wait if paused
-            self._paused.wait()
+        try:
+            while self._running:
+                # Wait if paused
+                self._paused.wait()
+
+                try:
+                    # Acquire the queue lock before dequeuing so that
+                    # _filter_queue drain-and-rebuild on the main thread is
+                    # atomic with respect to this get() call.
+                    with self._queue_lock:
+                        try:
+                            priority, task = self._task_queue.get_nowait()
+                        except queue.Empty:
+                            task = None
+
+                    if task is None:
+                        # Block until a new task is enqueued (enqueue() sets
+                        # _task_available) or the 0.5 s safety timeout fires.
+                        # This replaces the original time.sleep(0.05) busy-
+                        # poll, eliminating idle dead-time between expansion
+                        # waves without wasting CPU.
+                        self._task_available.wait(timeout=0.5)
+                        self._task_available.clear()
+                        continue
+
+                    if task.is_cancelled():
+                        log.debug("Skipping cancelled task: %s", task.name)
+                        self.task_cancelled.emit(task.name, task.context_id)
+                        if self._task_queue.empty():
+                            self.queue_empty.emit()
+                        continue
+
+                    log.debug(
+                        "Submitting task to pool: %s (context=%s)",
+                        task.name,
+                        task.context_id,
+                    )
+                    self._executor.submit(self._run_task_in_pool, task)
+
+                    if self._task_queue.empty():
+                        self.queue_empty.emit()
+
+                except Exception as e:
+                    log.exception("Unexpected error in dispatch loop: %s", e)
+        finally:
+            # cancel_futures=True (Python ≥ 3.9) drops queued-but-not-
+            # started futures; already-running ones are awaited.
+            self._executor.shutdown(wait=True, cancel_futures=True)
+            self._executor = None
+
+        log.debug("Task queue dispatch loop stopped")
+
+    def _run_task_in_pool(self, task: AsyncTask) -> None:
+        """Execute a single task inside a pool worker thread.
+
+        Results are delivered back to the main thread via
+        :meth:`_invoke_callback_safely`.
+
+        Args:
+            task: The task to execute.
+        """
+        # Re-check cancellation: the task may have been cancelled while
+        # waiting in the executor's internal work queue.
+        if task.is_cancelled():
+            log.debug("Skipping cancelled task (pool): %s", task.name)
+            return
+
+        log.debug("Processing task: %s (context=%s)", task.name, task.context_id)
+
+        try:
+            result = task.function()
+
+            # Double-check cancellation after execution.
+            if task.is_cancelled():
+                log.debug(
+                    "Task %s completed but was cancelled, discarding result",
+                    task.name,
+                )
+                return
+
+            if task.callback:
+                self._invoke_callback_safely(task.callback, result, task.name)
 
             try:
-                # Acquire the queue lock before dequeuing so that
-                # _filter_queue drain-and-rebuild on the main thread is
-                # atomic with respect to this get() call.
-                with self._queue_lock:
-                    try:
-                        priority, task = self._task_queue.get_nowait()
-                    except queue.Empty:
-                        task = None
+                self.task_completed.emit(task.name, result)
+            except Exception:
+                pass  # Signal emission from pool threads may fail on some
+                # Qt bindings; the signal is not connected to anything
+                # critical so we swallow the error silently.
 
-                if task is None:
-                    # Nothing ready right now; sleep briefly to avoid
-                    # busy-waiting, then re-check _running.
-                    time.sleep(0.05)
-                    continue
+            log.debug("Task completed successfully: %s", task.name)
 
-                # Process the task
-                self._process_task(task)
+        except Exception as e:
+            log.exception("Task %s failed: %s", task.name, e)
 
-                # Mark task as done
-                self._task_queue.task_done()
+            if task.callback:
+                self._invoke_callback_safely(task.callback, None, task.name)
 
-                # Check if queue is empty
-                if self._task_queue.empty():
-                    self.queue_empty.emit()
-
-            except Exception as e:
-                log.exception("Unexpected error in worker loop: %s", e)
-
-        log.debug("Task queue worker stopped")
+            try:
+                self.task_failed.emit(task.name, str(e))
+            except Exception:
+                pass
 
     def _invoke_callback_safely(
         self, callback: Callable, result: Any, task_name: str
@@ -275,57 +392,13 @@ class AsyncTaskQueue(QThread):
                 e,
             )
 
-    def _process_task(self, task: AsyncTask) -> None:
-        """Execute a single task with cancellation and context checks.
-
-        This method validates the task's context before execution and
-        handles all exceptions to prevent the worker thread from
-        crashing.
-
-        Args:
-            task: The task to process.
-        """
-        # Check if task is cancelled before processing
-        if task.is_cancelled():
-            log.debug("Skipping cancelled task: %s", task.name)
-            self.task_cancelled.emit(task.name, task.context_id)
-            return
-
-        # Process task normally
-        log.debug(
-            "Processing task: %s (context=%s)", task.name, task.context_id
-        )
-
-        try:
-            result = task.function()
-
-            # Double-check cancellation after execution
-            if task.is_cancelled():
-                log.debug(
-                    "Task %s completed but was cancelled, discarding result",
-                    task.name,
-                )
-                return
-
-            if task.callback:
-                self._invoke_callback_safely(task.callback, result, task.name)
-
-            self.task_completed.emit(task.name, result)
-            log.debug("Task completed successfully: %s", task.name)
-
-        except Exception as e:
-            log.exception("Task %s failed: %s", task.name, e)
-
-            if task.callback:
-                self._invoke_callback_safely(task.callback, None, task.name)
-
-            self.task_failed.emit(task.name, str(e))
-
     def enqueue(self, task: AsyncTask) -> None:
         """Add a task to the queue (thread-safe).
 
         Assigns a monotonically increasing counter to the task to ensure
-        FIFO ordering within the same priority level.
+        FIFO ordering within the same priority level.  Sets
+        ``_task_available`` so the dispatch loop wakes immediately instead
+        of waiting for its polling timeout.
 
         Args:
             task: The task to enqueue.
@@ -337,6 +410,8 @@ class AsyncTaskQueue(QThread):
 
         # Add to priority queue
         self._task_queue.put((task.priority, task))
+        # Wake the dispatch loop immediately — no idle wait.
+        self._task_available.set()
         log.debug(
             "Enqueued task: %s (priority=%d, queue_size=%d)",
             task.name,
@@ -345,27 +420,30 @@ class AsyncTaskQueue(QThread):
         )
 
     def pause(self) -> None:
-        """Pause task processing.
+        """Pause task dispatching.
 
-        The worker will finish the current task and then wait until
-        resumed. Tasks can still be enqueued while paused.
+        The dispatch loop finishes submitting the current task and then
+        waits until resumed.  Tasks can still be enqueued while paused.
         """
         self._paused.clear()
         log.debug("Task queue paused")
 
     def resume(self) -> None:
-        """Resume task processing.
+        """Resume task dispatching.
 
-        Tasks will begin processing again from where they were paused.
+        Dispatching resumes from where it was paused.
         """
         self._paused.set()
         log.debug("Task queue resumed")
 
     def stop(self) -> None:
-        """Stop the worker thread gracefully.
+        """Stop the dispatch thread and pool workers gracefully.
 
-        This will finish the current task and then exit the worker loop.
-        Waits up to 5 seconds for the thread to finish.
+        Sets ``_running = False``, then wakes the dispatch loop so it can
+        exit immediately.  The loop's ``finally`` block shuts the executor
+        down (cancelling queued-but-not-started futures; already-running
+        ones complete normally).  Waits up to 5 seconds for everything to
+        finish.
 
         Any pending (callback, result) pairs left in ``_callback_queue``
         are discarded so that stale model callbacks from a previous test
@@ -374,8 +452,11 @@ class AsyncTaskQueue(QThread):
         log.debug("Stopping task queue worker")
         self._running = False
         self._paused.set()  # Unpause if paused
+        # Wake the dispatch loop so it can observe _running=False without
+        # waiting for the 0.5 s timeout.
+        self._task_available.set()
 
-        # Wait for thread to finish (timeout after 5 seconds)
+        # Wait for the QThread (dispatch loop + executor shutdown) to finish.
         if not self.wait(5000):
             log.warning("Task queue worker did not stop within timeout")
 
@@ -397,10 +478,11 @@ class AsyncTaskQueue(QThread):
         return not self._paused.is_set()
 
     def queue_size(self) -> int:
-        """Get the current number of tasks in the queue.
+        """Get the current number of tasks in the priority queue.
 
         Returns:
-            Number of pending tasks.
+            Number of pending tasks (does not include tasks already
+            submitted to the pool).
         """
         return self._task_queue.qsize()
 
@@ -414,9 +496,14 @@ class AsyncTaskQueue(QThread):
         and clear operations.
 
         The entire drain-and-rebuild is performed while holding
-        ``_queue_lock`` so that the worker thread cannot dequeue a task
+        ``_queue_lock`` so that the dispatch thread cannot dequeue a task
         between two ``get_nowait()`` calls, making the operation atomic
-        with respect to the worker.
+        with respect to the dispatch loop.
+
+        Note:
+            Tasks already submitted to the pool cannot be removed here;
+            the cancellation flag on :class:`AsyncTask` is the only
+            mechanism that can stop an already-submitted task.
 
         Args:
             predicate: Function that takes (task, context_id) and returns
@@ -439,9 +526,7 @@ class AsyncTaskQueue(QThread):
                     else:
                         affected_count += 1
                         if emit_signal:
-                            self.task_cancelled.emit(
-                                task.name, task.context_id
-                            )
+                            self.task_cancelled.emit(task.name, task.context_id)
 
                 except queue.Empty:
                     break
@@ -457,6 +542,12 @@ class AsyncTaskQueue(QThread):
 
         More aggressive than cancel - actually removes from queue rather
         than just marking as cancelled.
+
+        Note:
+            Tasks already submitted to the pool executor (i.e. currently
+            running or waiting for a free pool slot) are *not* removed
+            here.  Their results will be discarded by the model's stale-
+            context check in the callback.
 
         Args:
             context_id: Context identifier to clear.
@@ -493,7 +584,7 @@ def get_task_queue() -> AsyncTaskQueue:
     """Return the shared AsyncTaskQueue, creating and starting it on first use.
 
     The queue is a module-level singleton so all components (table models,
-    tree models, etc.) share one worker thread.
+    tree models, etc.) share one dispatch thread and one pool.
 
     On first creation the queue is automatically connected to
     ``QApplication.aboutToQuit`` so it stops cleanly when the application
