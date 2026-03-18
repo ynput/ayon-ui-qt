@@ -108,6 +108,15 @@ class AYTreeView(QTreeView):
         # Let QTreeView draw its items on top.
         super().paintEvent(event)
 
+    def mousePressEvent(self, event) -> None:
+        """Deselect all items when clicking in an empty area."""
+        index = self.indexAt(event.pos())
+        if not index.isValid():
+            self.clearSelection()
+            self.setCurrentIndex(self.rootIndex())
+            return
+        super().mousePressEvent(event)
+
     def selectionChanged(
         self,
         selected: QItemSelection,
