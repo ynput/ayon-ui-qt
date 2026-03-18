@@ -534,7 +534,6 @@ class ButtonDrawer:
             clip_path.addRoundedRect(rect, border_radius, border_radius)
             painter.setClipPath(clip_path)
             mode = QtGui.QIcon.Mode.Normal
-            painter.setBrush(QColor("#000000"))
             painter.drawRoundedRect(rect, border_radius, border_radius)
             option.icon.paint(
                 painter,
