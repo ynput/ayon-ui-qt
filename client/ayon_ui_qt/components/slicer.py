@@ -27,7 +27,7 @@ class TreeFilterProxyModel(QSortFilterProxyModel):
 class AYSlicer(AYContainer):
     category_changed = Signal(str)
 
-    def __init__(self, item_list=None, parent=None):
+    def __init__(self, item_list=None, parent=None, initial_text=""):
         super().__init__(
             layout=AYContainer.Layout.HBox,
             variant=AYContainer.Variants.Low,
@@ -37,6 +37,8 @@ class AYSlicer(AYContainer):
             items=item_list,
             variant=AYComboBox.Variants.Low,
         )
+        if initial_text:
+            self._combo.setCurrentText(initial_text)
         self._field = AYLineEdit(placeholder="Search")
         self._button = AYButton(
             variant=AYButton.Variants.Nav,
