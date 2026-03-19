@@ -77,6 +77,7 @@ class QLabelVariants(Enum):
     Tag = "tag"
     Badge = "badge"
     Pill = "pill"
+    Entity_Label = "entity-label"
 
 
 class QTreeViewVariants(Enum):

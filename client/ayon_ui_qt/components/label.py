@@ -227,7 +227,11 @@ class AYLabel(QtWidgets.QLabel):
         p.end()
 
     def _paint_icon_and_text(self) -> None:
-        """Render label with both icon and text."""
+        """Render label with both icon and text.
+
+        The icon and text are treated as a single group and positioned
+        within the widget rect according to the current alignment.
+        """
         style = self._style
         p = QPainter(self)
         p.setFont(self._font)
@@ -235,37 +239,52 @@ class AYLabel(QtWidgets.QLabel):
 
         text_rect = self._font_metrics.boundingRect(self._text)
         text_rect.adjust(0, 0, 1, 0)  # +1 pixel for antialiasing
-        m = self.margin()
 
-        # Adjust contents for icon + spacing + text
-        self.setContentsMargins(
-            0, 0, self._icon_text_spacing + text_rect.width(), 0
-        )
-        cr = self.contentsRect().normalized()
+        icon_w = self._icon_size
+        icon_h = self._icon_size
+        group_w = icon_w + self._icon_text_spacing + text_rect.width()
+        group_h = max(icon_h, text_rect.height())
 
-        # Draw icon
-        icn_rct = QRect(cr)
-        icn_rct.adjust(0, 0, -m, 0)
+        # Position the group using the current alignment
+        widget_rect = self.contentsRect().normalized()
+        alignment = self.alignment()
+
+        if alignment & Qt.AlignmentFlag.AlignLeft:
+            group_x = widget_rect.left()
+        elif alignment & Qt.AlignmentFlag.AlignRight:
+            group_x = widget_rect.right() - group_w
+        else:  # Center (default)
+            group_x = widget_rect.left() + (widget_rect.width() - group_w) // 2
+
+        if alignment & Qt.AlignmentFlag.AlignTop:
+            group_y = widget_rect.top()
+        elif alignment & Qt.AlignmentFlag.AlignBottom:
+            group_y = widget_rect.bottom() - group_h
+        else:  # VCenter (default)
+            group_y = widget_rect.top() + (widget_rect.height() - group_h) // 2
+
+        # Draw icon at the left of the group
+        icon_y = group_y + (group_h - icon_h) // 2
+        icn_rct = QRect(group_x, icon_y, icon_w, icon_h)
         style.drawItemPixmap(
             p,
             icn_rct,
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+            Qt.AlignmentFlag.AlignCenter,
             self.pixmap(),
         )
 
-        # Draw text
+        # Draw text at the right of the icon
         pal = self.palette()
         if not self._dim:
             pal.setColor(QPalette.ColorRole.Text, self._resolve_color())
 
-        txt_rct = cr.adjusted(
-            cr.width() + self._icon_text_spacing - m, 0, 0, 0
-        )
-        txt_rct.setWidth(text_rect.width())
+        txt_x = group_x + icon_w + self._icon_text_spacing
+        txt_y = group_y + (group_h - text_rect.height()) // 2
+        txt_rct = QRect(txt_x, txt_y, text_rect.width(), text_rect.height())
         style.drawItemText(
             p,
             txt_rct,
-            self.alignment(),
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             pal,
             self.isEnabled(),
             self._text,
@@ -293,6 +312,23 @@ class AYLabel(QtWidgets.QLabel):
             textRole=self.foregroundRole(),
         )
 
+    def _paint_background(self, style_data: dict) -> None:
+        """Draw background if specified by style."""
+        bg_color = style_data.get("background-color")
+        if bg_color and bg_color != "transparent":
+            p = QPainter(self)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            border_radius = style_data.get("border-radius", 0)
+            border_width = style_data.get("border-width", 0)
+            border_color = style_data.get("border-color", "#00000000")
+            p.setBrush(QBrush(QColor(bg_color)))
+            p.setPen(
+                QPen(QColor(border_color), border_width)
+                if border_width > 0
+                else Qt.PenStyle.NoPen
+            )
+            p.drawRoundedRect(self.rect(), border_radius, border_radius)
+
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         if not self._style_palette:
             self._style_palette = self.palette()
@@ -307,12 +343,88 @@ class AYLabel(QtWidgets.QLabel):
         # Filled-background rendering (driven by JSON properties)
         if style_data.get("fill-from-foreground"):
             self._paint_filled(style_data)
-        elif self._text and self._icon:
-            self._paint_icon_and_text()
-        elif self._icon and not self._text:
-            super().paintEvent(arg__1)
         else:
-            self._paint_text_only()
+            self._paint_background(style_data)
+            if self._text and self._icon:
+                self._paint_icon_and_text()
+            elif self._icon and not self._text:
+                super().paintEvent(arg__1)
+            else:
+                self._paint_text_only()
+
+    def sizeHint(self) -> QSize:
+        """Compute a size hint driven by QLabel style data from the style JSON.
+
+        For variants with ``auto-size`` (e.g. badge / pill), the size is
+        derived from font-metrics and the ``auto-size-padding`` factor.
+        For variants with an explicit ``padding`` list (e.g. entity-label),
+        the size is padded accordingly.
+        When an icon is present the icon dimensions are added.
+        In all other cases the base ``QLabel.sizeHint()`` is returned.
+
+        Returns:
+            The recommended widget size.
+        """
+        self._ensure_font_setup()
+
+        style_data: dict = self._style.model.get_style(
+            "QLabel", self._variant_str
+        )
+
+        fm = self._font_metrics
+
+        # --- text size --------------------------------------------------
+        text = self._text or ""
+        if text:
+            t_rect = fm.boundingRect(text)
+            text_w = t_rect.width()
+            text_h = t_rect.height()
+        else:
+            text_w = 0
+            text_h = fm.height()
+
+        # --- icon size --------------------------------------------------
+        icon_w = icon_h = 0
+        if self._icon:
+            icon_w = self._icon_size
+            icon_h = self._icon_size
+
+        # --- variant-specific sizing ------------------------------------
+        if style_data.get("auto-size"):
+            # badge / pill: padding is expressed as a fraction of the
+            # character metrics (x-factor of avgCharWidth, y-factor of height)
+            padding = style_data.get("auto-size-padding", [0.0, 0.0])
+            pad_x = int(fm.averageCharWidth() * padding[0])
+            pad_y = int(fm.height() * padding[1])
+
+            content_w = max(text_w, icon_w)
+            content_h = max(text_h, icon_h)
+
+            return QSize(content_w + pad_x, content_h + pad_y)
+
+        explicit_padding = style_data.get("padding")
+        if explicit_padding and isinstance(explicit_padding, list):
+            # [vertical, horizontal] convention (same as CSS padding shorthand)
+            pad_v = int(explicit_padding[0])
+            pad_h = int(explicit_padding[1])
+
+            if icon_w and text_w:
+                content_w = icon_w + self._icon_text_spacing + text_w
+                content_h = max(text_h, icon_h)
+            elif icon_w:
+                content_w = icon_w
+                content_h = icon_h
+            else:
+                content_w = text_w
+                content_h = text_h
+
+            return QSize(
+                content_w + 2 * pad_h,
+                content_h + 2 * pad_v,
+            )
+
+        # Fallback: let Qt compute the default size hint
+        return super().sizeHint()
 
     def setText(self, arg__1: str) -> None:
         super().setText(arg__1)
