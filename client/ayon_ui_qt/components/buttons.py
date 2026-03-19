@@ -123,24 +123,22 @@ class AYButton(QtWidgets.QPushButton):
         return super().sizeHint()
 
     def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
-        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
-            p = QtGui.QPainter(self)
-            option = QtWidgets.QStyleOptionButton()
-            self.initStyleOption(option)
-            # override rect set by stylesheet
-            size = self.sizeHint()
-            if (
-                self.sizePolicy().horizontalPolicy()
-                == QtWidgets.QSizePolicy.Policy.Fixed
-            ):
-                self.setFixedSize(size)
-                option.rect = QtCore.QRect(0, 0, size.width(), size.height())
-            else:
-                self.setFixedHeight(size.height())  # draw
-            return get_ayon_style().drawControl(
-                QtWidgets.QStyle.ControlElement.CE_PushButton, option, p, self
-            )
-        super().paintEvent(arg__1)
+        p = QtGui.QPainter(self)
+        option = QtWidgets.QStyleOptionButton()
+        self.initStyleOption(option)
+        # override rect set by stylesheet
+        size = self.sizeHint()
+        if (
+            self.sizePolicy().horizontalPolicy()
+            == QtWidgets.QSizePolicy.Policy.Fixed
+        ):
+            self.setFixedSize(size)
+            option.rect = QtCore.QRect(0, 0, size.width(), size.height())
+        else:
+            self.setFixedHeight(size.height())  # draw
+        return get_ayon_style().drawControl(
+            QtWidgets.QStyle.ControlElement.CE_PushButton, option, p, self
+        )
 
     def set_icon(self, icon_name: str):
         self._icon = icon_name
