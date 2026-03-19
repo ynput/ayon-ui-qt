@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Callable
@@ -12,28 +13,46 @@ from qtpy.QtCore import (
     QTimer,
     QVariantAnimation,
 )
-from qtpy.QtGui import QIcon, QPainter, QPaintEvent, QPixmap
+from qtpy.QtGui import QColor, QIcon, QPainter, QPaintEvent, QPixmap
 from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
 from .. import get_ayon_style
 from ..image_cache import ImageCache
 from ..variants import QPushButtonVariants
 
+try:
+    from qtmaterialsymbols import get_icon  # type: ignore
+except ImportError:
+    from ..vendor.qtmaterialsymbols import get_icon
+
 
 class AYEntityThumbnail(QPushButton):
+    class Variants(Enum):
+        Thumbnail = QPushButtonVariants.Thumbnail.value
+        Entity_Card = QPushButtonVariants.Entity_Card.value
+
     def __init__(
         self,
         src: Path | str = "",
         file_cacher: Callable | None = None,
+        placeholder_icon: str = "image",
+        placeholder_scale: float = 0.333333,
         size: tuple = (85, 48),
         fade_duration: int = 0,
+        variant: Variants = Variants.Thumbnail,
         **kwargs,
     ):
         """A widget that displays a thumbnail image for an entity, with options
         to customize the image source, caching behavior, and size."""
         self._file_cacher = file_cacher
         self._size = size
-        self._variant_str: str = QPushButtonVariants.Thumbnail.value
+        self._variant_str: str = variant.value
+        icn_size = size[1] * placeholder_scale
+        self._placeholder_icon = QIcon(
+            get_icon(placeholder_icon, color="#10ffffff").pixmap(
+                QSize(icn_size, icn_size),
+            )
+        )
 
         super().__init__(QIcon(), "", **kwargs)
         self.setStyle(get_ayon_style())
@@ -48,6 +67,11 @@ class AYEntityThumbnail(QPushButton):
         self._anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._anim.valueChanged.connect(self._on_fade_tick)
         self._anim.finished.connect(self._on_fade_done)
+        self._bg_color = QColor(
+            get_ayon_style()
+            .model.get_style("QPushButton", variant=self._variant_str)
+            .get("background-color", "#000000")
+        )
 
         self.set_thumbnail(src)
         self.setFixedSize(*self._size)
@@ -88,7 +112,7 @@ class AYEntityThumbnail(QPushButton):
         """Set the thumbnail image for the button."""
         self._src = self._resolve_src(name)
         self._anim.stop()
-        if Path(self._src).exists():
+        if self._src and Path(self._src).exists():
             raw = QPixmap(str(self._src))
             self._incoming_pixmap = raw.scaled(
                 QSize(*self._size),
@@ -100,7 +124,7 @@ class AYEntityThumbnail(QPushButton):
         else:
             self._incoming_pixmap = None
             self._opacity = 1.0
-            self.setIcon(QIcon())
+            self.setIcon(self._placeholder_icon)
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         p = QPainter(self)
@@ -121,6 +145,7 @@ class AYEntityThumbnail(QPushButton):
             p.save()
             p.setClipRect(QRect(1, 1, size.width() - 2, size.height() - 2))
             p.setOpacity(self._opacity)
+            p.fillRect(option.rect, self._bg_color)
             p.drawPixmap(x, y, self._incoming_pixmap)
             p.restore()
 
@@ -141,8 +166,8 @@ if __name__ == "__main__":
     def build():
         w = AYContainer(
             layout=AYContainer.Layout.HBox,
-            margin=8,
-            layout_margin=8,
+            variant=AYContainer.Variants.Low,
+            layout_margin=24,
             layout_spacing=4,
         )
         w.add_widget(
@@ -157,6 +182,7 @@ if __name__ == "__main__":
             src="avatar2", file_cacher=resource_loader, fade_duration=0
         )
         w.add_widget(delayed)
+        w.add_widget(AYEntityThumbnail(file_cacher=resource_loader))
 
         # simulate thumbnail update after some time
         delayed.set_fade_duration(1000)

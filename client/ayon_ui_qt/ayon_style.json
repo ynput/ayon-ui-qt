@@ -184,9 +184,20 @@
                 },
                 "thumbnail": {
                     "ignore-text": true,
-                    "background-color": "--md-sys-color-surface-container-lowest-dark",
+                    "icon-as-background": true,
+                    "clip-icon-to-radius": true,
+                    "background-color": "--md-sys-color-surface-container-dark",
                     "border-color": "--md-sys-color-surface-container-highest-dark",
                     "border-width": 2
+                },
+                "entity-card": {
+                    "ignore-text": true,
+                    "icon-as-background": true,
+                    "clip-icon-to-radius": true,
+                    "background-color": "--md-sys-color-surface-container-dark",
+                    "border-color": "--md-sys-color-surface-container-highest-dark",
+                    "border-width": 0,
+                    "border-radius": 10
                 },
                 "tag": {
                     "adjust-color-for-background": true,
@@ -406,7 +417,11 @@
             }
         },
         "QFrame": {
-            "states": {},
+            "states": [
+                "hover",
+                "active",
+                "dragging"
+            ],
             "default-variant": "default",
             "variants": {
                 "default": {
@@ -448,6 +463,32 @@
                 "criterion": {
                     "background-color": "--md-ref-palette-neutral-variant25"
                 },
+                "entity-card": {
+                    "background-color": "--md-sys-color-surface-container-high-dark",
+                    "border-radius": 10,
+                    "border-width": 2,
+                    "border-color": "--md-sys-color-surface-container-high-dark",
+                    "default-width": 280,
+                    "default-height": 160,
+                    "placeholder-icon-color": "--md-ref-palette-neutral35",
+                    "border-color-dragging": "--md-custom-color-warning",
+                    "border-color-error": "--md-sys-color-error-dark",
+                    "loading-overlay-color": "--md-ref-palette-neutral5",
+                    "loading-skeleton-color": "--md-ref-palette-neutral30",
+                    "hover": {
+                        "border-color": "--md-ref-palette-secondary60"
+                    },
+                    "active": {
+                        "border-color": "--md-sys-color-primary-dark"
+                    }
+                },
+                "entity-card-tag": {
+                    "background-color": "--ec-chip-background",
+                    "background-opacity": 0.71,
+                    "border-radius": 4,
+                    "padding-h": 5,
+                    "padding-v": 3
+                },
                 "debug-r": {
                     "background-color": "#664444"
                 },
@@ -484,8 +525,20 @@
                 "tag": {
                     "adjust-color-for-background": true
                 },
-                "badge": {},
-                "pill": {}
+                "badge": {
+                    "auto-size": true,
+                    "auto-size-padding": [1.5, 0.25],
+                    "border-radius-fraction": 0.2,
+                    "fill-from-foreground": true,
+                    "contrast-text": true
+                },
+                "pill": {
+                    "auto-size": true,
+                    "auto-size-padding": [1.5, 0.25],
+                    "border-radius-fraction": 0.5,
+                    "fill-from-foreground": true,
+                    "contrast-text": true
+                }
             }
         },
         "QTreeView": {
@@ -613,6 +666,7 @@
     },
     "layouts": {},
     "palette": {
+        "--ec-chip-background": "#14141e",
         "text-color-link": "--md-sys-color-primary-dark",
         "--md-sys-color-primary-dark": "#8fceff",
         "--md-sys-color-on-primary-dark": "#00344f",

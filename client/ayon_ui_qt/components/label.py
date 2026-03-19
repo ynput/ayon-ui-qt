@@ -65,7 +65,8 @@ class AYLabel(QtWidgets.QLabel):
         self._contrast_adapted = None
 
         super().__init__(*args, **kwargs)
-        self.setStyle(get_ayon_style())
+        self._style = get_ayon_style()
+        self.setStyle(self._style)
 
         # used to be in polish
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
@@ -80,7 +81,9 @@ class AYLabel(QtWidgets.QLabel):
     def contrast_color(self) -> QColor | None:
         return self._contrast_color
 
-    def set_icon(self):
+    def set_icon(self, icon: str | None = None) -> None:
+        if icon is not None:
+            self._icon = icon
         if self._icon:
             icon_color = (
                 self._icon_color
@@ -169,36 +172,49 @@ class AYLabel(QtWidgets.QLabel):
         else:
             self.setPalette(self._style_palette)
 
-    def _paint_badge_or_pill(self) -> None:
-        """Render badge or pill variant."""
-        style = self.style()
+    def _paint_filled(self, style_data: dict) -> None:
+        """Render a filled-background label driven by style data."""
+        style = self._style
 
-        # Size based on text metrics
-        t_rect = self._font_metrics.boundingRect(self.text())
-        padx = int(self._font_metrics.averageCharWidth() * 1.5)
-        pady = int(self._font_metrics.height() * 0.25)
-        self.setFixedSize(t_rect.width() + padx, t_rect.height() + pady)
+        # Auto-size from text metrics
+        if style_data.get("auto-size"):
+            padding = style_data.get("auto-size-padding", [0, 0])
+            t_rect = self._font_metrics.boundingRect(self.text())
+            padx = int(self._font_metrics.averageCharWidth() * padding[0])
+            pady = int(self._font_metrics.height() * padding[1])
+            self.setFixedSize(
+                t_rect.width() + padx,
+                t_rect.height() + pady,
+            )
 
         p = QPainter(self)
         self.initPainter(p)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Draw rounded background
-        p.setBrush(QBrush(self._resolve_color()))
+        # Fill color from foreground
+        fill_color = self._resolve_color()
+        p.setBrush(QBrush(fill_color))
         p.setPen(Qt.PenStyle.NoPen)
-        radius = self.rect().height() / (
-            5.0 if self._variant_str == "badge" else 2.0
-        )
+
+        # Border radius: fraction of height or fixed
+        radius_frac = style_data.get("border-radius-fraction")
+        if radius_frac is not None:
+            radius = self.rect().height() * radius_frac
+        else:
+            radius = style_data.get("border-radius", 0)
+
         p.drawRoundedRect(self.rect(), radius, radius)
 
-        # Draw text with contrast color
-        contrast_ref = self._contrast_color or self._icon_color
-        txt_color = self._compute_contrast_text_color(
-            contrast_ref,
-            self.palette().color(self.foregroundRole()),
-        )
-        p.setPen(QPen(QBrush(txt_color), 1.0))
+        # Text color with contrast computation
+        if style_data.get("contrast-text"):
+            contrast_ref = self._contrast_color or self._icon_color
+            txt_color = self._compute_contrast_text_color(
+                contrast_ref,
+                self.palette().color(self.foregroundRole()),
+            )
+            p.setPen(QPen(QBrush(txt_color), 1.0))
+
         style.drawItemText(
             p,
             self.rect(),
@@ -212,7 +228,7 @@ class AYLabel(QtWidgets.QLabel):
 
     def _paint_icon_and_text(self) -> None:
         """Render label with both icon and text."""
-        style = self.style()
+        style = self._style
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -267,7 +283,7 @@ class AYLabel(QtWidgets.QLabel):
             pal.setColor(self.foregroundRole(), QColor(self._text_color))
             self.setPalette(pal)
 
-        self.style().drawItemText(
+        self._style.drawItemText(
             p,
             self.contentsRect().normalized(),
             self.alignment(),
@@ -284,8 +300,13 @@ class AYLabel(QtWidgets.QLabel):
         self._ensure_font_setup()
         self._apply_palette()
 
-        if self._variant_str in ("badge", "pill"):
-            self._paint_badge_or_pill()
+        # Resolve style from JSON (guard for non-AYONStyle environments)
+        qt_style = self._style
+        style_data = qt_style.model.get_style("QLabel", self._variant_str)
+
+        # Filled-background rendering (driven by JSON properties)
+        if style_data.get("fill-from-foreground"):
+            self._paint_filled(style_data)
         elif self._text and self._icon:
             self._paint_icon_and_text()
         elif self._icon and not self._text:

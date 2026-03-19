@@ -527,12 +527,18 @@ class ButtonDrawer:
         painter.setBrush(QBrush(bg_color))
         painter.setPen(Qt.PenStyle.NoPen)
         border_radius = style.get("border-radius", 0)
-        if self.get_button_variant(widget) == "thumbnail":
+
+        draw_icon_as_background = style.get("icon-as-background", False)
+        clip_icon_to_radius = style.get("clip-icon-to-radius", False)
+
+        if draw_icon_as_background:
             # draw the icon clipped by the same rounded rect
             painter.save()
-            clip_path = QPainterPath()
-            clip_path.addRoundedRect(rect, border_radius, border_radius)
-            painter.setClipPath(clip_path)
+            if clip_icon_to_radius:
+                clip_path = QPainterPath()
+                clip_path.addRoundedRect(rect, border_radius, border_radius)
+                painter.setClipPath(clip_path)
+
             mode = QtGui.QIcon.Mode.Normal
             painter.drawRoundedRect(rect, border_radius, border_radius)
             option.icon.paint(
@@ -541,7 +547,10 @@ class ButtonDrawer:
                 Qt.AlignmentFlag.AlignCenter,
                 mode,
             )
-            painter.setClipping(False)
+
+            if clip_icon_to_radius:
+                painter.setClipping(False)
+
             pen = QPen(QColor(style.get("border-color")))
             pen.setWidth(int(style.get("border-width", 0)))
             painter.setPen(pen)
@@ -1086,9 +1095,7 @@ class CheckboxDrawer:
                     if style.get("color")
                     else option.palette.color(QPalette.ColorRole.WindowText)
                 )
-                text_rect = QRect(
-                    x, cy - text_h // 2, text_w, text_h
-                )
+                text_rect = QRect(x, cy - text_h // 2, text_w, text_h)
                 painter.drawText(
                     text_rect,
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
