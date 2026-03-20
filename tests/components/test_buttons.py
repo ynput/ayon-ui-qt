@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QLabel, QStyle, QStyleOptionButton, QWidget
+from qtpy.QtWidgets import QStyle, QStyleOptionButton, QWidget
 
 from widget_test import WidgetTest
 from ayon_ui_qt.components.buttons import AYButton, AYButtonMenu
@@ -124,7 +124,12 @@ class ButtonTest(WidgetTest):
             btn.set_force_hover(False)
 
     def steps(self) -> list:
-        return [self.check_all, self.uncheck_all, self.hover_row1, self.unhover_row1]
+        return [
+            self.check_all,
+            self.uncheck_all,
+            self.hover_row1,
+            self.unhover_row1,
+        ]
 
 
 # =============================================================================
@@ -227,14 +232,23 @@ class ButtonMenuTest(WidgetTest):
         """Build a minimal AYButtonMenu widget for snapshot comparison."""
 
         def _populate(container: QtWidgets.QFrame) -> None:
-            label = QLabel("Item A", container)
-            _layout = container.layout()
-            assert _layout is not None
-            _layout.addWidget(label)
+            for ll in ["Item A", "Item B", "Item C"]:
+                label = AYButton(
+                    ll,
+                    icon="star",
+                    icon_color="white",
+                    icon_size=16,
+                    parent=container,
+                    variant=AYButton.Variants.Text
+                )
+                _layout = container.layout()
+                assert _layout is not None
+                _layout.addWidget(label)
 
         self._menu_btn = AYButtonMenu(
             "Options",
             populate_callback=_populate,
+            icon="menu",
         )
 
         root = _CompositeMenuWidget(
@@ -299,9 +313,15 @@ def test_aybuttonmenu_instantiation(qtbot) -> None:
     """
     btn, containers = _make_menu_button(qtbot)
 
-    assert isinstance(btn, AYButton), "AYButtonMenu should be a subclass of AYButton"
-    assert hasattr(btn, "menu_opened"), "AYButtonMenu must expose a menu_opened signal"
-    assert hasattr(btn, "menu_closed"), "AYButtonMenu must expose a menu_closed signal"
+    assert isinstance(btn, AYButton), (
+        "AYButtonMenu should be a subclass of AYButton"
+    )
+    assert hasattr(btn, "menu_opened"), (
+        "AYButtonMenu must expose a menu_opened signal"
+    )
+    assert hasattr(btn, "menu_closed"), (
+        "AYButtonMenu must expose a menu_closed signal"
+    )
     assert len(containers) == 1, (
         "populate_callback must be called exactly once during __init__"
     )
@@ -405,7 +425,9 @@ def test_aybuttonmenu_escape_closes_dropdown(qtbot) -> None:
     with qtbot.waitSignal(btn.menu_closed, timeout=500) as blocker:
         qtbot.keyPress(dropdown, Qt.Key.Key_Escape)
 
-    assert blocker.signal_triggered, "menu_closed must be emitted after pressing Escape"
+    assert blocker.signal_triggered, (
+        "menu_closed must be emitted after pressing Escape"
+    )
     assert btn._menu_open is False, (
         "_menu_open must be False after Escape closes the dropdown"
     )

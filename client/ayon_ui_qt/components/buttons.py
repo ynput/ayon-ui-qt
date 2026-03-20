@@ -9,7 +9,8 @@ from qtpy.QtCore import Qt
 
 from .. import get_ayon_style, get_ayon_style_data
 from ..color_utils import compute_color_for_contrast
-from ..variants import QPushButtonVariants, QFrameVariants
+from ..variants import QFrameVariants, QPushButtonVariants
+from .container import AYContainer
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ class AYButton(QtWidgets.QPushButton):
         self.setIcon(icn)
 
 
-class _ButtonMenuDropdown(QtWidgets.QFrame):
+class _ButtonMenuDropdown(AYContainer):
     """Floating dropdown popup for AYButtonMenu.
 
     A frameless popup QFrame that is shown below (or above, if not
@@ -192,9 +193,14 @@ class _ButtonMenuDropdown(QtWidgets.QFrame):
         Args:
             parent: Optional parent widget (used for style inheritance).
         """
-        super().__init__(parent)
+        super().__init__(
+            parent,
+            variant=AYContainer.Variants.Low_Framed_Thin,
+            layout=AYContainer.Layout.VBox,
+            layout_margin=10,
+            layout_spacing=5,
+        )
 
-        self._variant_str = QFrameVariants.Low.value
         self.setStyle(get_ayon_style())
 
         self.setWindowFlags(
@@ -235,7 +241,7 @@ class _ButtonMenuDropdown(QtWidgets.QFrame):
         Args:
             widget: The reference widget to position against.
         """
-        global_pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height()))
+        global_pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height() + 2))
         self.adjustSize()
 
         screen = QtWidgets.QApplication.screenAt(global_pos)
