@@ -96,6 +96,11 @@ class AYTableViewVariants(Enum):
     High = "high"
 
 
+class AYUserImageVariants(Enum):
+    Default = "default"
+    Entity_Card = "entity-card"
+
+
 # END OF VARIANTs DEFINITIONS -------------------------------------------------
 
 
