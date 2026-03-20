@@ -12,6 +12,7 @@ from qtpy.QtGui import (
     QPaintEvent,
     QPalette,
     QPen,
+    QResizeEvent,
 )
 
 try:
@@ -42,6 +43,7 @@ class AYLabel(QtWidgets.QLabel):
         tool_tip="",
         variant: Variants = Variants.Default,
         contrast_color: QColor | None = None,
+        elide_mode: Qt.TextElideMode = Qt.TextElideMode.ElideNone,
         **kwargs,
     ):
         self._dim = dim
@@ -56,6 +58,8 @@ class AYLabel(QtWidgets.QLabel):
         self._variant_str: str = variant.value
         self._text_setup_done = False
         self._style_palette = None
+        self._elide_mode = elide_mode
+        self._elided_text: str = ""
         # reference bg color to compute contrast-adapted text color
         self._contrast_color = (
             contrast_color
@@ -81,9 +85,11 @@ class AYLabel(QtWidgets.QLabel):
     def contrast_color(self) -> QColor | None:
         return self._contrast_color
 
-    def set_icon(self, icon: str | None = None) -> None:
+    def set_icon(self, icon: str | None = None, color: str = "") -> None:
         if icon is not None:
             self._icon = icon
+        if color:
+            self._icon_color = color
         if self._icon:
             icon_color = (
                 self._icon_color
@@ -113,6 +119,23 @@ class AYLabel(QtWidgets.QLabel):
         self._font.setWeight(weight)
         self.setFont(self._font)
         self._font_metrics = QFontMetrics(self._font)
+        self._update_elided_text()
+
+    def _update_elided_text(self) -> None:
+        """Recompute the elided version of the stored text."""
+        if (
+            self._elide_mode == Qt.TextElideMode.ElideNone
+            or not self._text_setup_done
+        ):
+            self._elided_text = self._text
+            return
+        available_w = self.contentsRect().width()
+        if self._icon:
+            spacing = self._icon_text_spacing
+            available_w -= self._icon_size + spacing
+        self._elided_text = self._font_metrics.elidedText(
+            self._text, self._elide_mode, max(0, available_w)
+        )
 
     def _resolve_color(self) -> QColor:
         """Get the effective foreground color (icon_color or palette)."""
@@ -226,23 +249,34 @@ class AYLabel(QtWidgets.QLabel):
         )
         p.end()
 
-    def _paint_icon_and_text(self) -> None:
+    def _paint_icon_and_text(self, style_data: dict) -> None:
         """Render label with both icon and text.
 
         The icon and text are treated as a single group and positioned
         within the widget rect according to the current alignment.
+
+        The spacing between icon and text is resolved from the
+        ``icon-text-spacing`` property in *style_data*, falling back to
+        the value supplied at construction time.
+
+        Args:
+            style_data: Variant style properties resolved from the style
+                JSON for the current ``QLabel`` variant.
         """
         style = self._style
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        text_rect = self._font_metrics.boundingRect(self._text)
+        text_rect = self._font_metrics.boundingRect(self._elided_text)
         text_rect.adjust(0, 0, 1, 0)  # +1 pixel for antialiasing
 
         icon_w = self._icon_size
         icon_h = self._icon_size
-        group_w = icon_w + self._icon_text_spacing + text_rect.width()
+        spacing = int(
+            style_data.get("icon-text-spacing", self._icon_text_spacing)
+        )
+        group_w = icon_w + spacing + text_rect.width()
         group_h = max(icon_h, text_rect.height())
 
         # Position the group using the current alignment
@@ -278,7 +312,7 @@ class AYLabel(QtWidgets.QLabel):
         if not self._dim:
             pal.setColor(QPalette.ColorRole.Text, self._resolve_color())
 
-        txt_x = group_x + icon_w + self._icon_text_spacing
+        txt_x = group_x + icon_w + spacing
         txt_y = group_y + (group_h - text_rect.height()) // 2
         txt_rct = QRect(txt_x, txt_y, text_rect.width(), text_rect.height())
         style.drawItemText(
@@ -287,7 +321,7 @@ class AYLabel(QtWidgets.QLabel):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             pal,
             self.isEnabled(),
-            self._text,
+            self._elided_text,
             textRole=self.foregroundRole(),
         )
 
@@ -308,7 +342,7 @@ class AYLabel(QtWidgets.QLabel):
             self.alignment(),
             self.palette(),
             self.isEnabled(),
-            self._text,
+            self._elided_text,
             textRole=self.foregroundRole(),
         )
 
@@ -346,7 +380,7 @@ class AYLabel(QtWidgets.QLabel):
         else:
             self._paint_background(style_data)
             if self._text and self._icon:
-                self._paint_icon_and_text()
+                self._paint_icon_and_text(style_data)
             elif self._icon and not self._text:
                 super().paintEvent(arg__1)
             else:
@@ -409,7 +443,12 @@ class AYLabel(QtWidgets.QLabel):
             pad_h = int(explicit_padding[1])
 
             if icon_w and text_w:
-                content_w = icon_w + self._icon_text_spacing + text_w
+                spacing = int(
+                    style_data.get(
+                        "icon-text-spacing", self._icon_text_spacing
+                    )
+                )
+                content_w = icon_w + spacing + text_w
                 content_h = max(text_h, icon_h)
             elif icon_w:
                 content_w = icon_w
@@ -426,9 +465,15 @@ class AYLabel(QtWidgets.QLabel):
         # Fallback: let Qt compute the default size hint
         return super().sizeHint()
 
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Recompute elided text when the widget is resized."""
+        super().resizeEvent(event)
+        self._update_elided_text()
+
     def setText(self, arg__1: str) -> None:
         super().setText(arg__1)
         self._text = self.text()
+        self._update_elided_text()
 
 
 if __name__ == "__main__":
