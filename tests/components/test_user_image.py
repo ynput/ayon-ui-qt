@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from qtpy.QtWidgets import QWidget
 
 from widget_test import WidgetTest
 from ayon_ui_qt.components.user_image import AYUserImage
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.label import AYLabel
+
+_RSRC = Path(__file__).parent.parent.parent / "client" / "ayon_ui_qt" / "resources"
 
 
 class UserImageTest(WidgetTest):
@@ -58,6 +62,60 @@ class UserImageTest(WidgetTest):
         root.add_widget(row3)
 
         return root
+
+    def steps(self):
+        return []
+
+
+class UserImageMainTest(WidgetTest):
+    """Replicates the __main__ build() fixture: image avatars, initials, sizes,
+    outline/highlight toggles, and the Entity_Card variant side-by-side."""
+
+    # 14 widgets (8×30 + 4×60 + 2×24) + 13 gaps×4 + 2×8 layout margin
+    size = (660, 100)
+    tolerance = 0.0
+
+    def build(self) -> QWidget:
+        w = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            margin=8,
+            layout_margin=8,
+            layout_spacing=4,
+        )
+        # Default size (30), src from file
+        w.add_widget(AYUserImage(src=_RSRC / "avatar1.jpg"))
+        w.add_widget(AYUserImage(src=_RSRC / "avatar2.jpg", highlight=True))
+        w.add_widget(AYUserImage(src=_RSRC / "avatar3.jpg", outline=False))
+        # Initials-only variants
+        w.add_widget(AYUserImage(full_name="Oliver Cromwell"))
+        w.add_widget(AYUserImage(name="Oliver"))
+        w.add_widget(AYUserImage(highlight=True))
+        w.add_widget(AYUserImage(name="Oliver", outline=False))
+        w.add_widget(AYUserImage(name="Oliver", outline=False, highlight=True))
+        # Large (size=60)
+        w.add_widget(AYUserImage(src=_RSRC / "avatar1.jpg", outline=False, size=60))
+        w.add_widget(AYUserImage(src=_RSRC / "avatar2.jpg", highlight=True, size=60))
+        w.add_widget(AYUserImage(full_name="Oliver Cromwell", size=60))
+        w.add_widget(AYUserImage(name="Oliver", outline=False, size=60))
+        # Entity_Card variant (size=24)
+        w.add_widget(
+            AYUserImage(
+                name="Milan",
+                outline=False,
+                size=24,
+                variant=AYUserImage.Variants.Entity_Card,
+            )
+        )
+        w.add_widget(
+            AYUserImage(
+                src=_RSRC / "avatar1.jpg",
+                name="Milan",
+                outline=False,
+                size=24,
+                variant=AYUserImage.Variants.Entity_Card,
+            )
+        )
+        return w
 
     def steps(self):
         return []
