@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QPainter, QColor
 from qtpy.QtWidgets import QStyle, QStyleOptionButton, QWidget
 
 from widget_test import WidgetTest
@@ -167,6 +168,11 @@ class _CompositeMenuWidget(QWidget):
         super().__init__(parent)
         self._dropdown = dropdown
         self._button = button
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        p = QPainter(self)
+        p.fillRect(event.rect(), QColor("#272d35"))
+        return super().paintEvent(event)
 
     def grab(  # type: ignore[override]
         self,
