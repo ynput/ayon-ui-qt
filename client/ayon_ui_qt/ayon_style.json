@@ -674,6 +674,23 @@
                     "background-color": "--md-sys-color-surface-container-dark"
                 }
             }
+        },
+        "AYUserImage": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "initials-color": "--md-sys-color-on-surface-dark",
+                    "initials-background-color": "--md-ref-palette-secondary30",
+                    "outline-color": "--md-ref-palette-neutral70",
+                    "highlight-color": "--md-sys-color-tertiary-dark"
+                },
+                "entity-card": {
+                    "initials-color": "--md-sys-color-on-surface-dark",
+                    "initials-background-color": "--md-sys-color-surface-container-high-dark",
+                    "outline-color": "--md-sys-color-surface-container-high-dark",
+                    "highlight-color": "--md-sys-color-tertiary-dark"
+                }
+            }
         }
     },
     "layouts": {},
