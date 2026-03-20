@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import logging
 import os
+from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
+from qtpy.QtCore import Qt
 
 from .. import get_ayon_style, get_ayon_style_data
 from ..color_utils import compute_color_for_contrast
-from ..variants import QPushButtonVariants
+from ..variants import QPushButtonVariants, QFrameVariants
+
+logger = logging.getLogger(__name__)
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
@@ -165,6 +170,185 @@ class AYButton(QtWidgets.QPushButton):
         self.setIcon(icn)
 
 
+class _ButtonMenuDropdown(QtWidgets.QFrame):
+    """Floating dropdown popup for AYButtonMenu.
+
+    A frameless popup QFrame that is shown below (or above, if not
+    enough space) the parent button. It closes when it loses focus or
+    the user presses Escape.
+
+    Signals:
+        popup_closed: Emitted when the popup is hidden/closed.
+    """
+
+    popup_closed = QtCore.Signal()
+
+    def __init__(
+        self,
+        parent: QtWidgets.QWidget | None = None,
+    ) -> None:
+        """Initialize the dropdown popup frame.
+
+        Args:
+            parent: Optional parent widget (used for style inheritance).
+        """
+        super().__init__(parent)
+
+        self._variant_str = QFrameVariants.Low.value
+        self.setStyle(get_ayon_style())
+
+        self.setWindowFlags(
+            Qt.WindowType.Popup
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_WindowPropagation)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(0)
+
+    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
+        """Paint the frame using the AYON style.
+
+        Args:
+            arg__1: The paint event.
+        """
+        p = QtGui.QPainter(self)
+        option = QtWidgets.QStyleOptionFrame()
+        self.initStyleOption(option)
+        get_ayon_style().drawControl(
+            QtWidgets.QStyle.ControlElement.CE_ShapedFrame,
+            option,
+            p,
+            self,
+        )
+
+    def show_below(self, widget: QtWidgets.QWidget) -> None:
+        """Position and show the popup below (or above) the widget.
+
+        The popup is left-aligned with the widget's left edge. If there
+        is not enough space below on the screen, the popup is shown
+        above instead.
+
+        Args:
+            widget: The reference widget to position against.
+        """
+        global_pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height()))
+        self.adjustSize()
+
+        screen = QtWidgets.QApplication.screenAt(global_pos)
+        if screen:
+            screen_geo = screen.availableGeometry()
+
+            # Shift left if popup would overflow right edge
+            if global_pos.x() + self.width() > screen_geo.right():
+                global_pos.setX(screen_geo.right() - self.width())
+
+            # Show above if not enough vertical space below
+            popup_bottom = global_pos.y() + self.height()
+            if popup_bottom > screen_geo.bottom():
+                above_y = (
+                    widget.mapToGlobal(QtCore.QPoint(0, 0)).y() - self.height()
+                )
+                global_pos.setY(above_y)
+
+        self.move(global_pos)
+        self.show()
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        """Close on Escape key.
+
+        Args:
+            event: The key event.
+        """
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        """Emit popup_closed when the popup is hidden.
+
+        Args:
+            event: The close event.
+        """
+        self.popup_closed.emit()
+        super().closeEvent(event)
+
+
+class AYButtonMenu(AYButton):
+    """A push button that shows a floating dropdown panel when clicked.
+
+    When clicked, the button displays a ``QFrame`` popup positioned
+    directly below it (or above when screen space is insufficient). The
+    popup contents are provided by a caller-supplied
+    ``populate_callback`` which receives the dropdown ``QFrame``
+    container.
+
+    Clicking the button again or clicking outside the popup closes the
+    dropdown.
+
+    Example::
+
+        def populate(container: QtWidgets.QFrame) -> None:
+            btn = QPushButton("Option A", container)
+            container.layout().addWidget(btn)
+
+        menu_btn = AYButtonMenu("Options", populate_callback=populate)
+
+    Signals:
+        menu_opened: Emitted when the dropdown is shown.
+        menu_closed: Emitted when the dropdown is hidden.
+    """
+
+    menu_opened = QtCore.Signal()
+    menu_closed = QtCore.Signal()
+
+    def __init__(
+        self,
+        *args,
+        populate_callback: Callable[[QtWidgets.QFrame], None],
+        **kwargs,
+    ) -> None:
+        """Initialize the AYButtonMenu.
+
+        Args:
+            *args: Positional arguments forwarded to ``AYButton``.
+            populate_callback: A callable that receives the dropdown
+                ``QFrame`` container and is responsible for adding
+                child widgets to it.
+            **kwargs: Keyword arguments forwarded to ``AYButton``.
+        """
+        super().__init__(*args, **kwargs)
+
+        self._populate_callback = populate_callback
+        self._menu_open: bool = False
+
+        self._dropdown = _ButtonMenuDropdown()
+        self._populate_callback(self._dropdown)
+        self._dropdown.popup_closed.connect(self._on_popup_closed)
+
+        self.clicked.connect(self._on_button_clicked)
+
+    # --- Event handlers ---
+
+    def _on_button_clicked(self) -> None:
+        """Toggle the dropdown popup visibility."""
+        if self._menu_open:
+            self._dropdown.close()
+        else:
+            self._menu_open = True
+            self.menu_opened.emit()
+            self._dropdown.show_below(self)
+
+    def _on_popup_closed(self) -> None:
+        """Update state when the popup signals it has closed."""
+        self._menu_open = False
+        self.menu_closed.emit()
+
+
 # TEST =======================================================================
 
 
@@ -190,7 +374,7 @@ if __name__ == "__main__":
             layout_spacing=10,
             layout_margin=10,
         )
-        for i, var in enumerate(variants):
+        for var in variants:
             b = AYButton(
                 f"{var.value} button",
                 variant=var,
@@ -205,7 +389,7 @@ if __name__ == "__main__":
             layout_spacing=10,
             layout_margin=10,
         )
-        for i, var in enumerate(variants):
+        for var in variants:
             b = AYButton(
                 f"{var.value} button",
                 variant=var,
@@ -221,7 +405,7 @@ if __name__ == "__main__":
             layout_spacing=10,
             layout_margin=10,
         )
-        for i, var in enumerate(variants):
+        for var in variants:
             b = AYButton(
                 variant=var,
                 icon="home",
@@ -230,9 +414,42 @@ if __name__ == "__main__":
             l3.add_widget(b)
         l3.addStretch(1)
 
+        l4 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.Low,
+            parent=widget,
+            layout_spacing=10,
+            layout_margin=10,
+        )
+
+        def populate_menu(container: QtWidgets.QFrame) -> None:
+            layout = container.layout()
+            assert layout is not None
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.setSpacing(5)
+            for i in range(5):
+                btn = AYButton(
+                    f"Option {i + 1}",
+                    parent=container,
+                    variant=AYButton.Variants.Text,
+                    icon=f"counter_{i + 1}",
+                    checkable=True,
+                )
+                layout.addWidget(btn)
+
+        menu_btn = AYButtonMenu(
+            "Menu Button",
+            variant=QPushButtonVariants.Filled,
+            icon="layers",
+            populate_callback=populate_menu,
+        )
+        l4.add_widget(menu_btn)
+        l4.addStretch(1)
+
         widget.add_widget(l1)
         widget.add_widget(l2)
         widget.add_widget(l3)
+        widget.add_widget(l4)
 
         return widget
 
