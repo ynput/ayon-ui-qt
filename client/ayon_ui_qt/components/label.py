@@ -436,34 +436,28 @@ class AYLabel(QtWidgets.QLabel):
 
             return QSize(content_w + pad_x, content_h + pad_y)
 
-        explicit_padding = style_data.get("padding")
-        if explicit_padding and isinstance(explicit_padding, list):
-            # [vertical, horizontal] convention (same as CSS padding shorthand)
-            pad_v = int(explicit_padding[0])
-            pad_h = int(explicit_padding[1])
+        explicit_padding = style_data.get("padding", [0, 0])
+        # [vertical, horizontal] convention (same as CSS padding shorthand)
+        pad_v = int(explicit_padding[0])
+        pad_h = int(explicit_padding[1])
 
-            if icon_w and text_w:
-                spacing = int(
-                    style_data.get(
-                        "icon-text-spacing", self._icon_text_spacing
-                    )
-                )
-                content_w = icon_w + spacing + text_w
-                content_h = max(text_h, icon_h)
-            elif icon_w:
-                content_w = icon_w
-                content_h = icon_h
-            else:
-                content_w = text_w
-                content_h = text_h
-
-            return QSize(
-                content_w + 2 * pad_h,
-                content_h + 2 * pad_v,
+        if icon_w and text_w:
+            spacing = int(
+                style_data.get("icon-text-spacing", self._icon_text_spacing)
             )
+            content_w = icon_w + spacing + text_w
+            content_h = max(text_h, icon_h)
+        elif icon_w:
+            content_w = icon_w
+            content_h = icon_h
+        else:
+            content_w = text_w
+            content_h = text_h
 
-        # Fallback: let Qt compute the default size hint
-        return super().sizeHint()
+        return QSize(
+            content_w + 2 * pad_h,
+            content_h + 2 * pad_v,
+        )
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Recompute elided text when the widget is resized."""
