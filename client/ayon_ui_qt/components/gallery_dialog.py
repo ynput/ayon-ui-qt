@@ -59,6 +59,7 @@ class GalleryDialog(QDialog):
         self.setStyle(get_ayon_style())
         self.images = images
         self.current_index = current_index
+        self._dialog_size_set = False  # Track if dialog size has been set based on first image
 
         self.setWindowTitle("Image Preview")
 
@@ -205,7 +206,7 @@ class GalleryDialog(QDialog):
         self.image_label.setPixmap(display_pixmap)
 
         # Set dialog size once on first image, then keep it consistent
-        if not hasattr(self, "_dialog_size_set"):
+        if not self._dialog_size_set:
             self.resize(self.top_lyt.layout().sizeHint())
             self._dialog_size_set = True
 
