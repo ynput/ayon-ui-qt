@@ -339,7 +339,7 @@ class ScreenshotHandler:
                 if hasattr(self._parent, "add_attachment"):
                     self._parent.add_attachment(temp_path, "screenshot")
 
-                logger.debug(f"Screenshot attached: {temp_path}")
+                logger.debug("Screenshot attached: %s", temp_path)
 
         self._restore_window()
 
