@@ -8,6 +8,7 @@ from typing import List, Tuple
 from qtpy.QtCore import QEvent, Qt, Signal
 from qtpy.QtGui import QKeyEvent, QPixmap, QShowEvent
 from qtpy.QtWidgets import (
+    QApplication,
     QDialog,
     QLabel,
     QWidget,
@@ -189,7 +190,8 @@ class GalleryDialog(QDialog):
             return
 
         # Get screen dimensions for sizing
-        screen_size = self.screen().availableGeometry()
+        screen = self.screen() or QApplication.primaryScreen()
+        screen_size = screen.availableGeometry()
         max_w = int(screen_size.width() * 0.8)
         max_h = int(screen_size.height() * 0.8)
 
