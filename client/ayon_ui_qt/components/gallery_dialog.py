@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import List, Tuple
 
@@ -19,6 +20,8 @@ from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.label import AYLabel
 from ayon_ui_qt.components.layouts import AYVBoxLayout
+
+logger = logging.getLogger(__name__)
 
 
 class GalleryDialog(QDialog):
@@ -60,7 +63,8 @@ class GalleryDialog(QDialog):
         self.setStyle(get_ayon_style())
         self.images = images
         self.current_index = current_index
-        self._dialog_size_set = False  # Track if dialog size has been set based on first image
+        # Track if dialog size has been set based on first image
+        self._dialog_size_set = False
 
         self.setWindowTitle("Image Preview")
 
@@ -209,8 +213,12 @@ class GalleryDialog(QDialog):
 
         # Set dialog size once on first image, then keep it consistent
         if not self._dialog_size_set:
-            self.resize(self.top_lyt.layout().sizeHint())
-            self._dialog_size_set = True
+            _layout = self.top_lyt.layout()
+            if _layout:
+                self.resize(_layout.sizeHint())
+                self._dialog_size_set = True
+            else:
+                logger.warning("Failed to get layout to size the dialog")
 
         # Update navigation controls if multiple images
         if len(self.images) > 1:
