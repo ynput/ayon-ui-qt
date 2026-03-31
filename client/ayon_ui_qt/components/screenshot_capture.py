@@ -239,12 +239,19 @@ class ScreenMarquee(QObject):
             dialog.setWindowState(Qt.WindowState.WindowActive)
 
         app = QApplication.instance()
-        while not self._finished:
-            app.processEvents()
+        if app is not None:
+            while not self._finished:
+                app.processEvents()
 
-        # Give time to close dialogs
-        for _ in range(2):
-            app.processEvents()
+            # Give time to close dialogs
+            for _ in range(2):
+                app.processEvents()
+        else:
+            logger.error(
+                "No QApplication instance found. "
+                "Capture may not work properly."
+            )
+            self._finished = True
 
         if self._captured:
             self._pix = self.get_desktop_pixmap(self._start_pos, self._end_pos)
