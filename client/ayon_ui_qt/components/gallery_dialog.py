@@ -61,7 +61,7 @@ class GalleryDialog(QDialog):
         self.current_index = current_index
 
         self.setWindowTitle("Image Preview")
-        
+
         # Set focus policy so dialog can receive keyboard events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -73,7 +73,7 @@ class GalleryDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:
         """Handle dialog show event to set focus properly.
-        
+
         Args:
             event: Show event.
         """
@@ -234,21 +234,6 @@ class GalleryDialog(QDialog):
         if self.current_index < len(self.images) - 1:
             self.current_index += 1
             self._show_current_image()
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        """Handle keyboard navigation.
-
-        Args:
-            event: Key event to handle.
-        """
-        if event.key() == Qt.Key.Key_Left:
-            self._show_previous()
-        elif event.key() == Qt.Key.Key_Right:
-            self._show_next()
-        elif event.key() == Qt.Key.Key_Escape:
-            self.accept()
-        else:
-            super().keyPressEvent(event)
 
 
 if __name__ == "__main__":
