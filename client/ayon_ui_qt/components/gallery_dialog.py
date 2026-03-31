@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Tuple
 
-from qtpy.QtCore import QEvent, Qt, Signal
+from qtpy.QtCore import (
+    QEvent,
+    Qt,
+    Signal,  # type: ignore
+)
 from qtpy.QtGui import QPixmap, QShowEvent
 from qtpy.QtWidgets import (
     QApplication,
@@ -47,7 +50,7 @@ class GalleryDialog(QDialog):
 
     def __init__(
         self,
-        images: List[Tuple[str, str]],
+        images: list[tuple[str, str]],
         current_index: int = 0,
         parent: QWidget | None = None,
     ) -> None:
