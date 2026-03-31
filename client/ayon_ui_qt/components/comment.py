@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import logging
 import tempfile
+import webbrowser
 from pathlib import Path
 from shutil import rmtree
 
@@ -12,7 +13,7 @@ from qtpy.QtCore import (
     QPointF,
     QRect,
     Qt,
-    Signal,
+    Signal,  # type: ignore
 )
 from qtpy.QtGui import (
     QColor,
@@ -559,8 +560,6 @@ class AYCommentField(AYTextEdit):
         if self.isReadOnly():
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
-                import webbrowser
-
                 url = char_format.anchorHref()
                 webbrowser.open(url)
                 event.accept()
