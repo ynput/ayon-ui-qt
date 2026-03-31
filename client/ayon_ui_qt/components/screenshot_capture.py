@@ -81,17 +81,18 @@ class ScreenMarqueeDialog(QWidget):
 
         painter = QPainter(self)
         painter.setRenderHints(
-            QPainter.Antialiasing | QPainter.SmoothPixmapTransform
+            QPainter.RenderHint.Antialiasing
+            | QPainter.RenderHint.SmoothPixmapTransform
         )
 
         # Draw background
         painter.setBrush(QColor(0, 0, 0, self._opacity))
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPath(fill_path)
 
         # Draw cropping markers at current mouse position
         pen_color = QColor(255, 255, 255, self._opacity)
-        pen = QPen(pen_color, 1, Qt.DotLine)
+        pen = QPen(pen_color, 1, Qt.PenStyle.DotLine)
         painter.setPen(pen)
         painter.drawLine(
             rect.left(), mouse_pos.y(), rect.right(), mouse_pos.y()
@@ -103,9 +104,9 @@ class ScreenMarqueeDialog(QWidget):
         # Draw rectangle around selection area
         if capture_rect is not None:
             pen_color = QColor(92, 173, 214)
-            pen = QPen(pen_color, 2)
+            pen = QPen(pen_color, 2, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             l_x = capture_rect.left()
             r_x = capture_rect.right()
             if l_x > r_x:
@@ -124,13 +125,13 @@ class ScreenMarqueeDialog(QWidget):
 
     def mousePressEvent(self, event):
         """Mouse click event"""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self._click_pos = event.globalPos()
             self.mouse_pressed.emit(self._click_pos, self._screen_id)
 
     def mouseReleaseEvent(self, event):
         """Mouse release event"""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self._click_pos = None
             self.mouse_released.emit(event.globalPos())
 
@@ -140,7 +141,7 @@ class ScreenMarqueeDialog(QWidget):
 
     def keyPressEvent(self, event):
         """Key press event"""
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._click_pos = None
             event.accept()
             self.close_requested.emit()
@@ -235,7 +236,7 @@ class ScreenMarquee(QObject):
     def start_capture(self):
         for dialog in self._screens_by_id.values():
             dialog.show()
-            dialog.setWindowState(Qt.WindowActive)
+            dialog.setWindowState(Qt.WindowState.WindowActive)
 
         app = QApplication.instance()
         while not self._finished:
