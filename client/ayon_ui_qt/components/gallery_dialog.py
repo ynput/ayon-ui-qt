@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from qtpy.QtCore import QEvent, Qt, Signal
-from qtpy.QtGui import QKeyEvent, QPixmap, QShowEvent
+from qtpy.QtGui import QPixmap, QShowEvent
 from qtpy.QtWidgets import (
     QApplication,
     QDialog,
