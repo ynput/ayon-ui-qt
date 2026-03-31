@@ -60,6 +60,8 @@ from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
 
+logger = logging.getLogger(__name__)
+
 # STATUS ---------------------------------------------------------------------
 
 
@@ -493,7 +495,7 @@ class AYCommentField(AYTextEdit):
                     self._insert_checkbox_at_cursor(cursor)
                     cursor.endEditBlock()
                 except Exception as err:
-                    logging.debug("Error inserting checkbox: %s", err)
+                    logger.debug("Error inserting checkbox: %s", err)
                 finally:
                     self._suppress_formatting = False
                 self.setTextCursor(cursor)
@@ -789,7 +791,7 @@ class AYImageAttachment(QLabel):
         try:
             parent_layout = self.parentWidget().layout()
         except AttributeError:
-            logging.info(
+            logger.info(
                 "Parent widget has no valid layout for image collector"
             )
             return []  # invalid parent widget
