@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import logging
 import tempfile
+import webbrowser
 from pathlib import Path
 from shutil import rmtree
 
@@ -12,7 +13,7 @@ from qtpy.QtCore import (
     QPointF,
     QRect,
     Qt,
-    Signal,
+    Signal,  # type: ignore
 )
 from qtpy.QtGui import (
     QColor,
@@ -24,14 +25,7 @@ from qtpy.QtGui import (
     QTextCursor,
     QTextDocument,
 )
-from qtpy.QtWidgets import (
-    QDialog,
-    QLabel,
-    QMessageBox,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from qtpy.QtWidgets import QLabel, QLayout, QMessageBox, QTextEdit, QWidget
 
 from ..data_models import (
     CommentModel,
@@ -60,10 +54,13 @@ from .comment_completion import (
     setup_user_completer,
 )
 from .container import AYContainer, AYFrame
+from .gallery_dialog import GalleryDialog
 from .label import AYLabel, get_icon
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .text_edit import AYTextEdit
 from .user_image import AYUserImage
+
+logger = logging.getLogger(__name__)
 
 # STATUS ---------------------------------------------------------------------
 
@@ -498,7 +495,7 @@ class AYCommentField(AYTextEdit):
                     self._insert_checkbox_at_cursor(cursor)
                     cursor.endEditBlock()
                 except Exception as err:
-                    logging.debug("Error inserting checkbox: %s", err)
+                    logger.debug("Error inserting checkbox: %s", err)
                 finally:
                     self._suppress_formatting = False
                 self.setTextCursor(cursor)
@@ -565,8 +562,6 @@ class AYCommentField(AYTextEdit):
         if self.isReadOnly():
             # Check if the clicked text is a link (has anchor href)
             if char_format.isAnchor() and char_format.anchorHref():
-                import webbrowser
-
                 url = char_format.anchorHref()
                 webbrowser.open(url)
                 event.accept()
@@ -598,8 +593,16 @@ class AYCommentField(AYTextEdit):
 
 
 class AYImageAttachment(QLabel):
-    """Widget to display an image attachment with thumbnail and full-size
-    preview."""
+    """Widget to display an image attachment with thumbnail and full-size preview.
+
+    Supports gallery mode when multiple images are associated together.
+    When gallery_images is set, clicking the thumbnail opens a GalleryDialog
+    that allows navigating through all images.
+
+    Attributes:
+        gallery_images: List of (image_path, filename) tuples for gallery mode.
+        gallery_index: Current image index within the gallery.
+    """
 
     no_img = get_icon("panorama", color="#666666")
     cacher_tmp_dir: Path | None = None
@@ -613,6 +616,8 @@ class AYImageAttachment(QLabel):
         max_height: int = 47,
         frame: int = 0,
         file_id: str = "",
+        gallery_images: list | None = None,
+        gallery_index: int = 0,
     ):
         super().__init__(parent)
         self._image_path = image_path
@@ -620,7 +625,9 @@ class AYImageAttachment(QLabel):
         self._max_width = max_width
         self._max_height = max_height
         self._frame = frame
-        self.file_id = file_id
+        self._file_id = file_id
+        self._gallery_images = gallery_images or []
+        self._gallery_index = gallery_index
 
         self.setScaledContents(False)
         self.setAlignment(
@@ -641,6 +648,16 @@ class AYImageAttachment(QLabel):
         # Load and display thumbnail
         self._load_thumbnail()
         self._draw_icon = get_icon("draw", color="#eeeeee")
+
+    @property
+    def image_path(self) -> str:
+        """Get the path to the full-size image."""
+        return self._image_path
+
+    @property
+    def frame(self) -> int:
+        """Get the frame number associated with the image."""
+        return self._frame
 
     def _load_thumbnail(self):
         """Load and display the thumbnail image.
@@ -746,62 +763,72 @@ class AYImageAttachment(QLabel):
         super().mousePressEvent(event)
 
     def _show_full_size(self):
-        """Show full-size image in a dialog that respects aspect ratio."""
-        if not self._image_path or not Path(self._image_path).exists():
-            QMessageBox.warning(
-                self,
-                "Image Not Available",
-                "The full-size image is not available.",
-            )
-            return
+        """Show full-size image in a dialog that respects aspect ratio.
 
-        # Load the full-size image
-        original_pixmap = QPixmap(self._image_path)
+        Uses GalleryDialog for consistent UI regardless of whether there's
+        a single image or multiple images in the gallery.
+        """
 
-        if original_pixmap.isNull():
-            QMessageBox.warning(
-                self,
-                "Image Load Error",
-                "Failed to load the full-size image.",
-            )
-            return
+        # Collect gallery images if not already done
+        if not self._gallery_images or any(
+            t[0] == "" for t in self._gallery_images
+        ):
+            self._gallery_images = self._image_collector()
 
-        # Get screen dimensions
-        screen_size = self.screen().availableGeometry()
-        max_w = int(screen_size.width() * 0.8)
-        max_h = int(screen_size.height() * 0.8)
+        # Build gallery images list - use gallery_images if set, otherwise just this image
+        if self._gallery_images:
+            images = self._gallery_images
+            current_index = self._gallery_index
+        else:
+            # Single image case - still use gallery dialog for consistency
+            if not self._image_path or not Path(self._image_path).exists():
+                QMessageBox.warning(
+                    self,
+                    "Image Not Available",
+                    "The full-size image is not available.",
+                )
+                return
+            images = [(self._image_path, f"Frame {self._frame}")]
+            current_index = 0
 
-        # Scale if too large for screen while maintaining aspect ratio
-        display_pixmap = original_pixmap
-        if original_pixmap.width() > max_w or original_pixmap.height() > max_h:
-            display_pixmap = original_pixmap.scaled(
-                max_w,
-                max_h,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Image Preview")
-        dialog.setModal(True)
-
-        # Create layout
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        # Create label to display image
-        image_label = QLabel(dialog)
-        image_label.setPixmap(display_pixmap)
-        image_label.setScaledContents(False)
-        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        layout.addWidget(image_label)
-
-        # Set dialog size to match image
-        dialog.resize(display_pixmap.size())
-
-        # Show dialog
+        dialog = GalleryDialog(
+            images=images,
+            current_index=current_index,
+            parent=self,
+        )
         dialog.exec()
+
+    def set_gallery_images(self, images: list, current_index: int = 0) -> None:
+        """Set the gallery images for navigation.
+
+        Args:
+            images: List of (image_path, filename) tuples.
+            current_index: Index of this image in the gallery.
+        """
+        self._gallery_images = images
+        self._gallery_index = current_index
+
+    def _image_collector(self) -> list[tuple[str, str]]:
+        """Collect all images in the parent layout."""
+        try:
+            parent_layout = self.parentWidget().layout()
+        except AttributeError:
+            logger.info(
+                "Parent widget has no valid layout for image collector"
+            )
+            return []  # invalid parent widget
+
+        assert isinstance(parent_layout, QLayout)
+        image_list = []
+        for i in range(parent_layout.count()):
+            try:
+                widget = parent_layout.itemAt(i).widget()
+            except AttributeError:
+                continue  # invalid layout item
+            if isinstance(widget, AYImageAttachment):
+                image_list.append((widget.image_path, f"Frame {widget.frame}"))
+
+        return image_list
 
     @classmethod
     def get_cacher_tmp_dir(cls) -> Path:
@@ -986,7 +1013,11 @@ class AYComment(AYContainer):
         self._build_edit_buttons()
 
     def _build_image_attachments(self):
-        """Build and display image attachments as separate clickable widgets."""
+        """Build and display image attachments as separate clickable widgets.
+
+        Supports gallery view: when multiple images are present, clicking
+        any thumbnail opens a GalleryDialog for navigating through all images.
+        """
         if (
             not self._data
             or not hasattr(self._data, "files")
@@ -994,6 +1025,8 @@ class AYComment(AYContainer):
         ):
             return
 
+        # First pass: collect all valid images for gallery view
+        valid_files = []
         for file_model in self._data.files:
             # Check if this file is marked as transparent in annotations
             is_transparent = False
@@ -1013,12 +1046,21 @@ class AYComment(AYContainer):
             if not Path(file_model.local_path).exists():
                 continue
 
+            valid_files.append(file_model)
+
+        # Build gallery images list for navigation
+        gallery_images = [
+            (f.local_path, f"Frame {f.frame}") for f in valid_files
+        ]
+
+        # Second pass: create widgets with gallery support
+        for idx, file_model in enumerate(valid_files):
             max_image_width = 100
             max_image_height = 47
 
             thumb_path = getattr(file_model, "thumb_local_path", None)
 
-            # Create image widget with dynamic width matching text field
+            # Create image widget with gallery support
             image_widget = AYImageAttachment(
                 parent=self,
                 image_path=file_model.local_path,
@@ -1027,6 +1069,8 @@ class AYComment(AYContainer):
                 max_height=max_image_height,
                 frame=file_model.frame,
                 file_id=file_model.id,
+                gallery_images=gallery_images,
+                gallery_index=idx,
             )
 
             self.images_container.add_widget(image_widget)
