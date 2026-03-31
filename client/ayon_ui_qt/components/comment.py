@@ -647,6 +647,16 @@ class AYImageAttachment(QLabel):
         self._load_thumbnail()
         self._draw_icon = get_icon("draw", color="#eeeeee")
 
+    @property
+    def image_path(self) -> str:
+        """Get the path to the full-size image."""
+        return self._image_path
+
+    @property
+    def frame(self) -> int:
+        """Get the frame number associated with the image."""
+        return self._frame
+
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
         if not self._thumb_path or not Path(self._thumb_path).exists():
@@ -804,9 +814,7 @@ class AYImageAttachment(QLabel):
             except AttributeError:
                 continue  # invalid layout item
             if isinstance(widget, AYImageAttachment):
-                image_list.append(
-                    (widget._image_path, f"Frame {widget._frame}")
-                )
+                image_list.append((widget.image_path, f"Frame {widget.frame}"))
 
         return image_list
 
