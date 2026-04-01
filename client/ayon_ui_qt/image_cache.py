@@ -312,6 +312,12 @@ class ImageCache:
                 return None
             cached_path = Path(row[0])
             if not cached_path.exists():
+                # Remove stale DB entry when the underlying file is missing
+                self._db.execute(
+                    "DELETE FROM cache WHERE key = ?",
+                    (key,),
+                )
+                self._db.commit()
                 return None
             self._db.execute(
                 "UPDATE cache "
