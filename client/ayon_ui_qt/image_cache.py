@@ -334,21 +334,23 @@ class ImageCache:
         Raises:
             IOError: If the copy or rename fails.
         """
-        fd, tmp_path = tempfile.mkstemp(dir=self.cache_path)
+        tmp_path: str | None = None
         try:
-            try:
-                with os.fdopen(fd, "wb") as tmp_fh:
-                    with open(src, "rb") as src_fh:
-                        tmp_fh.write(src_fh.read())
-            except Exception:
-                os.close(fd)
-                raise
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=self.cache_path,
+                delete=False,
+            ) as tmp_fh:
+                tmp_path = tmp_fh.name
+                with open(src, "rb") as src_fh:
+                    tmp_fh.write(src_fh.read())
             os.replace(tmp_path, dst)
         except IOError as exc:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+            if tmp_path is not None:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
             raise IOError(f"Failed to cache file: {exc}") from exc
 
     def _generate_cache_filename(self, key: str, source_path: Path) -> str:
