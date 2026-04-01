@@ -40,7 +40,7 @@ from ..data_models import (
     User,
     VersionPublishModel,
 )
-from ..image_cache import ImageCache
+from ..image_cache import ImageCache, make_activity_cache_key
 from ..utils import color_blend
 from ..variants import QTextEditVariants
 from .buttons import AYButton
@@ -1105,7 +1105,12 @@ class AYComment(AYContainer):
             self.user_name.setText(self._data.user_name)
             self.date.setText(self._data.short_date)
 
-    def refresh_image(self, file_id: str, filepath: str | None) -> None:
+    def refresh_image(
+        self,
+        file_id: str,
+        filepath: str | None,
+        project_name: str,
+    ) -> None:
         """Refresh image attachment widget once a file download completes.
 
         Called by the activity stream when a background download finishes.
@@ -1114,16 +1119,28 @@ class AYComment(AYContainer):
 
         Args:
             file_id: The AYON file identifier.
-            filepath: Unused – paths are resolved from ImageCache.
+            filepath: Unused - paths are resolved from ImageCache.
+            project_name: AYON project name that owns the file, used to
+                build the cache key via
+                :func:`ayon_ui_qt.image_cache.make_activity_cache_key`.
         """
         ic = ImageCache.get_instance()
         image_attachment = self._image_widgets.get(file_id)
 
         if image_attachment is None and file_id in self._image_widgets:
-            # Widget placeholder registered but not yet created – build it
+            # Widget placeholder registered but not yet created - build it
             # now that the download has completed.
-            image_path = ic.get_path(f"act_{file_id}") or ""
-            thumb_path = ic.get_path(f"act_thumb_{file_id}") or None
+            image_path = (
+                ic.get_path(
+                    make_activity_cache_key(project_name, file_id)
+                )
+                or ""
+            )
+            thumb_path = ic.get_path(
+                make_activity_cache_key(
+                    project_name, file_id, is_thumbnail=True
+                )
+            )
             if not image_path:
                 return  # Full-size not ready yet; thumbnail alone is enough
             image_attachment = AYImageAttachment(
@@ -1140,11 +1157,19 @@ class AYComment(AYContainer):
         if isinstance(image_attachment, AYImageAttachment):
             if not image_attachment._thumb_path:
                 image_attachment._thumb_path = (
-                    ic.get_path(f"act_thumb_{file_id}") or ""
+                    ic.get_path(
+                        make_activity_cache_key(
+                            project_name, file_id, is_thumbnail=True
+                        )
+                    )
+                    or ""
                 )
             if not image_attachment._image_path:
                 image_attachment._image_path = (
-                    ic.get_path(f"act_{file_id}") or ""
+                    ic.get_path(
+                        make_activity_cache_key(project_name, file_id)
+                    )
+                    or ""
                 )
             if image_attachment._thumb_path or image_attachment._image_path:
                 image_attachment._load_thumbnail()

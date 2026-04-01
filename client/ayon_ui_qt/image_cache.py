@@ -332,3 +332,28 @@ class ImageCache:
             self._save_metadata()
         except Exception as e:
             logger.error(f"Failed to save cache metadata: {e}")
+
+
+def make_activity_cache_key(
+    project_name: str,
+    file_id: str,
+    is_thumbnail: bool = False,
+) -> str:
+    """Build the ImageCache key for an activity-attached file.
+
+    Both the producer (download enqueue) and the consumer (UI refresh)
+    must use this function so that they always agree on the key, and so
+    that entries from different projects never collide.
+
+    Args:
+        project_name: AYON project name that owns the file.
+        file_id: The AYON file identifier.
+        is_thumbnail: Whether the key is for the thumbnail variant.
+
+    Returns:
+        Cache key string in the form
+        ``act_<project_name>_<file_id>`` or
+        ``act_thumb_<project_name>_<file_id>``.
+    """
+    prefix = "thumb_" if is_thumbnail else ""
+    return f"act_{prefix}{project_name}_{file_id}"
