@@ -54,7 +54,7 @@ def src_dir(tmp_path: Path) -> Path:
 def cache(cache_dir: Path) -> Iterator[ImageCache]:
     ic = _fresh_cache(cache_dir)
     yield ic
-    ic._db.close()
+    ic._close_all_connections()
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ def test_get_cache_miss(cache: ImageCache, src_dir: Path) -> None:
 
     assert len(calls) == 1
     assert Path(result).exists()
-    row = cache._db.execute(
+    row = cache._get_conn().execute(
         "SELECT file_path FROM cache WHERE key = ?", ("key1",)
     ).fetchone()
     assert row is not None
@@ -147,13 +147,13 @@ def test_get_path_returns_path(cache: ImageCache, src_dir: Path) -> None:
     src = _make_source_file(src_dir)
     cache.get("key1", lambda: src)
 
-    before = cache._db.execute(
+    before = cache._get_conn().execute(
         "SELECT access_count FROM cache WHERE key = ?", ("key1",)
     ).fetchone()[0]
 
     result = cache.get_path("key1")
 
-    after = cache._db.execute(
+    after = cache._get_conn().execute(
         "SELECT access_count FROM cache WHERE key = ?", ("key1",)
     ).fetchone()[0]
 
@@ -200,7 +200,7 @@ def test_eviction_lru(cache_dir: Path, src_dir: Path) -> None:
             "At least one recent entry must survive"
         )
     finally:
-        ic._db.close()
+        ic._close_all_connections()
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ def test_validate_cache_files(cache_dir: Path, src_dir: Path) -> None:
     ic = _fresh_cache(cache_dir)
     src = _make_source_file(src_dir)
     cached = ic.get("key1", lambda: src)
-    ic._db.close()
+    ic._close_all_connections()
 
     # Delete the file while the cache is "down"
     Path(cached).unlink()
@@ -221,12 +221,12 @@ def test_validate_cache_files(cache_dir: Path, src_dir: Path) -> None:
     # Re-open — _validate_cache_files() runs in _initialize()
     ic2 = _fresh_cache(cache_dir)
     try:
-        row = ic2._db.execute(
+        row = ic2._get_conn().execute(
             "SELECT key FROM cache WHERE key = ?", ("key1",)
         ).fetchone()
         assert row is None
     finally:
-        ic2._db.close()
+        ic2._close_all_connections()
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +287,7 @@ def test_concurrent_threads(cache: ImageCache, src_dir: Path) -> None:
     assert not errors, f"Thread errors: {errors}"
     assert len(results) == 20
     # DB must be consistent — no duplicate keys
-    rows = cache._db.execute("SELECT key FROM cache").fetchall()
+    rows = cache._get_conn().execute("SELECT key FROM cache").fetchall()
     keys = [r[0] for r in rows]
     assert len(keys) == len(set(keys))
 
@@ -310,7 +310,7 @@ def test_legacy_json_cleanup(cache_dir: Path) -> None:
         assert not legacy_json.exists()
         assert not legacy_lock.exists()
     finally:
-        ic._db.close()
+        ic._close_all_connections()
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +322,7 @@ def _worker_process(cache_dir: str, key: str, src_file: str) -> None:
     """Target function for subprocess workers."""
     ic = _fresh_cache(Path(cache_dir))
     ic.get(key, lambda: Path(src_file))
-    ic._db.close()
+    ic._close_all_connections()
 
 
 def test_concurrent_processes(cache_dir: Path, src_dir: Path) -> None:
