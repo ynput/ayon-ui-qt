@@ -107,8 +107,35 @@ class ImageCache:
             cache_path: Directory path for storing cached files.
             max_size_in_MB: Maximum cache size in megabytes.
         """
-        raw_size = os.environ.get("AYON_IMG_CACHE_SIZE", max_size_in_MB)
-        self.max_size_in_MB = int(raw_size)
+        raw_size_env = os.environ.get("AYON_IMG_CACHE_SIZE")
+        if raw_size_env is not None:
+            try:
+                parsed_size = int(raw_size_env)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Environment variable AYON_IMG_CACHE_SIZE must be an integer "
+                    f"number of megabytes, got {raw_size_env!r}"
+                ) from exc
+            if parsed_size <= 0:
+                raise ValueError(
+                    f"Environment variable AYON_IMG_CACHE_SIZE must be a positive "
+                    f"integer number of megabytes, got {raw_size_env!r}"
+                )
+            self.max_size_in_MB = parsed_size
+        else:
+            try:
+                parsed_size = int(max_size_in_MB)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"max_size_in_MB must be an integer number of megabytes, "
+                    f"got {max_size_in_MB!r}"
+                ) from exc
+            if parsed_size <= 0:
+                raise ValueError(
+                    f"max_size_in_MB must be a positive integer number of "
+                    f"megabytes, got {max_size_in_MB!r}"
+                )
+            self.max_size_in_MB = parsed_size
         self.max_size_bytes = self.max_size_in_MB * 1024 * 1024
 
         self.cache_path = (
