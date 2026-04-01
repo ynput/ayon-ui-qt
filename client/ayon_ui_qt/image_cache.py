@@ -285,7 +285,13 @@ class ImageCache:
             ).fetchone()
             if row is None:
                 return False
-            return Path(row[0]).exists()
+            cached_path = Path(row[0])
+            if cached_path.exists():
+                return True
+            # File gone — purge the stale row to keep DB in sync with disk
+            self._db.execute("DELETE FROM cache WHERE key = ?", (key,))
+            self._db.commit()
+            return False
 
     def get_path(self, key: str) -> str | None:
         """Return the cached file path for *key* if it exists, else None.
