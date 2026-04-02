@@ -75,9 +75,11 @@ def test_get_cache_miss(cache: ImageCache, src_dir: Path) -> None:
 
     assert len(calls) == 1
     assert Path(result).exists()
-    row = cache._get_conn().execute(
-        "SELECT file_path FROM cache WHERE key = ?", ("key1",)
-    ).fetchone()
+    row = (
+        cache._get_conn()
+        .execute("SELECT file_path FROM cache WHERE key = ?", ("key1",))
+        .fetchone()
+    )
     assert row is not None
     assert Path(row[0]) == Path(result)
 
@@ -147,15 +149,19 @@ def test_get_path_returns_path(cache: ImageCache, src_dir: Path) -> None:
     src = _make_source_file(src_dir)
     cache.get("key1", lambda: src)
 
-    before = cache._get_conn().execute(
-        "SELECT access_count FROM cache WHERE key = ?", ("key1",)
-    ).fetchone()[0]
+    before = (
+        cache._get_conn()
+        .execute("SELECT access_count FROM cache WHERE key = ?", ("key1",))
+        .fetchone()[0]
+    )
 
     result = cache.get_path("key1")
 
-    after = cache._get_conn().execute(
-        "SELECT access_count FROM cache WHERE key = ?", ("key1",)
-    ).fetchone()[0]
+    after = (
+        cache._get_conn()
+        .execute("SELECT access_count FROM cache WHERE key = ?", ("key1",))
+        .fetchone()[0]
+    )
 
     assert result is not None
     assert Path(result).exists()
@@ -221,9 +227,11 @@ def test_validate_cache_files(cache_dir: Path, src_dir: Path) -> None:
     # Re-open — _validate_cache_files() runs in _initialize()
     ic2 = _fresh_cache(cache_dir)
     try:
-        row = ic2._get_conn().execute(
-            "SELECT key FROM cache WHERE key = ?", ("key1",)
-        ).fetchone()
+        row = (
+            ic2._get_conn()
+            .execute("SELECT key FROM cache WHERE key = ?", ("key1",))
+            .fetchone()
+        )
         assert row is None
     finally:
         ic2._close_all_connections()
