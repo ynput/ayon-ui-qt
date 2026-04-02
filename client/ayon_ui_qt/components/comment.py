@@ -1014,7 +1014,6 @@ class AYComment(AYContainer):
                 # Register as None so refresh_image can create the widget
                 # once the background download completes.
                 self._image_widgets.setdefault(file_model.id, None)
-                continue
 
             max_image_width = 100
             max_image_height = 47
