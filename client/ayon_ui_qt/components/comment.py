@@ -12,7 +12,7 @@ from qtpy.QtCore import (
     QPointF,
     QRect,
     Qt,
-    Signal, # type: ignore
+    Signal,  # type: ignore
 )
 from qtpy.QtGui import (
     QColor,
@@ -650,7 +650,6 @@ class AYImageAttachment(QLabel):
         if AYImageAttachment.no_img is None:
             AYImageAttachment.no_img = get_icon("panorama", color="#666666")
 
-        # print(f'placeholder ? {self._thumb_path}')
         if not self._thumb_path or not Path(self._thumb_path).exists():
             self.setPixmap(AYImageAttachment.no_img.pixmap(32, 32))
             return
@@ -1135,7 +1134,7 @@ class AYComment(AYContainer):
             # now that the download has completed.
             image_path = (
                 ic.get_path(
-                    make_activity_cache_key(project_name, file_id)
+                    make_activity_cache_key(project_name, file_id),
                 )
                 or ""
             )
@@ -1170,7 +1169,7 @@ class AYComment(AYContainer):
             if not image_attachment._image_path:
                 image_attachment._image_path = (
                     ic.get_path(
-                        make_activity_cache_key(project_name, file_id)
+                        make_activity_cache_key(project_name, file_id),
                     )
                     or ""
                 )
