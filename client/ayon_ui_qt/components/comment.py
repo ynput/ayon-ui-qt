@@ -601,7 +601,7 @@ class AYImageAttachment(QLabel):
     """Widget to display an image attachment with thumbnail and full-size
     preview."""
 
-    no_img = get_icon("panorama", color="#666666")
+    no_img = None
     cacher_tmp_dir: Path | None = None
 
     def __init__(
@@ -647,8 +647,12 @@ class AYImageAttachment(QLabel):
 
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
+        if AYImageAttachment.no_img is None:
+            AYImageAttachment.no_img = get_icon("panorama", color="#666666")
+
+        # print(f'placeholder ? {self._thumb_path}')
         if not self._thumb_path or not Path(self._thumb_path).exists():
-            self.setPixmap(self.no_img.pixmap(32, 32))
+            self.setPixmap(AYImageAttachment.no_img.pixmap(32, 32))
             return
 
         thumb_path = Path(self._thumb_path)
