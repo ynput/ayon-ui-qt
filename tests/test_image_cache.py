@@ -11,7 +11,7 @@ from typing import Iterator
 
 import pytest
 
-from ayon_ui_qt.image_cache import ImageCache
+from ayon_ui_qt.image_cache import ImageCache, _DB_FILENAME
 
 
 # ---------------------------------------------------------------------------
@@ -354,3 +354,31 @@ def test_concurrent_processes(cache_dir: Path, src_dir: Path) -> None:
         assert len(keys) == 4, f"Expected 4 entries, got {len(keys)}"
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# test AYON_IMG_CACHE_CLEAR_ON_STARTUP
+# ---------------------------------------------------------------------------
+
+
+def test_clear_on_startup(cache_dir: Path, src_dir: Path) -> None:
+    """If AYON_IMG_CACHE_CLEAR_ON_STARTUP is set, cache files are deleted on init."""
+    # Create some dummy cache files
+    for i in range(5):
+        _make_source_file(src_dir, name=f"src_{i}.png")
+
+    # Set the environment variable and re-initialize the cache
+    import os
+
+    os.environ["AYON_IMG_CACHE_CLEAR_ON_STARTUP"] = "1"
+    ic = _fresh_cache(cache_dir)
+    try:
+        # Only the DB file should remain
+        remaining_files = list(cache_dir.iterdir())
+        assert all(_DB_FILENAME in f.name for f in remaining_files), (
+            f"Unexpected files in cache: {remaining_files}. "
+            f"Only {_DB_FILENAME}[-wal, -shm] should remain after clear "
+            "on startup"
+        )
+    finally:
+        ic._close_all_connections()

@@ -15,6 +15,8 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+_DB_FILENAME = "cache_metadata.db"
+
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS cache (
     key           TEXT PRIMARY KEY,
@@ -181,7 +183,7 @@ class ImageCache:
         )
         self.cache_path.mkdir(parents=True, exist_ok=True)
 
-        self._db_path = self.cache_path / "cache_metadata.db"
+        self._db_path = self.cache_path / _DB_FILENAME
 
         # Per-thread connection storage.
         self._local = threading.local()
@@ -221,6 +223,8 @@ class ImageCache:
         count = 0
         for entry in os.scandir(self.cache_path):
             if entry.is_file() and entry.name != self._db_path.name:
+                if _DB_FILENAME in entry.path:
+                    continue
                 try:
                     os.remove(entry.path)
                     count += 1
