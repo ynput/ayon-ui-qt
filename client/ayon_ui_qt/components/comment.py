@@ -34,7 +34,7 @@ from ..data_models import (
     User,
     VersionPublishModel,
 )
-from ..image_cache import ImageCache
+from ..image_cache import ImageCache, make_activity_cache_key
 from ..utils import color_blend
 from ..variants import QTextEditVariants
 from .buttons import AYButton
@@ -604,14 +604,14 @@ class AYImageAttachment(QLabel):
         gallery_index: Current image index within the gallery.
     """
 
-    no_img = get_icon("panorama", color="#666666")
+    no_img = None
     cacher_tmp_dir: Path | None = None
 
     def __init__(
         self,
         parent: QWidget | None = None,
-        image_path: str = "",
-        thumb_path: str = "",
+        image_path: str | None = None,
+        thumb_path: str | None = None,
         max_width: int = 100,
         max_height: int = 47,
         frame: int = 0,
@@ -621,6 +621,11 @@ class AYImageAttachment(QLabel):
         super().__init__(parent)
         self._image_path = image_path
         self._thumb_path = thumb_path or image_path
+        if (
+            self._thumb_path is not None
+            and not Path(self._thumb_path).exists()
+        ):
+            self._thumb_path = None
         self._max_width = max_width
         self._max_height = max_height
         self._frame = frame
@@ -659,8 +664,11 @@ class AYImageAttachment(QLabel):
 
     def _load_thumbnail(self):
         """Load and display the thumbnail image."""
+        if AYImageAttachment.no_img is None:
+            AYImageAttachment.no_img = get_icon("panorama", color="#666666")
+
         if not self._thumb_path or not Path(self._thumb_path).exists():
-            self.setPixmap(self.no_img.pixmap(32, 32))
+            self.setPixmap(AYImageAttachment.no_img.pixmap(32, 32))
             return
 
         thumb_path = Path(self._thumb_path)
@@ -668,11 +676,11 @@ class AYImageAttachment(QLabel):
 
         def _thumbnail_cacher() -> Path:
             """Cache the scaled-down thumbnail image."""
-            # print(f"Caching thumbnail for {thumb_path}")
-            pixmap = QPixmap(self._thumb_path)
+            pixmap = QPixmap(self._thumb_path or "")
             if pixmap.isNull():
-                self.setText("Failed to load image")
-                return Path()
+                raise ValueError(
+                    f"Cannot load image from path: {self._thumb_path!r}"
+                )
 
             # Scale pixmap to fit within max dimensions while maintaining
             # aspect ratio.
@@ -1030,9 +1038,14 @@ class AYComment(AYContainer):
             if not hasattr(file_model, "local_path"):
                 continue
 
-            # Check if path exists
-            if not Path(file_model.local_path).exists():
-                continue
+            # Guard against empty path: Path("") resolves to Path(".")
+            # which always exists (current directory), leading to errors when
+            # trying to cache it as an image.
+            local_path = file_model.local_path
+            if not local_path or not Path(local_path).exists():
+                # Register as None so refresh_image can create the widget
+                # once the background download completes.
+                self._image_widgets.setdefault(file_model.id, None)
 
             valid_files.append(file_model)
 
@@ -1046,12 +1059,13 @@ class AYComment(AYContainer):
             max_image_width = 100
             max_image_height = 47
 
-            thumb_path = getattr(file_model, "thumb_local_path", None)
+            # coerce any invalid thumb path to None.
+            thumb_path = getattr(file_model, "thumb_local_path", None) or None
 
             # Create image widget with gallery support
             image_widget = AYImageAttachment(
                 parent=self,
-                image_path=file_model.local_path,
+                image_path=local_path,
                 thumb_path=thumb_path,
                 max_width=max_image_width,
                 max_height=max_image_height,
@@ -1137,18 +1151,73 @@ class AYComment(AYContainer):
             self.user_name.setText(self._data.user_name)
             self.date.setText(self._data.short_date)
 
-    def refresh_image(self, file_id, filepath):
+    def refresh_image(
+        self,
+        file_id: str,
+        filepath: str | None,
+        project_name: str,
+    ) -> None:
+        """Refresh image attachment widget once a file download completes.
+
+        Called by the activity stream when a background download finishes.
+        If the widget hasn't been created yet (path was unavailable at build
+        time), creates and adds it now.
+
+        Args:
+            file_id: The AYON file identifier.
+            filepath: Unused - paths are resolved from ImageCache.
+            project_name: AYON project name that owns the file, used to
+                build the cache key via
+                :func:`ayon_ui_qt.image_cache.make_activity_cache_key`.
+        """
+        ic = ImageCache.get_instance()
         image_attachment = self._image_widgets.get(file_id)
+
+        if image_attachment is None and file_id in self._image_widgets:
+            # Widget placeholder registered but not yet created - build it
+            # now that the download has completed.
+            image_path = (
+                ic.get_path(
+                    make_activity_cache_key(project_name, file_id),
+                )
+                or ""
+            )
+            thumb_path = ic.get_path(
+                make_activity_cache_key(
+                    project_name, file_id, is_thumbnail=True
+                )
+            )
+            if not image_path:
+                return  # Full-size not ready yet; thumbnail alone is enough
+            image_attachment = AYImageAttachment(
+                parent=self,
+                image_path=image_path,
+                thumb_path=thumb_path,
+                max_width=100,
+                max_height=47,
+            )
+            self.images_container.add_widget(image_attachment)
+            self._image_widgets[file_id] = image_attachment
+            return
+
         if isinstance(image_attachment, AYImageAttachment):
             if not image_attachment._thumb_path:
-                ic = ImageCache.get_instance()
-                image_attachment._thumb_path = ic.get_path(
-                    f"act_thumb_{file_id}"
+                image_attachment._thumb_path = (
+                    ic.get_path(
+                        make_activity_cache_key(
+                            project_name, file_id, is_thumbnail=True
+                        )
+                    )
+                    or ""
                 )
             if not image_attachment._image_path:
-                ic = ImageCache.get_instance()
-                image_attachment._image_path = ic.get_path(f"act_{file_id}")
-            if image_attachment:
+                image_attachment._image_path = (
+                    ic.get_path(
+                        make_activity_cache_key(project_name, file_id),
+                    )
+                    or ""
+                )
+            if image_attachment._thumb_path or image_attachment._image_path:
                 image_attachment._load_thumbnail()
 
     def _on_checklist_changed(self):
