@@ -622,22 +622,23 @@ class ImageCache:
         ).fetchone()
         return int(row[0])
 
-    def _save_metadata(self) -> None:
-        """Save cache metadata to JSON file."""
-        try:
-            with self._access_lock:
-                with open(self._metadata_file, "w") as fw:
-                    json.dump(self._metadata, fw, indent=4)
-            logger.debug("Cache metadata saved")
-        except IOError as e:
-            logger.error(f"Failed to save cache metadata: {e}")
+    def _validate_cache_files(self) -> None:
+        """Remove DB entries whose files no longer exist on disk."""
+        conn = self._get_conn()
+        rows = conn.execute("SELECT key, file_path FROM cache").fetchall()
 
-    def __del__(self) -> None:
-        """Save metadata when cache is destroyed."""
-        try:
-            self._save_metadata()
-        except Exception as e:
-            logger.error(f"Failed to save cache metadata: {e}")
+        invalid_keys = [key for key, fp in rows if not Path(fp).exists()]
+
+        if not invalid_keys:
+            return
+
+        placeholders = ",".join("?" * len(invalid_keys))
+        conn.execute(
+            f"DELETE FROM cache WHERE key IN ({placeholders})",
+            invalid_keys,
+        )
+        conn.commit()
+        logger.debug(f"Removed {len(invalid_keys)} invalid cache entries")
 
 
 def make_activity_cache_key(
