@@ -741,7 +741,7 @@ class AYImageAttachment(QLabel):
         painter.drawText(
             lrect.adjusted(16 + 4, 0, 0, 0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            str(self._frame),
+            str(self._frame if self._frame > 0 else "n/a"),
         )
 
     def mousePressEvent(self, event):
@@ -1038,7 +1038,11 @@ class AYComment(AYContainer):
 
         # Build gallery images list for navigation
         gallery_images = [
-            (f.local_path, f"Frame {f.frame}") for f in valid_files
+            (
+                f.local_path,
+                f"Frame {f.start_frame + f.frame - 1 if f.frame > 0 else -1}",
+            )
+            for f in valid_files
         ]
 
         # Second pass: create widgets with gallery support
@@ -1048,6 +1052,16 @@ class AYComment(AYContainer):
 
             thumb_path = getattr(file_model, "thumb_local_path", None)
 
+            # frame sequences start at 1, so we need to subtract 1 to get the
+            # actual frame number.
+            # if frame is 0 or negative, we treat it as n/a. This happens when
+            # attaching a screenshot or external file.
+            frame = (
+                file_model.start_frame + file_model.frame - 1
+                if file_model.frame > 0
+                else -1
+            )
+
             # Create image widget with gallery support
             image_widget = AYImageAttachment(
                 parent=self,
@@ -1055,7 +1069,7 @@ class AYComment(AYContainer):
                 thumb_path=thumb_path,
                 max_width=max_image_width,
                 max_height=max_image_height,
-                frame=file_model.frame,
+                frame=frame,
                 gallery_images=gallery_images,
                 gallery_index=idx,
             )
