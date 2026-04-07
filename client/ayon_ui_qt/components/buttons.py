@@ -315,7 +315,7 @@ class AYButtonMenu(AYButton):
     def __init__(
         self,
         *args,
-        populate_callback: Callable[[QtWidgets.QFrame], None],
+        populate_callback: Callable[[AYContainer], None],
         **kwargs,
     ) -> None:
         """Initialize the AYButtonMenu.
@@ -332,7 +332,7 @@ class AYButtonMenu(AYButton):
         self._populate_callback = populate_callback
         self._menu_open: bool = False
 
-        self._dropdown = _ButtonMenuDropdown()
+        self._dropdown = _ButtonMenuDropdown(self)
         self._populate_callback(self._dropdown)
         self._dropdown.popup_closed.connect(self._on_popup_closed)
 
@@ -428,7 +428,7 @@ if __name__ == "__main__":
             layout_margin=10,
         )
 
-        def populate_menu(container: QtWidgets.QFrame) -> None:
+        def populate_menu(container: AYContainer) -> None:
             layout = container.layout()
             assert layout is not None
             layout.setContentsMargins(10, 10, 10, 10)
