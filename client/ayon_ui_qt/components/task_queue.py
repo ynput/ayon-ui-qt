@@ -8,10 +8,10 @@ run **in parallel** rather than serially.
 
 Key optimisations vs. the original single-worker design:
 
-* **No polling sleep** – the dispatch loop blocks on a ``threading.Event``
+* **No polling sleep** - the dispatch loop blocks on a ``threading.Event``
   that is set by :meth:`AsyncTaskQueue.enqueue` the instant a new task
   arrives, so there is zero idle wait between tree-expansion waves.
-* **Parallel execution** – up to ``num_workers`` fetch tasks run at the
+* **Parallel execution** - up to ``num_workers`` fetch tasks run at the
   same time, halving the effective latency when expanding N sibling nodes
   from O(N × round-trip) to O(round-trip / num_workers × N).
 
@@ -142,13 +142,13 @@ class AsyncTaskQueue(QThread):
     This removes two performance bottlenecks that made multi-level tree
     expansion slow in the original single-worker design:
 
-    1. **No idle polling** – instead of sleeping 50 ms when the queue is
+    1. **No idle polling** - instead of sleeping 50 ms when the queue is
        empty, the dispatch loop blocks on a ``threading.Event`` that
        :meth:`enqueue` sets immediately, so there is zero dead time between
        a tree-level's results arriving on the main thread, new
        ``fetchMore`` calls being enqueued, and those fetches starting.
 
-    2. **Parallel execution** – up to ``num_workers`` fetches run
+    2. **Parallel execution** - up to ``num_workers`` fetches run
        concurrently, so expanding a folder with N children takes
        ``ceil(N / num_workers)`` round-trips instead of N.
 
@@ -247,7 +247,7 @@ class AsyncTaskQueue(QThread):
                 log.exception("Callback execution failed: %s", e)
 
     def run(self) -> None:
-        """Dispatch loop – runs in the QThread context.
+        """Dispatch loop - runs in the QThread context.
 
         Dequeues the highest-priority pending task and submits it to the
         thread pool.  Blocks on ``_task_available`` when the queue is empty

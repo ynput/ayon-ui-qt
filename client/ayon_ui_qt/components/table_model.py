@@ -110,7 +110,7 @@ class BatchFetchRequest:
         sort_key: Column key for server-side sorting, or ``None``.
         descending: ``True`` for descending sort order.
         parent_id: The ``"id"`` value of the parent row, or ``None`` for
-            the invisible root (never used in batch – root is always
+            the invisible root (never used in batch - root is always
             fetched individually).
     """
 

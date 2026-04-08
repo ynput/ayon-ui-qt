@@ -22,7 +22,7 @@ class LabelTest(WidgetTest):
             layout_spacing=10,
         )
 
-        # Default variant – plain, dim, bold
+        # Default variant - plain, dim, bold
         row_default = AYContainer(
             layout=AYContainer.Layout.HBox,
             layout_margin=0,

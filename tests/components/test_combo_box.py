@@ -23,7 +23,7 @@ class ComboBoxTest(WidgetTest):
             layout_spacing=12,
         )
 
-        # Row 1: Default variant – Full mode
+        # Row 1: Default variant - Full mode
         row1 = AYContainer(
             layout=AYContainer.Layout.HBox,
             layout_margin=0,

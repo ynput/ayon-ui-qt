@@ -22,7 +22,7 @@ class LineEditTest(WidgetTest):
             layout_spacing=12,
         )
 
-        # Default variant – empty, with placeholder, with text
+        # Default variant - empty, with placeholder, with text
         row1 = AYContainer(
             layout=AYContainer.Layout.VBox,
             layout_margin=0,

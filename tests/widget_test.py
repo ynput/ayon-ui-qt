@@ -17,7 +17,7 @@ class WidgetTest:
 
     Class attributes:
         size: Widget dimensions (width, height) applied before first snapshot.
-        tolerance: Per-pixel diff tolerance in the 0.0–1.0 range, passed to
+        tolerance: Per-pixel diff tolerance in the 0.0-1.0 range, passed to
             image_regression.check(diff_threshold=...).
     """
 
