@@ -26,6 +26,7 @@ class QCheckBoxVariants(Enum):
     Secondary = "secondary"
     Tertiary = "tertiary"
     Button = "button"
+    Menu = "menu"
 
 
 class QTextEditVariants(Enum):

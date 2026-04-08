@@ -1030,10 +1030,15 @@ class CheckboxDrawer:
             "QCheckBox",
             variant=variant,
         )
+        metrics_h = widget.fontMetrics().height() if widget else 18
+        metrics_w = metrics_h * 2 if widget else 32
+
         if metric == QStyle.PixelMetric.PM_IndicatorWidth:
-            return style.get("indicator-width", 32)
+            # is indicator-width == 0, use the 2x the font height.
+            return style.get("indicator-width", metrics_w) or metrics_w
         elif metric == QStyle.PixelMetric.PM_IndicatorHeight:
-            return style.get("indicator-height", 18)
+            # is indicator-height == 0, use the font height.
+            return style.get("indicator-height", metrics_h) or metrics_h
         elif metric == QStyle.PixelMetric.PM_CheckBoxLabelSpacing:
             return style.get("checkbox-label-spacing", 8)
         return 0

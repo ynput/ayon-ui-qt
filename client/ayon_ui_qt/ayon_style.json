@@ -303,6 +303,10 @@
                         "indicator-color": "--md-sys-color-on-primary-dark",
                         "indicator-background-color": "--md-sys-color-primary-dark"
                     }
+                },
+                "menu": {
+                    "indicator-width": 0,
+                    "indicator-height": 0
                 }
             }
         },
