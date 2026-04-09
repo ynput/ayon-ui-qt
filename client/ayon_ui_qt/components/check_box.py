@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QRect, QSize
 from qtpy.QtGui import QPainter, QPaintEvent
-from qtpy.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
+from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
 from .. import get_ayon_style
 from ..variants import QCheckBoxVariants
@@ -49,8 +49,43 @@ class AYCheckBox(QCheckBox):
         option = QStyleOptionButton()
         self.initStyleOption(option)
         _style = get_ayon_style()
-        _style.drawControl(QStyle.ControlElement.CE_CheckBox, option, p, self)
-        return
+
+        _expanding = self.sizePolicy().horizontalPolicy() in (
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.MinimumExpanding,
+        )
+        if _expanding:
+            ind_w = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, self
+            )
+            ind_h = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorHeight, option, self
+            )
+            spacing = _style.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, self
+            )
+            cy = self.height() // 2
+
+            ind_opt = QStyleOptionButton(option)
+            ind_opt.rect = QRect(0, cy - ind_h // 2, ind_w, ind_h)
+            _style.drawPrimitive(
+                QStyle.PrimitiveElement.PE_IndicatorCheckBox, ind_opt, p, self
+            )
+
+            label_opt = QStyleOptionButton(option)
+            label_opt.rect = QRect(
+                ind_w + spacing,
+                0,
+                self.width() - ind_w - spacing,
+                self.height(),
+            )
+            _style.drawControl(
+                QStyle.ControlElement.CE_CheckBoxLabel, label_opt, p, self
+            )
+        else:
+            _style.drawControl(
+                QStyle.ControlElement.CE_CheckBox, option, p, self
+            )
 
     def sizeHint(self) -> QSize:
         size = super().sizeHint()

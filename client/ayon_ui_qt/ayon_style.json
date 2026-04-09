@@ -305,6 +305,7 @@
                     }
                 },
                 "menu": {
+                    "indicator-position": "right",
                     "indicator-width": 0,
                     "indicator-height": 0
                 }
