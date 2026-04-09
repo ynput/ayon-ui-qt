@@ -117,6 +117,7 @@ class FileModel:
     local_path: str = ""
     thumb_local_path: str = ""
     frame: int = 0
+    start_frame: int = 0  # for sequences, to compute the actual frame number
 
 
 @dataclass(unsafe_hash=True)
