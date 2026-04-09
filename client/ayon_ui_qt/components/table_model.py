@@ -794,6 +794,33 @@ class PaginatedTableModel(QAbstractItemModel):
             idx = self._index_for_node(node)
             self.dataChanged.emit(idx, idx)
 
+    def _get_fetch_priority(self, node: _TableNode, page: int) -> int:
+        """Return the async-task priority for a child-page fetch.
+
+        The default implementation uses priority **1** (High) for the
+        very first page of any node and **2** (Normal) for subsequent
+        pages.  Subclasses may override this method to implement dynamic
+        priority logic — for example, lowering the priority to **20**
+        (Background prefetch) when the parent node's row is not currently
+        visible in the table's viewport.
+
+        Priority scale (lower value = higher priority):
+
+        - ``0`` - Critical / visible first-page fetches
+        - ``1`` - High / visible subsequent-page fetches
+        - ``2`` - Normal / thumbnail fetches
+        - ``20`` - Low / off-screen prefetch
+
+        Args:
+            node: The parent node whose children are being fetched.
+            page: Zero-based index of the page being requested.
+
+        Returns:
+            Integer task priority passed to
+            :class:`~ayon_ui_qt.components.task_queue.AsyncTask`.
+        """
+        return 1 if page == 0 else 2
+
     def _fetch_next_page(self, node: _TableNode) -> None:
         """Enqueue an async task to fetch the next page of children for *node*.
 
@@ -808,8 +835,10 @@ class PaginatedTableModel(QAbstractItemModel):
         coalesces all sibling fetches that arrive in the same event-loop
         tick into a single server call.
 
-        Priority is 1 (High) for the first page of any node (``page==0``)
-        and 2 (Normal) for subsequent pages.
+        Priority is determined by :meth:`_get_fetch_priority`, which
+        defaults to 1 (High) for the first page and 2 (Normal) for
+        subsequent pages.  Subclasses may override
+        :meth:`_get_fetch_priority` to adjust priority dynamically.
 
         Args:
             node: The parent node whose next page of children to fetch.
@@ -828,7 +857,7 @@ class PaginatedTableModel(QAbstractItemModel):
         node_id = node.node_id
         request_id = self._request_id
 
-        priority = 1 if page == 0 else 2  # High for first page, Normal after
+        priority = self._get_fetch_priority(node, page)
 
         self._pending_tasks += 1
         self._update_loading_state()
@@ -915,6 +944,13 @@ class PaginatedTableModel(QAbstractItemModel):
         assert self._fetch_page_batch is not None  # guarded by caller
         batch_fn = self._fetch_page_batch
 
+        # Use the highest-urgency (lowest numeric) priority among the
+        # batched nodes so that a batch containing at least one visible
+        # node runs at visible priority rather than the default priority=1.
+        batch_priority = min(
+            self._get_fetch_priority(n, n.current_page) for n in nodes
+        )
+
         if self._no_async:
             try:
                 result: dict[str | None, list[dict[str, Any]]] | None = (
@@ -930,7 +966,7 @@ class PaginatedTableModel(QAbstractItemModel):
             name=f"fetch_batch_{len(nodes)}_nodes",
             function=lambda: batch_fn(requests),
             callback=lambda res: self._on_batch_ready(nodes, request_id, res),
-            priority=1,
+            priority=batch_priority,
             context_id=request_id,
             cancellable=True,
         )
