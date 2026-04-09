@@ -28,11 +28,12 @@ import concurrent.futures
 import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import Any, Callable
 
-from qtpy.QtCore import Qt, QThread, Signal, Slot
+from qtpy.QtCore import Qt, QThread, QTimer, Signal, Slot
 
 log = logging.getLogger(__name__)
 
@@ -231,20 +232,43 @@ class AsyncTaskQueue(QThread):
 
     @Slot()
     def _drain_callback_queue(self) -> None:
-        """Drain all pending (callback, result) pairs on the main thread.
+        """Process a small batch of pending callbacks, then yield.
 
         Called via a QueuedConnection so it always runs on the Qt main
         thread regardless of which thread emitted invoke_callback.
+
+        Up to ``_CALLBACK_BATCH_LIMIT`` callbacks are executed per
+        invocation, subject to a ``_CALLBACK_TIME_BUDGET_MS`` millisecond
+        wall-clock budget.  Stopping after each batch allows the event
+        loop to process paint events, keeping the UI responsive when many
+        async tasks complete simultaneously (e.g. auto-expand with
+        many folders).
+
+        If callbacks remain after the budget is exhausted, a 1 ms
+        single-shot timer re-schedules this method so that paint events
+        can be processed before the next batch.
         """
-        while True:
+        _BATCH_LIMIT = 5
+        _TIME_BUDGET_MS = 8
+
+        t0 = time.monotonic()
+        for _ in range(_BATCH_LIMIT):
             try:
                 callback, result = self._callback_queue.get_nowait()
             except queue.Empty:
-                break
+                return
             try:
                 callback(result)
             except Exception as e:
                 log.exception("Callback execution failed: %s", e)
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            if elapsed_ms >= _TIME_BUDGET_MS:
+                break
+
+        # If more items remain, schedule the next drain after yielding
+        # to the event loop so paint events can be processed.
+        if not self._callback_queue.empty():
+            QTimer.singleShot(1, self._drain_callback_queue)
 
     def run(self) -> None:
         """Dispatch loop - runs in the QThread context.
