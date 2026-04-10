@@ -5,9 +5,10 @@ from enum import Enum
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 
-from .frame import AYFrame
-from .layouts import AYGridLayout, AYHBoxLayout, AYVBoxLayout
+from ..utils import clear_layout
 from ..variants import QFrameVariants
+from .frame import AYFrame
+from .layouts import AYFlowLayout, AYGridLayout, AYHBoxLayout, AYVBoxLayout
 
 
 class AYContainer(AYFrame):
@@ -15,6 +16,7 @@ class AYContainer(AYFrame):
         HBox = 0
         VBox = 1
         Grid = 2
+        Flow = 3
 
     Variants = QFrameVariants
 
@@ -49,6 +51,10 @@ class AYContainer(AYFrame):
             self._layout = AYGridLayout(
                 self, spacing=layout_spacing, margin=layout_margin
             )
+        elif layout == AYContainer.Layout.Flow:
+            self._layout = AYFlowLayout(
+                self, spacing=layout_spacing, margin=layout_margin
+            )
         else:
             raise ValueError(f"Unknown Layout type : {layout}")
 
@@ -64,6 +70,8 @@ class AYContainer(AYFrame):
             self._layout.addWidget(w, stretch=stretch)
         elif isinstance(self._layout, AYGridLayout):
             self._layout.addWidget(w, row, column, alignment)
+        elif isinstance(self._layout, AYFlowLayout):
+            self._layout.addWidget(w)
         else:
             raise ValueError(f"Unknown Layout type : {self._layout}")
 
@@ -79,6 +87,8 @@ class AYContainer(AYFrame):
             self._layout.addLayout(lyt, stretch=stretch)
         elif isinstance(self._layout, AYGridLayout):
             self._layout.addLayout(lyt, row, column, alignment)
+        elif isinstance(self._layout, AYFlowLayout):
+            self._layout.addLayout(lyt)
         else:
             raise ValueError(f"Unknown Layout type : {self._layout}")
 
@@ -86,24 +96,27 @@ class AYContainer(AYFrame):
         if isinstance(self._layout, (AYHBoxLayout, AYVBoxLayout)):
             if isinstance(w, QWidget):
                 self._layout.insertWidget(index, w, stretch=stretch)
-        elif isinstance(self._layout, AYGridLayout):
-            raise ValueError(f"Not supported by QGridLayout : {self._layout}")
+        elif isinstance(self._layout, (AYGridLayout, AYFlowLayout)):
+            raise ValueError(f"Not supported by this layout : {self._layout}")
 
     def count(self) -> int:
         return self._layout.count()
 
     def addStretch(self, stretch: int = 0) -> None:
-        if isinstance(self._layout, AYGridLayout):
+        if isinstance(self._layout, (AYGridLayout, AYFlowLayout)):
             return
         self._layout.addStretch(stretch=stretch)
 
     def takeAt(self, index: int) -> QLayoutItem:
-        return self._layout.takeAt(index)
+        return self._layout.takeAt(index)  # type: ignore
 
     def itemAt(self, index: int) -> QLayoutItem:
         if isinstance(self._layout, AYGridLayout):
             raise NotImplementedError
-        return self._layout.itemAt(index)
+        return self._layout.itemAt(index)  # type: ignore
+
+    def clear(self):
+        self._layout.clear()
 
 
 if __name__ == "__main__":

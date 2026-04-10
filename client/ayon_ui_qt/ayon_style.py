@@ -8,14 +8,26 @@ from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPainterPath, QPalette, QPen
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPalette,
+    QPen,
+)
 from qtpy.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
     QCommonStyle,
     QFrame,
+    QHeaderView,
     QLabel,
+    QLineEdit,
+    QListView,
     QPushButton,
     QStyle,
     QStyledItemDelegate,
@@ -27,6 +39,7 @@ from qtpy.QtWidgets import (
     QStyleOptionSlider,
     QStyleOptionViewItem,
     QToolTip,
+    QTreeView,
     QWidget,
 )
 from qtpy.shiboken import isValid
@@ -36,8 +49,6 @@ try:
 except ImportError:
     from .vendor.qtmaterialsymbols import get_icon
 
-from .components.combo_box import Item
-# from .components.color import AYColor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,12 +76,12 @@ def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
     pt_size = w.font().pointSizeF() if w else style["font-size"]
     font.setPointSizeF(pt_size)
     font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
-    log.debug(
-        "FONT: %s, %g pts, w=%d",
-        font.family(),
-        font.pointSizeF(),
-        font.weight(),
-    )
+    # log.debug(
+    #     "FONT: %s, %g pts, w=%d",
+    #     font.family(),
+    #     font.pointSizeF(),
+    #     font.weight(),
+    # )
     return font
 
 
@@ -105,7 +116,22 @@ def _enum_values(enum):
     enum_index = meta_object.indexOfEnumerator(enum.__name__)
     meta_enum: QtCore.QMetaEnum = meta_object.enumerator(enum_index)
     num_keys = meta_enum.keyCount()
-    vals = [v for v in range(num_keys) if meta_enum.key(v)]
+    vals = [meta_enum.value(v) for v in range(num_keys) if meta_enum.key(v)]
+    # print(f"=== enum = {meta_enum.scope()}.{meta_enum.enumName()} -> {keys}")
+    return vals
+
+
+def _enum_values_dict(enum):
+    # qmeta = QtCore.QMetaEnum(enum)
+    meta_object: QtCore.QMetaObject = QStyle.staticMetaObject  # type: ignore
+    enum_index = meta_object.indexOfEnumerator(enum.__name__)
+    meta_enum: QtCore.QMetaEnum = meta_object.enumerator(enum_index)
+    num_keys = meta_enum.keyCount()
+    vals = {
+        meta_enum.key(i): meta_enum.value(i)
+        for i in range(num_keys)
+        if meta_enum.key(i)
+    }
     # print(f"=== enum = {meta_enum.scope()}.{meta_enum.enumName()} -> {keys}")
     return vals
 
@@ -160,7 +186,7 @@ class StyleData:
             if v.startswith("hsl("):
                 self._palette[k] = hsl_to_html_color(v)
         for k, v in self._palette.items():
-            self.data["palette"][k] = self.data["palette"].get(v, v)
+            self._palette[k] = self._palette.get(v, v)
         for k, v in self._palette.items():
             if v in self._palette:
                 raise ValueError(f"Unresolved palette value in {k}")
@@ -169,6 +195,16 @@ class StyleData:
         self.last_key = ""
         # base palette
         self.base_palette = self._build_palette()
+        self._base_font = None
+
+    @property
+    def base_font(self):
+        # delayed to make sure QApplication is initialized
+        if self._base_font is None:
+            self._base_font = _style_font(
+                self.data.get("global", {}), QWidget()
+            )
+        return self._base_font
 
     def _build_palette(self):
         bp = {
@@ -212,16 +248,16 @@ class StyleData:
 
     def default_variant(self, widget_data):
         return widget_data.get(
-            "default-variant", list(widget_data.get("variants", {}).keys())[0]
+            "default-variant", next(iter(widget_data.get("variants", {})))
         )
 
     def validate_variant(self, widget_data, variant):
-        if variant not in widget_data.get("variants", {}).keys():
+        if variant not in widget_data.get("variants", {}):
             return self.default_variant(widget_data)
         return variant
 
     def palette(self):
-        return self.data.get("palette", {})
+        return self._palette
 
     def get_style(
         self,
@@ -238,7 +274,7 @@ class StyleData:
         data = self.widget_data(widget_cls)
         vrt = self.validate_variant(data, variant)
         dvrt = self.default_variant(data)
-        pal = self.palette()
+        pal = self._palette
         d = copy.copy(self.data["global"])
         d.update(copy.deepcopy(data.get("variants", {}).get(dvrt, {})))
         d.update(copy.deepcopy(data.get("variants", {}).get(vrt, {})))
@@ -246,29 +282,26 @@ class StyleData:
         if state == "all":
             for key, val in d.items():
                 if isinstance(val, dict):
-                    for kk, vv in val.items():
-                        d[key][kk] = pal.get(vv, vv)
-                elif isinstance(val, list):
-                    pass
-                else:
+                    d[key] = {kk: pal.get(vv, vv) for kk, vv in val.items()}
+                elif not isinstance(val, list):
                     d[key] = pal.get(val, val)
         else:
             # Override palette variables with the current state's values and remove
             # all states. That way, we can directly use "background-color" without
             # checking the widget's state.
-            to_be_removed = []
-            for key, val in d.items():
+            state_dict = {}
+            for key, val in list(d.items()):
                 if isinstance(val, dict):
                     if key == state:
-                        for kk, vv in val.items():
-                            d[kk] = pal.get(vv, vv)
-                    to_be_removed.append(key)
-                elif isinstance(val, list):
-                    pass
-                else:
+                        state_dict = {
+                            kk: pal.get(vv, vv) for kk, vv in val.items()
+                        }
+                    d.pop(key)
+                elif not isinstance(val, list):
                     d[key] = pal.get(val, val)
-            for k in to_be_removed:
-                d.pop(k)
+            # apply current state overrides last to ensure they take precedence
+            # over the base variant
+            d.update(state_dict)
 
         # cache result
         self.last_key = f"{widget_cls}-{variant}-{state}"
@@ -313,6 +346,26 @@ class StyleData:
 
     def current_style(self):
         return self._cache[self.last_key]
+
+    def get_color(self, color_name: str, style: dict, w: QWidget) -> QColor:
+        """Process color definitions referencing a widget attribute/property
+        using the @ syntax.
+
+        Args:
+            color_name: The color name to retrieve.
+            style: The style dictionary.
+            w: The widget to get the color from.
+        Returns:
+            The color.
+        """
+        color = style[color_name]
+        if isinstance(color, str) and color.startswith("@"):
+            color = getattr(
+                w,
+                color[1:],
+                w.palette().color(QPalette.ColorRole.ButtonText),
+            )
+        return QColor(color)
 
 
 # ----------------------------------------------------------------------------
@@ -489,14 +542,19 @@ class ButtonDrawer:
         painter.setBrush(QBrush(bg_color))
         painter.setPen(Qt.PenStyle.NoPen)
         border_radius = style.get("border-radius", 0)
-        if self.get_button_variant(widget) == "thumbnail":
+
+        draw_icon_as_background = style.get("icon-as-background", False)
+        clip_icon_to_radius = style.get("clip-icon-to-radius", False)
+
+        if draw_icon_as_background:
             # draw the icon clipped by the same rounded rect
             painter.save()
-            clip_path = QPainterPath()
-            clip_path.addRoundedRect(rect, border_radius, border_radius)
-            painter.setClipPath(clip_path)
+            if clip_icon_to_radius:
+                clip_path = QPainterPath()
+                clip_path.addRoundedRect(rect, border_radius, border_radius)
+                painter.setClipPath(clip_path)
+
             mode = QtGui.QIcon.Mode.Normal
-            painter.setBrush(QColor("#000000"))
             painter.drawRoundedRect(rect, border_radius, border_radius)
             option.icon.paint(
                 painter,
@@ -504,7 +562,10 @@ class ButtonDrawer:
                 Qt.AlignmentFlag.AlignCenter,
                 mode,
             )
-            painter.setClipping(False)
+
+            if clip_icon_to_radius:
+                painter.setClipping(False)
+
             pen = QPen(QColor(style.get("border-color")))
             pen.setWidth(int(style.get("border-width", 0)))
             painter.setPen(pen)
@@ -547,7 +608,7 @@ class ButtonDrawer:
         variant = self.get_button_variant(widget)
 
         # Set up text color
-        text_color = QColor(style["color"])
+        text_color = self.model.get_color("color", style, widget)
         if not (option.state & QStyle.StateFlag.State_Enabled):  # type: ignore
             # Apply some opacity to disabled text
             text_color.setAlpha(int(255 * 0.5))
@@ -564,20 +625,17 @@ class ButtonDrawer:
         )
         # _debug_rect(painter, "#ff5555", content_rect)
 
+        # Optional per-widget alignment override (None → default centered layout)
+        label_alignment = getattr(widget, "_label_alignment", None)
+
         # Draw icon if present
         if option.icon:  # type: ignore
             # icon_color = QColor(getattr(widget, "_icon_color", text_color))
-            icon_rect = QRect(content_rect)
             if option.text and not style.get("ignore-text", False):  # type: ignore
-                # Icon + text: place icon on the left
                 icon_size = option.iconSize  # type: ignore
-                icon_rect.setSize(icon_size)
-                icon_rect.moveCenter(
-                    QtCore.QPoint(
-                        content_rect.left() + style["icon-padding"][0],
-                        content_rect.center().y(),
-                    )
-                )
+                icon_w = icon_size.width()
+                icon_h = icon_size.height()
+                _gap = 4
 
                 # Draw icon with text color inheritance
                 mode = QtGui.QIcon.Mode.Normal
@@ -588,28 +646,75 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                # option.icon = get_icon(widget._icon, color=icon_color)
-
-                option.icon.paint(  # type: ignore
-                    painter,
-                    icon_rect,
-                    Qt.AlignmentFlag.AlignCenter,
-                    mode,
-                )
-
-                # Adjust text rectangle
-                text_rect = QRect(content_rect)
-                text_rect.setLeft(icon_rect.right() + 4)
-
-                # Draw text
-                if option.text:  # type: ignore
+                if label_alignment is not None:
+                    # Group layout: icon + text move together as a unit
+                    h_align = (
+                        label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask
+                    )
+                    text_w = painter.fontMetrics().horizontalAdvance(
+                        option.text  # type: ignore
+                    )
+                    group_w = icon_w + _gap + text_w
+                    if h_align == Qt.AlignmentFlag.AlignLeft:
+                        group_x = content_rect.left()
+                    elif h_align == Qt.AlignmentFlag.AlignRight:
+                        group_x = content_rect.right() - group_w
+                    else:
+                        group_x = (
+                            content_rect.left()
+                            + (content_rect.width() - group_w) // 2
+                        )
+                    icon_rect = QRect(
+                        group_x,
+                        content_rect.center().y() - icon_h // 2,
+                        icon_w,
+                        icon_h,
+                    )
+                    text_rect = QRect(
+                        icon_rect.right() + _gap,
+                        content_rect.top(),
+                        text_w,
+                        content_rect.height(),
+                    )
+                    option.icon.paint(  # type: ignore
+                        painter,
+                        icon_rect,
+                        Qt.AlignmentFlag.AlignCenter,
+                        mode,
+                    )
+                    painter.drawText(
+                        text_rect,
+                        Qt.AlignmentFlag.AlignLeft
+                        | Qt.AlignmentFlag.AlignVCenter,
+                        option.text,  # type: ignore
+                    )
+                else:
+                    # Icon + text: place icon on the left (default centered layout)
+                    icon_rect = QRect(content_rect)
+                    icon_rect.setSize(icon_size)
+                    icon_rect.moveCenter(
+                        QtCore.QPoint(
+                            content_rect.left() + style["icon-padding"][0],
+                            content_rect.center().y(),
+                        )
+                    )
+                    option.icon.paint(  # type: ignore
+                        painter,
+                        icon_rect,
+                        Qt.AlignmentFlag.AlignCenter,
+                        mode,
+                    )
+                    # Adjust text rectangle
+                    text_rect = QRect(content_rect)
+                    text_rect.setLeft(icon_rect.right() + _gap)
+                    # Draw text
                     painter.drawText(
                         text_rect,
                         Qt.AlignmentFlag.AlignCenter,
                         option.text,  # type: ignore
                     )
             elif variant != "thumbnail":
-                # Icon only: center the icon
+                # Icon only
                 mode = QtGui.QIcon.Mode.Normal
                 if not (
                     option.state & QStyle.StateFlag.State_Enabled  # type: ignore
@@ -618,27 +723,48 @@ class ButtonDrawer:
                 elif option.state & QStyle.StateFlag.State_Sunken:  # type: ignore
                     mode = QtGui.QIcon.Mode.Active
 
-                state = (
-                    QtGui.QIcon.State.On
-                    if wstate == "hover"
-                    else QtGui.QIcon.State.Off
+                checkable = widget.isCheckable() if widget else False
+                # checked = widget.isChecked() if widget else False
+
+                icon_state = (
+                    (
+                        QtGui.QIcon.State.On
+                        if wstate == "hover"
+                        else QtGui.QIcon.State.Off
+                    )
+                    if not checkable
+                    else (
+                        QtGui.QIcon.State.On
+                        if option.state & QStyle.StateFlag.State_On
+                        else QtGui.QIcon.State.Off
+                    )
                 )
 
-                # option.icon = get_icon(widget._icon, color=icon_color)
-
+                _icon_align = (
+                    (label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask)
+                    | Qt.AlignmentFlag.AlignVCenter
+                    if label_alignment is not None
+                    else Qt.AlignmentFlag.AlignCenter
+                )
                 option.icon.paint(  # type: ignore
                     painter,
                     content_rect,
-                    Qt.AlignmentFlag.AlignCenter,
+                    _icon_align,
                     mode,
-                    state,
+                    icon_state,
                 )
         else:
             # Text only
             if option.text and not style.get("ignore-text", False):  # type: ignore
+                _text_align = (
+                    (label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask)
+                    | Qt.AlignmentFlag.AlignVCenter
+                    if label_alignment is not None
+                    else Qt.AlignmentFlag.AlignCenter
+                )
                 painter.drawText(
                     content_rect,
-                    Qt.AlignmentFlag.AlignCenter,
+                    _text_align,
                     option.text,  # type: ignore
                 )
 
@@ -788,17 +914,35 @@ class FrameDrawer:
                 QStyle.ControlElement.CE_ShapedFrame,
                 "QFrame",
             ): self.draw_frame,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_Widget,
+                "QFrame",
+            ): self.draw_frame,
         }
 
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
         variant = getattr(w, "_variant_str", "")
+        is_view_frame = next(
+            (
+                True
+                for child in w.children()
+                if isinstance(child, QAbstractItemView)
+            ),
+            False,
+        )
+        if is_view_frame or isinstance(w, QListView):
+            variant = "item-view"
         style = self.model.get_style("QFrame", variant)
+
         # widget override for comment types
+        border_width = style.get("border-width", 0)
         if hasattr(w, "get_bg_color"):
             bgc: QColor = w.get_bg_color(style["background-color"])
             style = dict(style)
-            style["border-color"] = bgc
+            if border_width == 0:
+                style["border-color"] = bgc
             style["background-color"] = bgc
             # set background color of QTextEdit widgets
             try:
@@ -812,7 +956,6 @@ class FrameDrawer:
 
         # pen setup
         border_color = QColor(style["border-color"])
-        border_width = style.get("border-width", 0)
         pen = QPen(border_color)
         pen.setWidth(border_width)
         pen.setStyle(
@@ -826,10 +969,19 @@ class FrameDrawer:
         painter.setPen(pen)
         painter.setBrush(brush)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # Inset rect by half border width to keep stroke within bounds
+        draw_rect = option.rect
+        if border_width > 0:
+            half_width = border_width / 2.0
+            draw_rect = QRectF(option.rect).adjusted(
+                half_width, half_width, -half_width, -half_width
+            )
+
         if radius:
-            painter.drawRoundedRect(option.rect, radius, radius)
+            painter.drawRoundedRect(draw_rect, radius, radius)
         else:
-            painter.drawRect(option.rect)
+            painter.drawRect(draw_rect)
 
 
 # ----------------------------------------------------------------------------
@@ -847,10 +999,10 @@ class CheckboxDrawer:
     def register_drawers(self):
         return {
             enum_to_str(
-                QStyle.PrimitiveElement,
+                QStyle.ControlElement,
                 QStyle.ControlElement.CE_CheckBox,
                 "QCheckBox",
-            ): self.draw_control,
+            ): self.draw_indicator,
             enum_to_str(
                 QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_IndicatorCheckBox,
@@ -888,20 +1040,104 @@ class CheckboxDrawer:
         opt: QStyleOption | None = None,
         widget: QWidget | None = None,
     ):
+        variant = getattr(widget, "_variant_str", "default")
+        style = self.model.get_style(
+            "QCheckBox",
+            variant=variant,
+        )
+        metrics_h = widget.fontMetrics().height() if widget else 18
+        metrics_w = metrics_h * 2 if widget else 32
+
         if metric == QStyle.PixelMetric.PM_IndicatorWidth:
-            return 32
+            # is indicator-width == 0, use the 2x the font height.
+            return style.get("indicator-width", metrics_w) or metrics_w
         elif metric == QStyle.PixelMetric.PM_IndicatorHeight:
-            return 18
+            # is indicator-height == 0, use the font height.
+            return style.get("indicator-height", metrics_h) or metrics_h
         elif metric == QStyle.PixelMetric.PM_CheckBoxLabelSpacing:
-            return 8
+            return style.get("checkbox-label-spacing", 8)
         return 0
 
-    def draw_control(
+    def draw_indicator(
         self,
         option: QStyleOption,
         painter: QPainter,
         widget: QWidget | None,
     ):
+        variant = getattr(widget, "_variant_str", "default")
+        state = (
+            "checked" if option.state & QStyle.StateFlag.State_On else "base"
+        )
+        style = self.model.get_style(
+            "QCheckBox",
+            variant=variant,
+            state=state,
+        )
+
+        if style.get("background-color"):
+            painter.save()
+            painter.setBrush(QColor(style["background-color"]))
+            painter.setPen(Qt.PenStyle.NoPen)
+            radius = style.get("border-radius", 0)
+            painter.drawRoundedRect(option.rect, radius, radius)
+            painter.restore()
+
+        if style.get("indicator-position", "left") == "right":
+            # Manually draw a centred [label  toggle] group so that padding is
+            # equal on both sides, instead of relying on Qt's layout direction.
+            s = self.style_inst
+            ind_w = s.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, widget
+            )
+            ind_h = s.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorHeight, option, widget
+            )
+            spacing = s.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, widget
+            )
+
+            text = getattr(option, "text", "")
+            fm = option.fontMetrics
+            text_w = fm.horizontalAdvance(text) if text else 0
+            text_h = fm.height()
+
+            total_w = text_w + (spacing + ind_w if text_w else ind_w)
+
+            rect = option.rect
+            cx = rect.center().x()
+            cy = rect.center().y()
+            x = cx - total_w // 2
+
+            painter.save()
+            if text:
+                painter.setPen(
+                    QColor(style["color"])
+                    if style.get("color")
+                    else option.palette.color(QPalette.ColorRole.WindowText)
+                )
+                text_rect = QRect(x, cy - text_h // 2, text_w, text_h)
+                painter.drawText(
+                    text_rect,
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                    text,
+                )
+
+            toggle_opt = QStyleOption(option)
+            toggle_opt.rect = QRect(
+                x + text_w + (spacing if text_w else 0),
+                cy - ind_h // 2,
+                ind_w,
+                ind_h,
+            )
+            self.draw_toggle(toggle_opt, painter, widget)
+            painter.restore()
+            return
+
+        if style.get("color"):
+            option.palette.setColor(
+                QPalette.ColorRole.WindowText, QColor(style["color"])
+            )
+
         super(AYONStyle, self.style_inst).drawControl(
             QStyle.ControlElement.CE_CheckBox, option, painter, widget
         )
@@ -914,28 +1150,39 @@ class CheckboxDrawer:
     ):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        # get style data
         checked = bool(option.state & QStyle.StateFlag.State_On)
+        variant = getattr(w, "_variant_str", "default")
         style = self.model.get_style(
-            "QCheckBox", "", state="checked" if checked else "base"
+            "QCheckBox",
+            variant=variant,
+            state="checked" if checked else "base",
         )
-        painter.setBrush(QColor(style["background-color"]))
-        painter.setPen(Qt.PenStyle.NoPen)
 
         # draw toggle background
+        painter.setBrush(QColor(style["indicator-background-color"]))
+        if style.get("indicator-border-width", 0):
+            pen = QPen(QColor(style["indicator-border-color"]))
+            pen.setWidth(style.get("indicator-border-width", 0))
+            painter.setPen(pen)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
         frame_rect: QRectF = option.rect.toRectF().adjusted(1, 0, -1, 0)
         radius = frame_rect.height() / 2.0
         painter.drawRoundedRect(frame_rect, radius, radius)
 
         # draw toggle
-        painter.setBrush(QColor(style["color"]))
+        painter.setBrush(QColor(style["indicator-color"]))
         offset = frame_rect.height() * 0.125
         state_rect: QRectF = frame_rect.adjusted(
             offset, offset, -offset, -offset
         )
         state_rect.setWidth(state_rect.height())
         if checked:
-            state_rect.moveRight(frame_rect.width() - offset * 0.5)
+            state_rect.moveRight(frame_rect.right() - offset)
         painter.drawEllipse(state_rect)
+
         painter.restore()
 
 
@@ -944,53 +1191,18 @@ class CheckboxDrawer:
 
 class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(
-        self, parent=None, padding: int = 4, icon_size: int = 16
+        self,
+        parent=None,
+        padding: int = 4,
+        icon_size: int = 16,
+        style_model: StyleData | None = None,
     ) -> None:
         super().__init__(parent)
         self._padding = padding
         self._icon_size = icon_size
         self._icon_text_spacing = 8
-
-    def paint(
-        self,
-        painter: QtGui.QPainter,
-        option: QtWidgets.QStyleOptionViewItem,
-        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
-    ) -> None:
-        saved_palette = QPalette(option.palette)
-        # change colors for highlight
-        highlight_color = option.palette.color(
-            QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
-        )
-
-        if option.state & QStyle.StateFlag.State_MouseOver:
-            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.Highlight,
-                    highlight_color,
-                )
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.HighlightedText,
-                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
-                )
-        elif option.state & QStyle.StateFlag.State_Selected:
-            if index.data(QtCore.Qt.ItemDataRole.ForegroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.Highlight,
-                    index.data(QtCore.Qt.ItemDataRole.ForegroundRole).color(),
-                )
-            if index.data(QtCore.Qt.ItemDataRole.BackgroundRole):
-                option.palette.setColor(
-                    QPalette.ColorGroup.Active,
-                    QPalette.ColorRole.HighlightedText,
-                    index.data(QtCore.Qt.ItemDataRole.BackgroundRole).color(),
-                )
-
-        super().paint(painter, option, index)
-        option.palette = saved_palette
+        self._style_model = style_model
+        self._icon_cache: dict[str, QIcon] = {}
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index
@@ -1018,6 +1230,152 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
 
         return QtCore.QSize(total_width, total_height)
 
+    def _get_icon(
+        self, fg: QColor, bg: QColor, icon_name: str, invert: bool = True
+    ) -> QIcon:
+        """Get icon from cache or create new one."""
+        key = f"{icon_name}-{fg.name()}-{bg.name()}-{invert}"
+        if key not in self._icon_cache:
+            self._icon_cache[key] = get_icon(
+                icon_name,
+                bg if invert else fg,
+            )
+        return self._icon_cache[key]
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint combo-box items directly, bypassing QStyle.
+
+        This avoids QStyleSheetStyle intercepting drawPrimitive /
+        drawControl calls when an app-level QSS is active.
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Build a copy of the option with text/palette configured
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        # --- debug ---------------------------------------------
+        # m = f">> {opt.text!r} -> "
+        # for flag in QStyle.StateFlag:
+        #     if opt.state & flag:
+        #         m += f"{flag.name}, "
+        # print(m)
+        # -------------------------------------------------------
+
+        # --- resolve colours -----------------------------------
+        fg_data = index.data(Qt.ItemDataRole.ForegroundRole)
+        bg_data = index.data(Qt.ItemDataRole.BackgroundRole)
+
+        cb = self.parent()
+
+        # Menu background from the AYON style JSON
+        if self._style_model:
+            cb_style = self._style_model.get_style("QComboBox")
+            menu_bg = QColor(cb_style.get("menu-background-color", "#1c2026"))
+        else:
+            menu_bg = opt.palette.color(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.Window,
+            )
+
+        highlight_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Dark
+        )
+
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = (
+            bool(state & QStyle.StateFlag.State_MouseOver) and not is_selected
+        )
+
+        if fg_data and bg_data:
+            fg = fg_data.color()
+            bg = bg_data.color()
+
+            if is_hovered:
+                bg_color = highlight_color
+                text_color = fg
+            elif is_selected:
+                bg_color = fg
+                text_color = bg
+                # Regenerate icon with the swapped text_color
+                icon_name = (
+                    index.data(cb.model().IconNameRole)
+                    if hasattr(cb.model(), "IconNameRole")
+                    else None
+                )
+                if icon_name:
+                    opt.icon = self._get_icon(
+                        text_color, bg_color, icon_name, False
+                    )
+            else:
+                bg_color = menu_bg
+                text_color = fg
+        else:
+            # Fallback for items without FG/BG data
+            if is_hovered or is_selected:
+                bg_color = highlight_color
+                text_color = opt.palette.color(
+                    QPalette.ColorRole.HighlightedText
+                )
+            else:
+                bg_color = menu_bg
+                text_color = opt.palette.color(QPalette.ColorRole.Text)
+
+        # --- draw background -----------------------------------
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(opt.rect)
+
+        # --- draw icon -----------------------------------------
+        content_left = opt.rect.left() + self._padding
+        if not opt.icon.isNull():
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - self._icon_size // 2,
+                self._icon_size,
+                self._icon_size,
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if opt.state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            state = (
+                QIcon.State.On
+                if (is_hovered or is_selected)
+                else QIcon.State.Off
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+                state,
+            )
+            content_left = icon_rect.right() + self._icon_text_spacing
+
+        # --- draw text -----------------------------------------
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(text_rect.right() - self._padding)
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
 
 class ComboBoxDrawer:
     def __init__(self, style_inst: AYONStyle) -> None:
@@ -1030,11 +1388,11 @@ class ComboBoxDrawer:
 
     def register_drawers(self):
         return {
-            # enum_to_str(
-            #     QStyle.ControlElement,
-            #     QStyle.ControlElement.CE_ComboBoxLabel,
-            #     "QComboBox",
-            # ): self.draw_label,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ComboBoxLabel,
+                "QComboBox",
+            ): self.draw_label,
             enum_to_str(
                 QStyle.ComplexControl,
                 QStyle.ComplexControl.CC_ComboBox,
@@ -1061,6 +1419,29 @@ class ComboBoxDrawer:
             ): self.combobox_size,
         }
 
+    def get_fg_bg_colors(
+        self, opt: QtWidgets.QStyleOptionComplex, w: QComboBox
+    ) -> tuple[QColor, QColor]:
+        bg_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.Base
+        )
+        fg_color = opt.palette.color(
+            QPalette.ColorGroup.Active, QPalette.ColorRole.ButtonText
+        )
+
+        inverted = getattr(w, "_inverted", False)
+        current_index = w.currentIndex()
+        if current_index >= 0:
+            item_color = w.itemData(
+                current_index, QtCore.Qt.ItemDataRole.ForegroundRole
+            )
+            if item_color is not None:
+                item_color = item_color.color()
+                fg_color = bg_color if inverted else item_color
+                bg_color = item_color if inverted else bg_color
+
+        return fg_color, bg_color
+
     def draw_box(
         self,
         opt: QtWidgets.QStyleOptionComplex,
@@ -1070,39 +1451,21 @@ class ComboBoxDrawer:
         if not isinstance(w, QComboBox):
             return
 
-        _style = self.model.get_style("QComboBox")
+        _style = self.model.get_style(
+            "QComboBox", variant=getattr(w, "_variant_str", None)
+        )
+        style_bg_color = _style.get("background-color", None)
         opt.palette.setBrush(
-            QPalette.ColorRole.Base, self.model.base_palette.base()
+            QPalette.ColorRole.Base,
+            QColor(style_bg_color)
+            if style_bg_color
+            else self.model.base_palette.base(),
         )
         _radius = _style.get("border-radius", 0)
 
         # print(f"SUB_CTL: {opt.activeSubControls}")
         if not w.isEditable():
-            bg_color = opt.palette.color(
-                QPalette.ColorGroup.Active, QPalette.ColorRole.Base
-            )
-            fg_color = opt.palette.color(
-                QPalette.ColorGroup.Active, QPalette.ColorRole.ButtonText
-            )
-
-            if not w:
-                # print("NO WIDGET")
-                return
-
-            inverted = False
-            icon_name = ""
-
-            # Get the current selected status
-            current_index = w.currentIndex()
-            if current_index >= 0:
-                item: Item = w.itemData(
-                    current_index, QtCore.Qt.ItemDataRole.UserRole
-                )
-                if item:
-                    inverted = getattr(w, "_inverted", False)
-                    fg_color = bg_color if inverted else QColor(item.color)
-                    bg_color = QColor(item.color) if inverted else bg_color
-                    icon_name = item.icon
+            fg_color, bg_color = self.get_fg_bg_colors(opt, w)
 
             # Paint background with status color
             rect = opt.rect
@@ -1114,17 +1477,97 @@ class ComboBoxDrawer:
 
             # set pen for text drawing
             p.setPen(fg_color)
-            if icon_name:
-                opt.currentIcon = get_icon(icon_name, color=fg_color)
         else:
             # editable combobox - IMPLEMENT ME
-            pass
+            super(AYONStyle, self.style_inst).drawComplexControl(
+                QStyle.ComplexControl.CC_ComboBox, opt, p, w
+            )
+
+    def draw_label(self, opt: QStyleOptionComboBox, p: QPainter, w: QWidget):
+        if not isinstance(w, QComboBox):
+            return
+
+        _style = self.model.get_style(
+            "QComboBox", variant=getattr(w, "_variant_str", None)
+        )
+        icon_padding = _style.get("icon-padding", [4, 4])
+        text_padding = _style.get("text-padding", [1, 1])
+
+        fg_color, bg_color = self.get_fg_bg_colors(opt, w)
+
+        base_cls = super(AYONStyle, self.style_inst)
+        edit_rect = base_cls.subControlRect(
+            QStyle.ComplexControl.CC_ComboBox,
+            opt,
+            QStyle.SubControl.SC_ComboBoxEditField,
+            w,
+        )
+        p.save()
+        p.setClipRect(edit_rect)
+        if opt.currentIcon:
+            mode = (
+                QIcon.Mode.Normal
+                if opt.state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            pixmap = opt.currentIcon.pixmap(opt.iconSize, mode)
+            icon_rect = QRect(edit_rect)
+            icon_rect.setWidth(opt.iconSize.width() + icon_padding[0])
+            icon_rect.setHeight(opt.iconSize.height() + icon_padding[1])
+            icon_rect = QStyle.alignedRect(
+                opt.direction,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                icon_rect.size(),
+                edit_rect,
+            )
+            if opt.editable:
+                p.fillRect(
+                    icon_rect, opt.palette.brush(QPalette.ColorRole.Base)
+                )
+            base_cls.drawItemPixmap(
+                p, icon_rect, Qt.AlignmentFlag.AlignCenter, pixmap
+            )
+            if opt.direction == Qt.LayoutDirection.RightToLeft:
+                edit_rect.translate(-icon_padding[0] - opt.iconSize.width(), 0)
+            else:
+                edit_rect.translate(opt.iconSize.width() + icon_padding[0], 0)
+
+        if opt.currentText and not opt.editable:
+            base_cls.drawItemText(
+                p,
+                edit_rect.adjusted(
+                    text_padding[0],
+                    -text_padding[1],
+                    -text_padding[0],
+                    text_padding[1],
+                ),
+                QStyle.visualAlignment(
+                    opt.direction,
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                ),
+                opt.palette,
+                bool(opt.state & QStyle.StateFlag.State_Enabled),
+                opt.currentText,
+            )
+
+        p.restore()
 
     def draw_panel_item_view_item(
         self, option: QStyleOption, painter: QPainter, w: QWidget
     ):
-        stl = self.model.get_style("QComboBox")
-        option.backgroundBrush.setColor(QColor(stl["menu-background-color"]))
+        cb = w.model().parent()
+        if cb and getattr(cb, "_inverted", False):
+            idx = option.index
+            if idx:
+                fgc = (
+                    w.model().data(idx, Qt.ItemDataRole.ForegroundRole).color()
+                )
+                option.backgroundBrush.setColor(fgc)
+        else:
+            stl = self.model.get_style("QComboBox")
+            option.backgroundBrush.setColor(
+                QColor(stl["menu-background-color"])
+            )
         super(AYONStyle, self.style_inst).drawPrimitive(  # type: ignore
             QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, w
         )
@@ -1342,6 +1785,47 @@ class ScrollBarDrawer:
         painter.drawRect(option.rect)
 
         painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class LineEditDrawer:
+    """AYONStyle drawer for QLineEdit.
+
+    Registers a no-op for PE_PanelLineEdit when the widget is an AYLineEdit
+    instance (which paints itself fully in its own paintEvent), and falls back
+    to the base QCommonStyle implementation for all other QLineEdit widgets.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+
+    @property
+    def base_class(self):
+        return {"QLineEdit": QLineEdit}
+
+    def register_drawers(self):
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelLineEdit,
+                "QLineEdit",
+            ): self.draw_panel,
+        }
+
+    def draw_panel(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None,
+    ) -> None:
+        # AYLineEdit paints its own background — skip Qt's default frame.
+        if type(widget).__name__ == "AYLineEdit":
+            return
+        super(AYONStyle, self.style_inst).drawPrimitive(
+            QStyle.PrimitiveElement.PE_PanelLineEdit, option, painter, widget
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -1677,6 +2161,875 @@ class ItemViewItemDrawer:
 # ----------------------------------------------------------------------------
 
 
+class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
+    """Item delegate for AYTreeView that paints directly, bypassing QSS.
+
+    Reads style data from the QTreeView style entry to draw item
+    backgrounds (hover, selected) and text/icons.  The paint() method
+    uses raw QPainter calls so that a parent-level QStyleSheet cannot
+    intercept and override the colours.
+
+    Args:
+        parent: The parent widget (expected to be an AYTreeView instance).
+        style_model: StyleData instance providing colour/dimension data.
+        variant: The variant string used to look up the correct style.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        style_model: StyleData | None = None,
+        variant: str = "default",
+    ) -> None:
+        super().__init__(parent)
+        self._style_model = style_model
+        self._variant_str = variant
+        self._icon_cache: dict[str, QIcon] = {}
+
+    def _tv_styles(self) -> dict[str, dict]:
+        """Return *base*, *hover* and *selected* style dicts at once."""
+        if self._style_model is None:
+            return {"base": {}, "hover": {}, "selected": {}}
+        return self._style_model.get_styles(
+            "QTreeView",
+            self._variant_str,
+            ["base", "hover", "selected"],
+        )
+
+    def sizeHint(
+        self,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QtCore.QSize:
+        """Return a fixed row height from the style data.
+
+        Args:
+            option: The style option for the item.
+            index: The model index of the item.
+
+        Returns:
+            The size hint for the item.
+        """
+        if self._style_model:
+            style = self._style_model.get_style("QTreeView", self._variant_str)
+            h = int(style.get("item-height", 28))
+        else:
+            h = 28
+        return QtCore.QSize(option.rect.width(), h)
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint a tree-view item directly, bypassing QStyle completely.
+
+        Args:
+            painter: The QPainter to use.
+            option: The style option for the item.
+            index: The model index of the item.
+        """
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+
+        styles = self._tv_styles()
+        base_style = styles["base"]
+        hover_style = styles["hover"]
+        selected_style = styles["selected"]
+
+        item_padding = base_style.get("item-padding", [4, 8])
+        icon_text_spacing = int(base_style.get("icon-text-spacing", 6))
+
+        # --- background ------------------------------------------------
+        if is_selected:
+            bg_color = QColor(
+                selected_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        elif is_hovered:
+            bg_color = QColor(
+                hover_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        else:
+            bg_color = QColor(
+                base_style.get("background-color", "transparent")
+            )
+
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(opt.rect)
+
+        # --- text colour -----------------------------------------------
+        if is_selected:
+            text_color = QColor(
+                selected_style.get(
+                    "color",
+                    base_style.get("color", "#f4f5f5"),
+                )
+            )
+        else:
+            text_color = QColor(base_style.get("color", "#f4f5f5"))
+
+        # disabled dimming
+        if not (state & QStyle.StateFlag.State_Enabled):
+            text_color.setAlpha(
+                int(
+                    text_color.alpha()
+                    * base_style.get("disabled-opacity", 0.5)
+                )
+            )
+
+        # --- icon + text layout ----------------------------------------
+        content_rect = QRect(opt.rect).adjusted(
+            item_padding[1],
+            item_padding[0],
+            -item_padding[1],
+            -item_padding[0],
+        )
+        content_left = content_rect.left()
+
+        if not opt.icon.isNull():
+            icon_size = opt.decorationSize
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - icon_size.height() // 2,
+                icon_size.width(),
+                icon_size.height(),
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+            )
+            content_left = icon_rect.right() + icon_text_spacing
+
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(content_rect.right())
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class TableItemDelegate(QtWidgets.QStyledItemDelegate):
+    """Item delegate for AYTableView that paints cells directly, bypassing QSS.
+
+    Reads style data from the AYTableView style entry to draw cell
+    backgrounds (hover, selected) and text/icons.
+
+    Columns that carry a ``widget_factory`` on their :class:`TableColumn`
+    definition get a persistent editor via :meth:`createEditor`.  Qt calls
+    :meth:`setEditorData` both when the editor is first opened and
+    automatically whenever the model emits ``dataChanged`` for that index,
+    so server-push updates reach live widgets without extra wiring.
+    User edits are written back via :meth:`setModelData`.
+
+    Args:
+        parent: The parent widget (expected to be an AYTableView instance).
+        style_model: StyleData instance providing colour/dimension data.
+        variant: The variant string used to look up the correct style.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        style_model: StyleData | None = None,
+        variant: str = "default",
+    ) -> None:
+        super().__init__(parent)
+        self._style_model = style_model
+        self._variant_str = variant
+
+    def _table_styles(self) -> dict[str, dict]:
+        """Return base, hover and selected style dicts at once."""
+        if self._style_model is None:
+            return {"base": {}, "hover": {}, "selected": {}}
+        return self._style_model.get_styles(
+            "AYTableView",
+            self._variant_str,
+            ["base", "hover", "selected"],
+        )
+
+    def sizeHint(
+        self,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QtCore.QSize:
+        """Return a fixed row height from the style data."""
+        if self._style_model:
+            style = self._style_model.get_style(
+                "AYTableView", self._variant_str
+            )
+            h = int(style.get("item-height", 32))
+        else:
+            h = 32
+        return QtCore.QSize(option.rect.width(), h)
+
+    def createEditor(
+        self,
+        parent: QWidget,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> QWidget | None:
+        """Return a widget for widget-factory columns; None otherwise.
+
+        The returned widget is kept open permanently by the view via
+        ``openPersistentEditor``.  Qt calls :meth:`setEditorData` once
+        here and again automatically on every ``dataChanged`` emission
+        for this index, so server-push updates reach the widget for free.
+
+        Args:
+            parent: Parent widget (viewport).
+            option: Style option for the cell.
+            index: Model index identifying the cell.
+
+        Returns:
+            A QWidget created by the column's ``widget_factory``, or
+            ``None`` if the column has no factory.
+        """
+        from .components.table_model import PaginatedTableModel
+
+        src_model = index.model()
+        if hasattr(src_model, "sourceModel"):
+            src_model = src_model.sourceModel()
+        if not isinstance(src_model, PaginatedTableModel):
+            return None
+        col = index.column()
+        cols = src_model.columns
+        if col < 0 or col >= len(cols):
+            return None
+        factory = cols[col].widget_factory
+        if factory is None:
+            return None
+        return factory(index, parent)  # type: ignore[return-value]
+
+    def setEditorData(
+        self,
+        editor: QWidget,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Push current model data into *editor* when the model changes.
+
+        Called by Qt when the persistent editor is first opened and
+        automatically whenever the model emits ``dataChanged`` for this
+        index — server-push updates propagate to live widgets for free.
+
+        This default implementation is a no-op suited to action widgets
+        (e.g. buttons) that do not reflect model data.  Override or
+        replace this method for data-reflecting widgets: read
+        ``index.data(Qt.DisplayRole)`` (or a custom role) and push the
+        value into *editor*.
+
+        Args:
+            editor: The persistent editor widget.
+            index: Model index whose data changed.
+        """
+
+    def setModelData(
+        self,
+        editor: QWidget,
+        model: QtCore.QAbstractItemModel,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Write committed user input from *editor* back to *model*.
+
+        Called by Qt when the user commits an edit (e.g. presses Enter
+        or the editor loses focus).
+
+        This default implementation is a no-op suited to action widgets
+        that do not write back to the model.  For interactive widget
+        columns, read the current value from *editor* and call
+        ``model.setData(index, value, Qt.EditRole)`` to propagate the
+        change upstream (e.g. to the server).
+
+        Args:
+            editor: The persistent editor widget.
+            model: The data model.
+            index: Model index to write to.
+        """
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Paint a table cell directly, bypassing QStyle."""
+        # Skip painting for cells covered by a persistent editor widget.
+        from .components.table_model import PaginatedTableModel
+
+        src_model = index.model()
+        if hasattr(src_model, "sourceModel"):
+            src_model = src_model.sourceModel()
+        if isinstance(src_model, PaginatedTableModel):
+            col = index.column()
+            cols = src_model.columns
+            if 0 <= col < len(cols) and cols[col].widget_factory is not None:
+                return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        state = opt.state
+        is_selected = bool(state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(state & QStyle.StateFlag.State_MouseOver)
+        # State_MouseOver is only set for the cell directly under the cursor.
+        # When hovering the branch-indicator column, other cells in the same
+        # row don't receive it.  Fall back to a y-coordinate check so the
+        # entire row highlights consistently.
+        if not is_hovered and not is_selected:
+            _view = self.parent()
+            if type(_view).__name__ == "AYTableView" and hasattr(
+                _view, "viewport"
+            ):
+                _cursor = _view.viewport().mapFromGlobal(QtGui.QCursor.pos())
+                is_hovered = opt.rect.top() <= _cursor.y() < opt.rect.bottom()
+        is_item = not bool(state & QStyle.StateFlag.State_Children)
+
+        styles = self._table_styles()
+        base_style = styles["base"]
+        hover_style = styles["hover"]
+        selected_style = styles["selected"]
+
+        item_padding = base_style.get("item-padding", [4, 8])
+        icon_text_spacing = int(base_style.get("icon-text-spacing", 6))
+
+        # --- background ---
+        if is_selected:
+            bg_color = QColor(
+                selected_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        elif is_hovered:
+            bg_color = QColor(
+                hover_style.get(
+                    "background-color",
+                    base_style.get("background-color", "transparent"),
+                )
+            )
+        else:
+            bg_color = QColor(
+                base_style.get(
+                    "background-color-item" if is_item else "background-color",
+                    "transparent",
+                )
+            )
+
+        painter.setBrush(QBrush(bg_color))
+
+        pen_width = base_style.get("border-width", 0)
+        if pen_width > 0:
+            pen_color = QColor(base_style.get("border-color", "#000000"))
+            pen = QPen(pen_color)
+            pen.setWidth(pen_width)
+            painter.setPen(pen)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
+        column = index.column()
+        if column == 1:
+            painter.fillRect(opt.rect, bg_color)
+            painter.drawPolyline(
+                [
+                    opt.rect.topLeft(),
+                    opt.rect.topRight(),
+                    opt.rect.bottomRight(),
+                    opt.rect.bottomLeft(),
+                ]
+            )
+        else:
+            painter.drawRect(opt.rect)
+
+        # --- text colour ---
+        index_color = index.data(role=Qt.ItemDataRole.ForegroundRole)
+        if is_selected:
+            text_color = (
+                index_color.color()
+                if index_color
+                else QColor(base_style.get("color", "#f4f5f5"))
+            )
+        else:
+            text_color = (
+                index_color.color()
+                if index_color
+                else QColor(base_style.get("color", "#f4f5f5"))
+            )
+
+        # disabled dimming
+        if not (state & QStyle.StateFlag.State_Enabled):
+            text_color.setAlpha(
+                int(
+                    text_color.alpha()
+                    * base_style.get("disabled-opacity", 0.5)
+                )
+            )
+
+        # --- icon + text layout ---
+        content_rect = QRect(opt.rect).adjusted(
+            item_padding[1],
+            item_padding[0],
+            -item_padding[1],
+            -item_padding[0],
+        )
+        content_left = content_rect.left()
+
+        if not opt.icon.isNull():
+            icon_size = opt.decorationSize
+            icon_rect = QRect(
+                content_left,
+                opt.rect.center().y() - icon_size.height() // 2,
+                icon_size.width(),
+                icon_size.height(),
+            )
+            mode = (
+                QIcon.Mode.Normal
+                if state & QStyle.StateFlag.State_Enabled
+                else QIcon.Mode.Disabled
+            )
+            opt.icon.paint(
+                painter,
+                icon_rect,
+                Qt.AlignmentFlag.AlignCenter,
+                mode,
+            )
+            content_left = icon_rect.right() + icon_text_spacing
+
+        if opt.text:
+            text_rect = QRect(opt.rect)
+            text_rect.setLeft(content_left)
+            text_rect.setRight(content_rect.right())
+            painter.setPen(text_color)
+            painter.setFont(opt.font)
+            painter.drawText(
+                text_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                opt.text,
+            )
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class TreeViewDrawer:
+    """AYONStyle drawer for QTreeView.
+
+    Handles branch expand/collapse indicators and the indentation metric
+    using colours from the QTreeView style data in ayon_style.json.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._icon_cache = {}
+
+    @property
+    def base_class(self):
+        return {"QTreeView": QTreeView}
+
+    def register_drawers(self) -> dict:
+        """Register drawing functions for QTreeView primitives."""
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            ): self.draw_branch_indicator,
+        }
+
+    def register_metrics(self) -> dict:
+        """Register pixel metric functions for QTreeView."""
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_TreeViewIndentation,
+                "QTreeView",
+            ): self.get_metric,
+        }
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        """Return indent width from style data.
+
+        Args:
+            metric: The pixel metric being queried.
+            opt: Optional style option.
+            widget: The target widget.
+
+        Returns:
+            The indent size in pixels.
+        """
+        if metric == QStyle.PixelMetric.PM_TreeViewIndentation:
+            variant = getattr(widget, "_variant_str", "default")
+            style = self.model.get_style("QTreeView", variant)
+            return int(style.get("indent", 20))
+        return 0
+
+    def _draw_cell_border(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        style: dict,
+    ) -> None:
+        """Draw top and bottom border lines for an AYTableView cell."""
+        painter.setPen(
+            QPen(
+                QColor(style.get("border-color")), style.get("border-width", 1)
+            )
+        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLines(
+            [
+                rect.topLeft(),
+                rect.topRight(),
+                rect.bottomLeft(),
+                rect.bottomRight(),
+            ]
+        )
+
+    def draw_branch_indicator(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw expand / collapse arrows for tree branch items.
+
+        Args:
+            option: The primitive element style option.
+            painter: The QPainter to draw on.
+            widget: The QTreeView widget (may be the viewport).
+        """
+        has_children = bool(option.state & QStyle.StateFlag.State_Children)
+
+        # Resolve to the actual QTreeView — widget may be the viewport.
+        tv = widget
+        if tv is not None and not isinstance(tv, QTreeView):
+            tv = tv.parent() if tv.parent() else tv
+
+        is_table = type(tv).__name__ == "AYTableView"
+        is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+
+        # State_MouseOver is only set when the cursor is directly over the
+        # branch rect — not when hovering another column in the same row.
+        # Query the actual cursor position for true row-level hover.
+        # Compare by y-coordinate rather than index.row() to avoid false
+        # matches between rows at the same row number under different parents
+        # (e.g. row 2 under root vs row 2 under an expanded child).
+        is_hovered = False
+        if not is_selected and is_table and isinstance(tv, QTreeView):
+            vp = tv.viewport()
+            cursor_vp = vp.mapFromGlobal(QtGui.QCursor.pos())
+            is_hovered = (
+                option.rect.top() <= cursor_vp.y() < option.rect.bottom()
+            )
+
+        if not has_children:
+            if is_table:
+                if is_selected:
+                    state_name = "selected"
+                elif is_hovered:
+                    state_name = "hover"
+                else:
+                    state_name = "base"
+                style = self.model.get_style("AYTableView", state=state_name)
+                painter.save()
+                painter.fillRect(
+                    option.rect,
+                    QColor(style.get("background-color", "transparent")),
+                )
+                self._draw_cell_border(painter, option.rect, style)
+                painter.restore()
+            return
+
+        is_open = bool(option.state & QStyle.StateFlag.State_Open)
+
+        variant = getattr(tv, "_variant_str", "default")
+        style = self.model.get_style("QTreeView", variant)
+        color = QColor(style.get("branch-indicator-color", "#8b9198"))
+        icon_name = style.get(
+            "expanded-icon-name" if is_open else "expand-icon-name"
+        )
+
+        painter.save()
+
+        if is_table:
+            if is_selected:
+                state_name = "selected"
+            elif is_hovered:
+                state_name = "hover"
+            else:
+                state_name = "base"
+            tbl_style = self.model.get_style("AYTableView", state=state_name)
+            painter.fillRect(
+                option.rect,
+                QColor(tbl_style.get("background-color", "transparent")),
+            )
+            self._draw_cell_border(painter, option.rect, tbl_style)
+
+        if icon_name:
+            key = f"{icon_name}-{color.name()}"
+            if key not in self._icon_cache:
+                self._icon_cache[key] = get_icon(icon_name, color=color)
+            icon = self._icon_cache[key]
+            rect = option.rect
+            if style.get("expand-icon-size"):
+                center = rect.center()
+                rect.setSize(QSize(16, 16))
+                rect.moveCenter(center)
+            icon.paint(painter, rect)
+
+        else:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+
+            rect = option.rect
+            cx, cy = rect.center().x(), rect.center().y()
+            size = max(4, min(rect.width(), rect.height()) // 3)
+
+            path = QPainterPath()
+            if is_open:
+                # Downward-pointing triangle
+                path.moveTo(cx - size, cy - size // 2)
+                path.lineTo(cx + size, cy - size // 2)
+                path.lineTo(cx, cy + size // 2)
+            else:
+                # Right-pointing triangle
+                path.moveTo(cx - size // 2, cy - size)
+                path.lineTo(cx - size // 2, cy + size)
+                path.lineTo(cx + size // 2, cy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
+class TableHeaderDrawer:
+    """AYONStyle drawer for QHeaderView used by AYTableView.
+
+    Handles painting of header sections and labels using colours
+    from the AYTableView style data in ayon_style.json.
+    """
+
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._icon_cache: dict[str, QIcon] = {}
+
+    @property
+    def base_class(self):
+        return {"QHeaderView": QtWidgets.QHeaderView}
+
+    def register_drawers(self) -> dict:
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_Header,
+                "QHeaderView",
+            ): [
+                partial(
+                    self.style_inst.drawControl,
+                    QStyle.ControlElement.CE_HeaderSection,
+                ),
+                partial(
+                    self.style_inst.drawControl,
+                    QStyle.ControlElement.CE_HeaderLabel,
+                ),
+            ],
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_HeaderSection,
+                "QHeaderView",
+            ): self.draw_header_section,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_HeaderLabel,
+                "QHeaderView",
+            ): self.draw_header_label,
+        }
+
+    def register_metrics(self) -> dict:
+        """Register pixel metrics for QHeaderView."""
+        return {
+            enum_to_str(
+                QStyle.PixelMetric,
+                QStyle.PixelMetric.PM_HeaderMargin,
+                "QHeaderView",
+            ): self.get_metric,
+        }
+
+    def get_metric(
+        self,
+        metric: QStyle.PixelMetric,
+        opt: QStyleOption | None = None,
+        widget: QWidget | None = None,
+    ) -> int:
+        """Return header margin from style data."""
+        if metric == QStyle.PixelMetric.PM_HeaderMargin:
+            return 4
+        return 0
+
+    def _get_table_style(self, widget: QWidget | None) -> dict:
+        """Resolve the AYTableView style for the header's parent table."""
+        variant = "default"
+        if widget is not None:
+            # QHeaderView's parent is the QTreeView/AYTableView
+            table = widget.parent()
+            if table is not None:
+                variant = getattr(table, "_variant_str", "default")
+        return self.model.get_style("AYTableView", variant)
+
+    def draw_header_section(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the header section background and bottom border."""
+        style = self._get_table_style(widget)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+
+        # Background
+        bg_color = QColor(style.get("header-background-color", "#272d35"))
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(option.rect)
+
+        # Bottom border
+        border_color = QColor(style.get("header-border-color", "#41474d"))
+        pen = QPen(border_color)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        bottom = option.rect.bottom()
+        painter.drawLine(
+            option.rect.left(),
+            bottom,
+            option.rect.right(),
+            bottom,
+        )
+
+        painter.restore()
+
+    def draw_header_label(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        """Draw the header label text and sort indicator."""
+        style = self._get_table_style(widget)
+        padding = style.get("header-padding", [4, 8])
+
+        painter.save()
+
+        # Text
+        text_color = QColor(style.get("header-color", "#c1c7ce"))
+        painter.setPen(text_color)
+
+        font = painter.font()
+        font.setWeight(QtGui.QFont.Weight.DemiBold)
+        painter.setFont(font)
+
+        text_rect = option.rect.adjusted(
+            padding[1], padding[0], -padding[1], -padding[0]
+        )
+
+        text = ""
+        if hasattr(option, "text"):
+            text = option.text or ""
+
+        # Check for sort indicator
+        sort_indicator = getattr(option, "sortIndicator", None)
+        indicator_space = 0
+        if sort_indicator and sort_indicator != 0:
+            indicator_space = 16
+
+        if text:
+            draw_rect = QRect(text_rect)
+            if indicator_space:
+                draw_rect.setRight(draw_rect.right() - indicator_space)
+            painter.drawText(
+                draw_rect,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                text,
+            )
+
+        # Sort indicator arrow
+        if sort_indicator and sort_indicator != 0:
+            indicator_color = QColor(
+                style.get(
+                    "header-sort-indicator-color",
+                    "#8fceff",
+                )
+            )
+            # sortIndicator: 1 = Down, 2 = Up (in QStyleOptionHeader)
+            icon_name = (
+                "arrow_downward" if sort_indicator == 1 else "arrow_upward"
+            )
+            cache_key = f"{icon_name}-{indicator_color.name()}"
+            if cache_key not in self._icon_cache:
+                self._icon_cache[cache_key] = get_icon(
+                    icon_name, color=indicator_color
+                )
+            icon = self._icon_cache[cache_key]
+            icon_rect = QRect(
+                text_rect.right() - 14,
+                text_rect.center().y() - 7,
+                14,
+                14,
+            )
+            icon.paint(painter, icon_rect)
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
+
+
 W_T = {}
 
 
@@ -1697,11 +3050,14 @@ class AYONStyle(QCommonStyle):
         self.drawer_objs = [
             TooltipDrawer(self),
             LabelDrawer(self),  # first because QLabel inherits from QFrame.
+            LineEditDrawer(self),
             ButtonDrawer(self),
             CheckboxDrawer(self),
             ComboBoxDrawer(self),
             ScrollBarDrawer(self),
             FrameDrawer(self),
+            TreeViewDrawer(self),
+            TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
         ]
         for obj in self.drawer_objs:
@@ -1713,6 +3069,15 @@ class AYONStyle(QCommonStyle):
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
 
+        # Sort base_classes: most-specific (deepest MRO) first
+        self.base_classes = dict(
+            sorted(
+                self.base_classes.items(),
+                key=lambda kv: len(kv[1].__mro__),
+                reverse=True,
+            )
+        )
+
     def widget_key(self, w: QWidget | None) -> str:
         if self._in_widget_key or w is None or not isValid(w):
             return ""
@@ -1720,7 +3085,9 @@ class AYONStyle(QCommonStyle):
         if w:
             # Handle item view widgets - check parent for delegate and exclude
             # ComboBoxItemDelegate
-            if hasattr(w, "itemDelegate") and not isinstance(w, QComboBox):
+            if hasattr(w, "itemDelegate") and not isinstance(
+                w, (QComboBox, QHeaderView)
+            ):
                 # Calling itemDelegate() is not a simple getter - it can
                 # trigger Qt's internal operations that call back into the
                 # custom style methods (subElementRect, drawPrimitive,
@@ -1732,7 +3099,10 @@ class AYONStyle(QCommonStyle):
                     cbd = delegate and isinstance(
                         delegate, ComboBoxItemDelegate
                     )
-                    if not cbd:
+                    tvd = delegate and isinstance(
+                        delegate, (TreeViewItemDelegate, TableItemDelegate)
+                    )
+                    if not cbd and not tvd:
                         return "QStyledItemDelegate"
                 finally:
                     self._in_widget_key = False
@@ -1759,6 +3129,7 @@ class AYONStyle(QCommonStyle):
             super().polish(widget)
             # TODO(plp): move to QStyle:polishPalette(QPalette)
             widget.setPalette(self.model.base_palette)
+            widget.setFont(self.model.base_font)
 
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
@@ -1766,7 +3137,9 @@ class AYONStyle(QCommonStyle):
 
             if isinstance(widget, QComboBox):
                 widget.setMinimumContentsLength(1)
-                widget.setItemDelegate(ComboBoxItemDelegate(parent=widget))
+                widget.setItemDelegate(
+                    ComboBoxItemDelegate(parent=widget, style_model=self.model)
+                )
                 widget.setSizeAdjustPolicy(
                     QComboBox.SizeAdjustPolicy.AdjustToContents
                 )
@@ -1776,8 +3149,8 @@ class AYONStyle(QCommonStyle):
                     Qt.WidgetAttribute.WA_TranslucentBackground, True
                 )
 
-        elif isinstance(widget, QPalette):
-            print("YES: QPalette")
+        # elif isinstance(widget, QPalette):
+        #     print("YES: QPalette")
 
         elif isinstance(widget, QApplication):
             super().polish(widget)

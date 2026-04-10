@@ -3,13 +3,13 @@ from __future__ import annotations
 from os.path import normpath
 from typing import Optional
 
-from qtpy import QtCore, QtWidgets
+from PySide6.QtCore import Qt
+from qtpy.QtWidgets import QWidget
 
-from ..utils import clear_layout
 from .. import get_ayon_style
-from .layouts import AYHBoxLayout
-from ..variants import QLabelVariants
+from ..utils import clear_layout
 from .label import AYLabel
+from .layouts import AYHBoxLayout
 
 
 class AYEntityPathSegment(AYLabel):
@@ -18,23 +18,46 @@ class AYEntityPathSegment(AYLabel):
         text,
         parent=None,
         variant: AYLabel.Variants = AYLabel.Variants.Default,
-        dim=True,
-        rel_text_size=-2,
     ):
-        super().__init__(text, parent=parent)
+        super().__init__(text, dim=True, rel_text_size=-2, parent=parent)
+        self.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self._variant_str: str = variant.value
+        self._ensure_font_setup()
+        self.setFixedSize(
+            self._font_metrics.size(self.alignment(), self.text()),
+        )
 
 
-class AYEntityPath(QtWidgets.QWidget):
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+class AYEntityPath(QWidget):
+    def __init__(
+        self,
+        path: str = "",
+        simple: bool = False,
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self.setStyle(get_ayon_style())
-        self._path = ""
+        self._path = path
         self._path_segments = []
         self._entity_id = None
-        self.setLayout(AYHBoxLayout(self))
+        self._simple = simple
 
-        self.entity_path = "Project/assets/characters/robot/Render"
+        lyt = AYHBoxLayout(self, spacing=1)
+        self.setLayout(lyt)
+
+        if self._simple:
+            self._label = AYLabel(
+                self._path,
+                dim=True,
+                rel_text_size=-2,
+                elide_mode=Qt.TextElideMode.ElideMiddle,
+            )
+            lyt.addWidget(self._label)
+            lyt.addStretch(100)
+
+        self.entity_path = path
 
     @property
     def entity_path(self):
@@ -42,9 +65,12 @@ class AYEntityPath(QtWidgets.QWidget):
 
     @entity_path.setter
     def entity_path(self, value):
-        self._path_segments = normpath(value).split("/")
         self._path = value
-        self._build()
+        if not self._simple:
+            self._path_segments = normpath(value).split("/")
+            self._build()
+        else:
+            self._label.setText(self._path.replace("/", " / "))
 
     def _build(self):
         lyt = self.layout()
@@ -58,3 +84,22 @@ class AYEntityPath(QtWidgets.QWidget):
             if p != self._path_segments[-1]:
                 lyt.addWidget(AYEntityPathSegment("/", parent=self))
         lyt.addStretch(100)
+
+
+if __name__ == "__main__":
+    from ..tester import Style, test
+    from .container import AYContainer
+
+    def _build():
+        w = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYContainer.Variants.Low,
+            layout_margin=20,
+            layout_spacing=10,
+        )
+        w.add_widget(AYLabel("AYEntityPath", bold=True, rel_text_size=2))
+        w.add_widget(AYEntityPath("project/asset/shot/comp", simple=False))
+        w.add_widget(AYEntityPath("project/asset/shot/comp", simple=True))
+        return w
+
+    test(_build, style=Style.AyonStyleOverCSS)

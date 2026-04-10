@@ -1,77 +1,153 @@
 from __future__ import annotations
 
+from enum import Enum
 from functools import partial
 from pathlib import Path
 from typing import Callable
 
-from qtpy.QtCore import QRect, QSize, Qt
-from qtpy.QtGui import QIcon, QPainter, QPaintEvent, QPixmap
+from qtpy.QtCore import (
+    QEasingCurve,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+)
+from qtpy.QtGui import QColor, QIcon, QPainter, QPaintEvent, QPixmap
 from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
 from .. import get_ayon_style
 from ..image_cache import ImageCache
 from ..variants import QPushButtonVariants
 
+try:
+    from qtmaterialsymbols import get_icon  # type: ignore
+except ImportError:
+    from ..vendor.qtmaterialsymbols import get_icon
+
 
 class AYEntityThumbnail(QPushButton):
+    class Variants(Enum):
+        Thumbnail = QPushButtonVariants.Thumbnail.value
+        Entity_Card = QPushButtonVariants.Entity_Card.value
+
     def __init__(
         self,
         src: Path | str = "",
         file_cacher: Callable | None = None,
+        placeholder_icon: str = "image",
+        placeholder_scale: float = 0.333333,
         size: tuple = (85, 48),
+        fade_duration: int = 0,
+        variant: Variants = Variants.Thumbnail,
         **kwargs,
     ):
         """A widget that displays a thumbnail image for an entity, with options
         to customize the image source, caching behavior, and size."""
-        self._src = src
         self._file_cacher = file_cacher
         self._size = size
-        self._variant_str: str = QPushButtonVariants.Thumbnail.value
-        self._icon = QIcon()
-
-        if not Path(self._src).exists() and self._file_cacher:
-            ic = ImageCache.get_instance()
-            self._src = ic.get(
-                str(self._src), partial(self._file_cacher, self._src)
+        self._variant_str: str = variant.value
+        icn_size = size[1] * placeholder_scale
+        self._placeholder_icon = QIcon(
+            get_icon(placeholder_icon, color="#10ffffff").pixmap(
+                QSize(icn_size, icn_size),
             )
+        )
 
-        super().__init__(self._icon, "", **kwargs)
+        super().__init__(QIcon(), "", **kwargs)
         self.setStyle(get_ayon_style())
 
-        self.set_thumbnail(self._src)
+        self._src: Path | str = ""
+        self._incoming_pixmap: QPixmap | None = None
+        self._opacity: float = 1.0
+        self._anim = QVariantAnimation(self)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setDuration(fade_duration)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._anim.valueChanged.connect(self._on_fade_tick)
+        self._anim.finished.connect(self._on_fade_done)
+        self._bg_color = QColor(
+            get_ayon_style()
+            .model.get_style("QPushButton", variant=self._variant_str)
+            .get("background-color", "#000000")
+        )
+
+        self.set_thumbnail(src)
         self.setFixedSize(*self._size)
 
-    def set_thumbnail(self, name: Path | str):
-        """Set the thumbnail image for the button."""
-        self._src = name
-        if not Path(self._src).exists() and self._file_cacher:
-            ic = ImageCache.get_instance()
-            self._src = ic.get(
-                str(self._src), partial(self._file_cacher, self._src)
-            )
-        if Path(self._src).exists():
-            pxm = QPixmap(str(self._src))
-            qicon = QIcon()
-            qicon.addPixmap(pxm)
-            self.setIcon(qicon)
+    def set_fade_duration(self, duration: int) -> None:
+        """Set the duration of the fade animation when changing thumbnails."""
+        self._anim.setDuration(duration)
+
+    def _resolve_src(self, src: Path | str) -> Path | str:
+        """Resolve a cache key or path to an existing file path."""
+        if Path(src).exists():
+            return src
+        ic = ImageCache.get_instance()
+        if self._file_cacher:
+            return ic.get(str(src), partial(self._file_cacher, src))
+        if ic.has(str(src)):
+            return ic.get_path(str(src)) or ""
+        return src
+
+    def _on_fade_tick(self, value: float) -> None:
+        self._opacity = value
+        self.update()
+
+    def _on_fade_done(self) -> None:
+        pixmap = self._incoming_pixmap
+        if pixmap and not pixmap.isNull():
+            icon = QIcon()
+            icon.addPixmap(pixmap)
+            self.setIcon(icon)
             self.setIconSize(QSize(*self._size))
         else:
             self.setIcon(QIcon())
+        self._incoming_pixmap = None
+        self._opacity = 1.0
+        self.update()
+
+    def set_thumbnail(self, name: Path | str) -> None:
+        """Set the thumbnail image for the button."""
+        self._src = self._resolve_src(name)
+        self._anim.stop()
+        if self._src and Path(self._src).exists():
+            raw = QPixmap(str(self._src))
+            self._incoming_pixmap = raw.scaled(
+                QSize(*self._size),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self._opacity = 0.0
+            self._anim.start()
+        else:
+            self._incoming_pixmap = None
+            self._opacity = 1.0
+            self.setIcon(self._placeholder_icon)
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            p = QPainter(self)
-            option = QStyleOptionButton()
-            self.initStyleOption(option)
-            # override rect set by stylesheet
-            size = QSize(*self._size)
-            self.setFixedSize(size)
-            option.rect = QRect(0, 0, size.width(), size.height())
-            # draw
-            return get_ayon_style().drawControl(
-                QStyle.ControlElement.CE_PushButton, option, p, self
-            )
-        super().paintEvent(arg__1)
+        p = QPainter(self)
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        # override rect set by stylesheet
+        size = QSize(*self._size)
+        self.setFixedSize(size)
+        option.rect = QRect(0, 0, size.width(), size.height())
+        # draw base (current icon)
+        get_ayon_style().drawControl(
+            QStyle.ControlElement.CE_PushButton, option, p, self
+        )
+        # overlay incoming pixmap with fade opacity
+        if self._incoming_pixmap and not self._incoming_pixmap.isNull():
+            x = (size.width() - self._incoming_pixmap.width()) // 2
+            y = (size.height() - self._incoming_pixmap.height()) // 2
+            p.save()
+            p.setClipRect(QRect(1, 1, size.width() - 2, size.height() - 2))
+            p.setOpacity(self._opacity)
+            p.fillRect(option.rect, self._bg_color)
+            p.drawPixmap(x, y, self._incoming_pixmap)
+            p.restore()
 
 
 if __name__ == "__main__":
@@ -90,8 +166,8 @@ if __name__ == "__main__":
     def build():
         w = AYContainer(
             layout=AYContainer.Layout.HBox,
-            margin=8,
-            layout_margin=8,
+            variant=AYContainer.Variants.Low,
+            layout_margin=24,
             layout_spacing=4,
         )
         w.add_widget(
@@ -102,6 +178,15 @@ if __name__ == "__main__":
                 src="SMPTE_Color_Bars", file_cacher=resource_loader
             )
         )
+        delayed = AYEntityThumbnail(
+            src="avatar2", file_cacher=resource_loader, fade_duration=0
+        )
+        w.add_widget(delayed)
+        w.add_widget(AYEntityThumbnail(file_cacher=resource_loader))
+
+        # simulate thumbnail update after some time
+        delayed.set_fade_duration(1000)
+        QTimer.singleShot(1500, lambda: delayed.set_thumbnail("avatar3"))
         return w
 
     test(build, style=Style.AyonStyleOverCSS)

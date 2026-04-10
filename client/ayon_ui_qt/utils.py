@@ -60,9 +60,10 @@ def process_activity_data(
         return []
 
     users = {d.short_name: d for d in project_data.users}
+    category_colors = {c.name: c.color for c in project_data.comment_category}
 
     ui_data = []
-    nothing = "Not available"
+    nothing = "n/a"
     for act in activities:
         act_data = act.get("activityData", {})
         if isinstance(act_data, str):
@@ -81,8 +82,9 @@ def process_activity_data(
         date = act.get("updatedAt", nothing)
 
         if activity_type == "comment":
-            annotation_models = _parse_annotations(act_data, nothing)
-            file_models = _parse_files(act, nothing)
+            annotation_models, ranges = _parse_annotations(act_data, nothing)
+            file_models = _parse_files(act, ranges, nothing)
+            category = act_data.get("category", "")
             ui_data.append(
                 CommentModel(
                     activity_id=activity_id,
@@ -90,6 +92,8 @@ def process_activity_data(
                     user_name=user_name,
                     comment=act.get("body", nothing),
                     comment_date=date,
+                    category=category,
+                    category_color=category_colors.get(category, ""),
                     files=file_models,
                     annotations=annotation_models,
                 )
@@ -110,14 +114,19 @@ def process_activity_data(
                 )
             )
         elif activity_type == "status.change":
-            print(act.get("activityData", {}).get("oldValue", nothing))
+            version = act_data.get("origin", {}).get("name", nothing)
+            parents: list[dict] = act_data.get("parents", {})
+            product = next(
+                (p["name"] for p in parents if p["type"] == "product"),
+                nothing,
+            )
             ui_data.append(
                 StatusChangeModel(
                     activity_id=activity_id,
                     user_full_name=user_full_name,
                     user_name=user_name,
-                    product=nothing,
-                    version=nothing,
+                    product=product,
+                    version=version,
                     old_status=str(act_data.get("oldValue", nothing)),
                     new_status=str(act_data.get("newValue", nothing)),
                     date=date,
@@ -127,15 +136,17 @@ def process_activity_data(
     return ui_data
 
 
-def _parse_files(act, nothing):
+def _parse_files(act, ranges, nothing):
     """Attached files to comment activities."""
     files = act.get("files", [])
     file_models = []
     for file_info in files:
+        fid = file_info.get("id", nothing)
         file_models.append(
             FileModel(
-                id=file_info.get("id", nothing),
+                id=fid,
                 mime=file_info.get("mime", nothing),
+                frame=ranges.get(fid, (-1, -1))[0],
             )
         )
     return file_models
@@ -143,6 +154,7 @@ def _parse_files(act, nothing):
 
 def _parse_annotations(act_data, nothing):
     """Attached annotations to comment activities."""
+    ranges = {}
     annotation_models = []
     annotations = act_data.get("annotations", [])
     for annotation in annotations:
@@ -154,7 +166,9 @@ def _parse_annotations(act_data, nothing):
                 transparent=annotation.get("transparent", nothing),
             )
         )
-    return annotation_models
+        ranges[annotation.get("composite")] = annotation.get("range")
+        ranges[annotation.get("transparent")] = annotation.get("range")
+    return annotation_models, ranges
 
 
 def clear_layout(layout):

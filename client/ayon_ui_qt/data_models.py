@@ -1,21 +1,36 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum, Flag, auto
 from typing import Any, List, Optional
+
+RE_HAS_CHECKLIST = re.compile(r"\s*[-*+]\s+\[[xX ]\]\s*")
+
+
+class MenuSize(Enum):
+    Full = "full"
+    Short = "short"
+    Icon = "icon"
+
+
+class ActivityCategory(Flag):
+    COMMENT = 1
+    STATUS_CHANGE = auto()
+    VERSION_PUBLISH = auto()
+    CHECKLIST = auto()
+    DETAILS = auto()
+    ALL = COMMENT | STATUS_CHANGE | VERSION_PUBLISH | CHECKLIST
 
 
 def short_date(date_str: str) -> str:
-    if date_str:
-        try:
-            # Parse the ISO string
-            dt = datetime.fromisoformat(date_str)
-            return dt.strftime("%b %d, %I:%M %p")
-        except ValueError:
-            # Handle invalid date format
-            return date_str
-    else:
+    if not date_str:
         return "Not available"
+    try:
+        return datetime.fromisoformat(date_str).strftime("%b %d, %I:%M %p")
+    except ValueError:
+        return date_str
 
 
 @dataclass
@@ -55,7 +70,9 @@ class StatusChangeModel:
     new_status: str = ""
     date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="status.change", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.STATUS_CHANGE, hash=False
+    )
 
     def __post_init__(self):
         self.short_date = short_date(self.date)
@@ -71,7 +88,9 @@ class VersionPublishModel:
     product: str = ""
     date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="version.publish", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.VERSION_PUBLISH, hash=False
+    )
 
     def __post_init__(self):
         self.short_date = short_date(self.date)
@@ -92,10 +111,13 @@ class FileModel:
     Attachments could be images, there could be also preview available for
     them.
     """
+
     id: str
     mime: str
     local_path: str = ""
     thumb_local_path: str = ""
+    frame: int = 0
+    start_frame: int = 0  # for sequences, to compute the actual frame number
 
 
 @dataclass(unsafe_hash=True)
@@ -104,14 +126,19 @@ class CommentModel:
     user_full_name: str = ""
     user_name: str = ""
     user_src: str = ""
-    comment: str = ""
+    comment: str = ""  # type: ignore
     category: str = ""
     category_color: str = ""
     comment_date: str = ""
     short_date: str = field(init=False, hash=False)
-    type: str = field(init=False, default="comment", hash=False)
+    type: ActivityCategory = field(
+        init=False, default=ActivityCategory.COMMENT, hash=False
+    )
     files: list[FileModel] = field(default_factory=list, hash=False)
-    annotations: list[AnnotationModel] = field(default_factory=list, hash=False)
+    annotations: list[AnnotationModel] = field(
+        default_factory=list, hash=False
+    )
+    _comment: str = field(init=False, repr=False)
 
     def __post_init__(self):
         """Set the date if not set and compute the short date."""
@@ -119,6 +146,17 @@ class CommentModel:
             self.comment_date = datetime.now(timezone.utc).isoformat()
 
         self.short_date = short_date(self.comment_date)
+
+    @property
+    def comment(self):  # noqa: F811
+        return self._comment
+
+    @comment.setter
+    def comment(self, value: str):
+        """Check if the comment contains a checklist."""
+        if re.search(RE_HAS_CHECKLIST, str(value)):
+            self.type = ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+        self._comment = value
 
 
 # -----------------------------------------------------------------------------
@@ -162,6 +200,7 @@ class Team:
 @dataclass
 class CommentCategory:
     """Model for powerpack `activity_categories` settings"""
+
     name: str
     color: str
     access: dict[str, Any]
@@ -175,9 +214,8 @@ class ProjectData:
     users: List[User]
     teams: List[Team]
     anatomy: dict[str, Any]
-    comment_category : List[CommentCategory]
+    comment_category: List[CommentCategory]
     current_user: Optional[User]
-
 
     @staticmethod
     def not_set():
@@ -188,7 +226,7 @@ class ProjectData:
             teams=[],
             anatomy={},
             comment_category=[],
-            current_user=None
+            current_user=None,
         )
 
 
@@ -225,8 +263,8 @@ class VersionData:
             folder_path=ns,
             assignees=[],
             attrib={},
-            thumbnail_id=None,
-            thumbnail_local_path=None
+            thumbnail_id="",
+            thumbnail_local_path="",
         )
 
 
@@ -238,3 +276,42 @@ if __name__ == "__main__":
     print(f"v ={v}  hash(v) = {hash(v)}")
     s = StatusChangeModel()
     print(f"s ={s}  hash(s) = {hash(s)}")
+    #  test checkbox detection
+    print()
+    comment = "This contains a checklist\n\n- [ ] do this\n- [x] done this\n"
+    c = CommentModel(comment=comment)
+    print(f"checklist test:\n - comment: {c.comment!r}\n - type: {c.type!r}")
+    comment = "This does not contains a checklist\n\n"
+    c = CommentModel(comment=comment)
+    print(f"checklist test:\n - comment: {c.comment!r}\n - type: {c.type!r}")
+    print()
+    s = ActivityCategory.COMMENT
+    print(f"s = {s!r}")
+    print(f"s == ActivityCategory.COMMENT -> {s == ActivityCategory.COMMENT}")
+    print(
+        f"s == ActivityCategory.CHECKLIST -> {s == ActivityCategory.CHECKLIST}"
+    )
+    ch = ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+    print(f"ch = {ch!r}")
+    print(
+        f"ch == ActivityCategory.COMMENT -> {ch == ActivityCategory.COMMENT}"
+    )
+    print(
+        f"ch == ActivityCategory.CHECKLIST -> {ch == ActivityCategory.CHECKLIST}"
+    )
+    print(
+        f"ch & ActivityCategory.CHECKLIST -> {ch & ActivityCategory.CHECKLIST}"
+    )
+    print(f"ch & ActivityCategory.COMMENT -> {ch & ActivityCategory.COMMENT}")
+    print(
+        f"ch & ActivityCategory.VERSION_PUBLISH -> {ch & ActivityCategory.VERSION_PUBLISH}"
+    )
+    print()
+    for filter in list(ActivityCategory) + [
+        ActivityCategory.COMMENT | ActivityCategory.CHECKLIST
+    ]:
+        print(f"filter = {filter!r} -----------------------------------------")
+        for cat in ActivityCategory:
+            # print(f"{cat.name} -> {cat.value}")
+            print(f"bool({cat.name} & filter) -> {bool(cat & filter)}")
+            # print(f"filter & {cat.name}  == {cat.name} -> {filter & cat == cat}")

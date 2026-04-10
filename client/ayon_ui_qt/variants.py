@@ -15,11 +15,18 @@ class QPushButtonVariants(Enum):
     Checked = "checked"
     Tonal = "tonal"
     Thumbnail = "thumbnail"
+    Entity_Card = "entity-card"
     Tag = "tag"
+    Tag_Menu = "tag-menu"
+    Table_Filter = "table-filter"
 
 
 class QCheckBoxVariants(Enum):
     Default = "default"
+    Secondary = "secondary"
+    Tertiary = "tertiary"
+    Button = "button"
+    Menu = "menu"
 
 
 class QTextEditVariants(Enum):
@@ -31,8 +38,14 @@ class QTextEditVariants(Enum):
     Debug_B = "debug-b"
 
 
+class QLineEditVariants(Enum):
+    Default = "default"
+    Search_Field = "search-field"
+
+
 class QComboBoxVariants(Enum):
     Default = "default"
+    Low = "low"
 
 
 class QScrollBarVariants(Enum):
@@ -42,8 +55,15 @@ class QScrollBarVariants(Enum):
 class QFrameVariants(Enum):
     Default = "default"
     Low = "low"
+    Low_Square = "low-square"
+    Low_Framed = "low-framed"
+    Low_Framed_Thin = "low-framed-thin"
     High = "high"
     Tag = "tag"
+    Item_View = "item-view"
+    Criterion = "criterion"
+    Entity_Card = "entity-card"
+    Entity_Card_Tag = "entity-card-tag"
     Debug_R = "debug-r"
     Debug_G = "debug-g"
     Debug_B = "debug-b"
@@ -58,17 +78,34 @@ class QLabelVariants(Enum):
     Tag = "tag"
     Badge = "badge"
     Pill = "pill"
+    Entity_Label = "entity-label"
+
+
+class QTreeViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
 
 
 class QStyledItemDelegateVariants(Enum):
     Default = "default"
 
 
+class AYTableViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
+
+
+class AYUserImageVariants(Enum):
+    Default = "default"
+    Entity_Card = "entity-card"
+
+
 # END OF VARIANTs DEFINITIONS -------------------------------------------------
 
 
 if __name__ == "__main__":
-
     # NOTE: Execute this file to update the variants.py file with the current
     # style data:
     #    uv run python -m client.ayon_ui_qt.variants

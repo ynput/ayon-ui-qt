@@ -7,6 +7,7 @@ from functools import partial
 from qtpy import QtWidgets
 from qtpy.QtCore import (
     QObject,
+    QPoint,
     Qt,
     Signal,  # type: ignore
     Slot,  # type: ignore
@@ -16,9 +17,11 @@ from qtpy.QtGui import (
     QFont,
     QPalette,
     QPixmap,
+    QTextBlockFormat,
+    QTextCharFormat,
     QTextCursor,
     QTextDocument,
-    QTextFrameFormat,
+    QTextListFormat,
 )
 from qtpy.QtWidgets import (
     QLabel,
@@ -31,14 +34,23 @@ from .. import get_ayon_style
 from ..data_models import CommentCategory, ProjectData, User
 from ..variants import QFrameVariants, QTextEditVariants
 from .buttons import AYButton
+from .checkbox_handler import (
+    CHECKBOX_FORMAT_TYPE,
+    CHECKBOX_CHECKED_PROP,
+    CHECKBOX_INDEX_PROP,
+    CheckboxHandler,
+)
 from .combo_box import AYComboBox
 from .comment_completion import (
+    apply_code_block_backgrounds,
     format_comment_on_change,
     on_completer_activated,
     on_completer_key_press,
     on_completer_text_changed,
     on_users_updated,
     setup_user_completer,
+    CODE_FG,
+    CODE_BG
 )
 from .container import AYContainer
 from .layouts import AYHBoxLayout, AYVBoxLayout
@@ -51,6 +63,9 @@ MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
 class AYTextEditor(AYTextEdit):
     Variants = QTextEditVariants
+
+    submitted = Signal()  # Signal emitted when Ctrl+Enter is pressed
+    checklist_changed = Signal()  # Signal emitted when checkbox state changes
 
     def __init__(
         self,
@@ -66,14 +81,30 @@ class AYTextEditor(AYTextEdit):
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
         self._variant_str: str = variant.value
+        self._checkbox_handler: CheckboxHandler | None = None
+        # Guard flag: when True, format_comment_on_change is a no-op.
+        self._suppress_formatting: bool = False
 
         super().__init__(*args, variant=variant, **kwargs)
         self.setStyle(get_ayon_style())
+        # Enable mouse tracking on viewport to receive mouseMoveEvent
+        self.viewport().setMouseTracking(True)
+
+        self.document().setIndentWidth(22)  # pixels per indent level
 
         if self.num_lines:
-            self.setFixedHeight(
-                self.fontMetrics().lineSpacing() * self.num_lines + 8
+            doc = self.document()
+            fm = self.fontMetrics()
+            frame_w = self.frameWidth()
+            cm = self.contentsMargins()
+            height = (
+                fm.lineSpacing() * self.num_lines
+                + int(doc.documentMargin()) * 2
+                + frame_w * 2
+                + cm.top()
+                + cm.bottom()
             )
+            self.setFixedHeight(height)
 
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -99,9 +130,19 @@ class AYTextEditor(AYTextEdit):
             self._on_completer_activated,
             self._on_text_changed,
         )
-        self.document().contentsChanged.connect(
-            lambda: format_comment_on_change(self)
-        )
+
+        self.document().contentsChanged.connect(self._on_contents_changed)
+
+    def _on_contents_changed(self) -> None:
+        """Forward contentsChanged to format_comment_on_change.
+
+        Skipped when ``_suppress_formatting`` is True so that checkbox
+        insertion code can mutate the document without triggering a
+        full re-format pass.
+        """
+        if not self._suppress_formatting:
+            format_comment_on_change(self)
+            apply_code_block_backgrounds(self)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
@@ -116,56 +157,240 @@ class AYTextEditor(AYTextEdit):
         if on_completer_key_press(self, event):
             event.accept()
             return
+
+        # ctrl/cmd-enter to submit
+        if (
+            event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            self.submitted.emit()
+
+        # Auto-continue checkbox on Enter
+        if (
+            event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+            and self._checkbox_handler
+            and self._checkbox_handler.has_checkboxes()
+        ):
+            cursor = self.textCursor()
+            block_text = cursor.block().text()
+
+            if "\ufffc" in block_text:
+                # Extract text after the checkbox object char
+                parts = block_text.split("\ufffc", 1)
+                after_checkbox = parts[1].strip() if len(parts) > 1 else ""
+
+                if not after_checkbox:
+                    # Empty checkbox line → end the list
+                    # Remove the checkbox content from current block
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.StartOfBlock,
+                        QTextCursor.MoveMode.MoveAnchor,
+                    )
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.EndOfBlock,
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+                    cursor.removeSelectedText()
+                    # Remove the last checkbox from handler
+                    self._checkbox_handler.remove_last_checkbox()
+                    # Insert a plain newline
+                    super().keyPressEvent(event)
+                    return
+
+                # Non-empty checkbox line → insert new checkbox
+                event.accept()
+                self._suppress_formatting = True
+
+                cursor.beginEditBlock()
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
+                cursor.insertBlock()
+                self._insert_checkbox_at_cursor(cursor)
+                cursor.endEditBlock()
+
+                self._suppress_formatting = False
+                self.setTextCursor(cursor)
+                return
+
         super().keyPressEvent(event)
 
-    def set_style(self, style):
+    def _setup_checkbox_handler(self) -> None:
+        """Initialize checkbox handler if not already done."""
+        if self._checkbox_handler is None:
+            self._checkbox_handler = CheckboxHandler(self)
+            self._checkbox_handler.checklist_changed.connect(
+                self._on_checklist_changed
+            )
+
+    def _on_checklist_changed(self) -> None:
+        """Handle checkbox state changes."""
+        self.checklist_changed.emit()
+
+    def _insert_checkbox_at_cursor(self, cursor: QTextCursor) -> None:
+        """Insert a new unchecked checkbox object at the cursor position.
+
+        Inserts a two-space prefix, the custom checkbox object character
+        (``\\ufffc``), and a trailing space, then records the document
+        position on the :class:`CheckboxItem` for fast hit-testing.
+        The checkbox handler must already be initialised via
+        :meth:`_setup_checkbox_handler`.
+
+        Args:
+            cursor: Cursor at the insertion point; advanced past the
+                inserted characters on return.
+        """
+        assert self._checkbox_handler is not None
+        new_item = self._checkbox_handler.add_checkbox()
+        fmt = QTextCharFormat()
+        fmt.setObjectType(CHECKBOX_FORMAT_TYPE)
+        fmt.setProperty(CHECKBOX_CHECKED_PROP, False)
+        fmt.setProperty(CHECKBOX_INDEX_PROP, new_item.index)
+        fmt.setVerticalAlignment(
+            QTextCharFormat.VerticalAlignment.AlignBaseline
+        )
+        cursor.insertText("  ")
+        new_item.doc_position = cursor.position()
+        cursor.insertText("\ufffc", fmt)
+        cursor.insertText(" ")
+
+    def set_markdown(self, md: str) -> None:
+        """Set markdown content with checkbox support.
+
+        Args:
+            md: Markdown text to display
+        """
+        if CheckboxHandler.contains_checkboxes(md):
+            self._setup_checkbox_handler()
+            assert self._checkbox_handler is not None
+            self._checkbox_handler.parse_and_render(md)
+        else:
+            self.document().setMarkdown(md, MD_DIALECT)
+        apply_code_block_backgrounds(self)
+
+    def as_markdown(self) -> str:
+        """Get the content as GitHub-flavored markdown.
+
+        Returns:
+            Markdown string.
+        """
+        if self._checkbox_handler and self._checkbox_handler.has_checkboxes():
+            return self._checkbox_handler.to_markdown()
+        return self.document().toMarkdown(MD_DIALECT)
+
+    def _is_checkbox_at_cursor(
+        self, click_pos: QPoint
+    ) -> tuple[bool, int | None]:
+        """Check if a click position hits a checkbox bounding rect.
+
+        Delegates to :meth:`CheckboxHandler.find_checkbox_at_click` which
+        uses stored document positions instead of scanning the full text.
+
+        Args:
+            click_pos: QPoint from event.pos(), viewport coords.
+
+        Returns:
+            Tuple of (is_checkbox, document_position_for_lookup).
+        """
+        if not self._checkbox_handler:
+            return False, None
+
+        # Account for scroll offset
+        scroll_offset = QPoint(
+            -self.horizontalScrollBar().value(),
+            -self.verticalScrollBar().value(),
+        )
+        result = self._checkbox_handler.find_checkbox_at_click(
+            click_pos, scroll_offset
+        )
+        if result is None:
+            return False, None
+        return result
+
+    def mousePressEvent(self, event) -> None:
+        """Handle mouse press events for checkboxes.
+
+        Checkboxes can be toggled even in read-only mode.
+        """
+        is_cb, cb_pos = self._is_checkbox_at_cursor(event.pos())
+        if is_cb and cb_pos is not None:
+            assert self._checkbox_handler is not None  # implied by is_cb==True
+            checkbox_idx = self._checkbox_handler.get_checkbox_at_position(
+                cb_pos
+            )
+            if checkbox_idx is not None:
+                self._checkbox_handler.toggle_checkbox(checkbox_idx)
+                self.viewport().update()
+                event.accept()
+                return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Show arrow cursor over checkboxes, hand over links, I-beam else."""
+        pos = event.pos()
+        cursor = self.cursorForPosition(pos)
+        fmt = cursor.charFormat()
+        if fmt.objectType() == CHECKBOX_FORMAT_TYPE:
+            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+        elif fmt.isAnchor():
+            self.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
+        super().mouseMoveEvent(event)
+
+    def set_style(self, style: str) -> None:
+        """Apply a character style to the current selection or cursor.
+
+        Styles are merged with the existing character formatting so that
+        multiple styles (e.g. bold + italic) can be combined without
+        removing previously applied styles.
+
+        Args:
+            style: Style identifier string (e.g. ``"stl_bold"``).
+        """
         cursor = self.textCursor()
 
-        # Disconnect the format_comment_on_change to prevent re-formatting
-        self.document().contentsChanged.disconnect()
-        self._applying_style = True
+        # Suppress formatting during style application
+        self._suppress_formatting = True
 
         cursor.beginEditBlock()
 
         if style == "stl_bold":
-            # Toggle bold for current format or set it for new text
-            fmt = cursor.charFormat()
+            # Toggle bold, preserving all other formatting
+            current_weight = cursor.charFormat().fontWeight()
             new_weight = (
                 QFont.Weight.Normal
-                if fmt.fontWeight() == QFont.Weight.Bold
+                if current_weight == QFont.Weight.Bold
                 else QFont.Weight.Bold
             )
+            fmt = QTextCharFormat()
             fmt.setFontWeight(new_weight)
 
-            # Apply the format to current selection OR set as current format
-            # for next text
             if cursor.hasSelection():
-                cursor.setCharFormat(fmt)
+                cursor.mergeCharFormat(fmt)
             else:
-                # Set as the current format for subsequent typing
-                self.setCurrentCharFormat(fmt)
+                self.mergeCurrentCharFormat(fmt)
 
-            # Ensure the cursor maintains this format
             self.setTextCursor(cursor)
 
         elif style == "stl_italic":
-            fmt = cursor.charFormat()
-            new_italic = not fmt.fontItalic()
+            # Toggle italic, preserving all other formatting
+            new_italic = not cursor.charFormat().fontItalic()
+            fmt = QTextCharFormat()
             fmt.setFontItalic(new_italic)
 
             if cursor.hasSelection():
-                cursor.setCharFormat(fmt)
+                cursor.mergeCharFormat(fmt)
             else:
-                self.setCurrentCharFormat(fmt)
+                self.mergeCurrentCharFormat(fmt)
 
             self.setTextCursor(cursor)
 
         elif style == "stl_h1":
-            fmt = cursor.charFormat()
+            # Toggle heading size, preserving all other formatting
             base_size = self.font().pointSize()
-            current_size = fmt.fontPointSize()
+            current_size = cursor.charFormat().fontPointSize()
 
-            # Toggle header formatting
+            fmt = QTextCharFormat()
             if current_size > base_size:  # Already a header
                 fmt.setFontPointSize(base_size)
                 fmt.setFontWeight(QFont.Weight.Normal)
@@ -174,9 +399,9 @@ class AYTextEditor(AYTextEdit):
                 fmt.setFontWeight(QFont.Weight.Bold)
 
             if cursor.hasSelection():
-                cursor.setCharFormat(fmt)
+                cursor.mergeCharFormat(fmt)
             else:
-                self.setCurrentCharFormat(fmt)
+                self.mergeCurrentCharFormat(fmt)
 
             self.setTextCursor(cursor)
 
@@ -192,15 +417,15 @@ class AYTextEditor(AYTextEdit):
 
             def _make_link():
                 link = field.text()
-                fmt = self.currentCharFormat()
+                fmt = QTextCharFormat()
                 fmt.setAnchor(True)
                 fmt.setAnchorHref(link)
                 fmt.setFontUnderline(True)
 
                 if cursor.hasSelection():
-                    cursor.setCharFormat(fmt)
+                    cursor.mergeCharFormat(fmt)
                 else:
-                    self.setCurrentCharFormat(fmt)
+                    self.mergeCurrentCharFormat(fmt)
 
                 field.close()
                 field.deleteLater()
@@ -216,44 +441,160 @@ class AYTextEditor(AYTextEdit):
             field.returnPressed.connect(_make_link)
 
         elif style == "stl_code":
-            frame_fmt = QTextFrameFormat()
-            cursor.insertFrame(frame_fmt)
-            print("IMPLEMENT ME !")
+            # Detect if already in code style
+            is_code = cursor.charFormat().fontFixedPitch()
+            fmt = QTextCharFormat()
+
+            if is_code:
+                # Toggle off: revert code-specific properties to widget defaults
+                fmt.setFontFixedPitch(False)
+                fmt.setFontFamilies([self.font().family()])
+                fmt.setBackground(
+                    self.palette().color(QPalette.ColorRole.Base)
+                )
+                fmt.setForeground(
+                    self.palette().color(QPalette.ColorRole.Text)
+                )
+            else:
+                # Toggle on: apply code style
+                fmt.setFontFixedPitch(True)
+                fmt.setFontFamilies(
+                    ["Courier New", "Menlo", "Monaco", "monospace"]
+                )
+                fmt.setBackground(CODE_BG)
+                fmt.setForeground(CODE_FG)
+
+            if cursor.hasSelection():
+                cursor.mergeCharFormat(fmt)
+            else:
+                self.mergeCurrentCharFormat(fmt)
+
+            self.setTextCursor(cursor)
 
         cursor.endEditBlock()
-        self._applying_style = False
-        self.document().contentsChanged.connect(
-            lambda: format_comment_on_change(self)
-        )
+        self._suppress_formatting = False
+        self.setFocus()
 
-    def set_format(self, format):
-        """Set up the bullet/numbered/checklist formatting."""
+    def _insert_fmt_checklist(self) -> None:
+        """Insert an unchecked checklist checkbox at the current cursor.
+
+        If the cursor is on a bullet or numbered list line, the list
+        item is converted into a checkbox line, preserving its text.
+        Otherwise inserts on the current (empty) block, or on a new
+        block inserted above when the current line is non-empty.
+        """
+        self._setup_checkbox_handler()
+        assert self._checkbox_handler is not None
+
+        self._suppress_formatting = True
         cursor = self.textCursor()
         cursor.beginEditBlock()
-        # Select all and delete to remove placeholder
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-        if format == "fmt_bullet":
-            # Apply bullet list formatting
-            self.document().setMarkdown("- ", MD_DIALECT)
-        elif format == "fmt_number":
-            # Apply numbered list formatting
-            self.document().setMarkdown("1. ", MD_DIALECT)
-        elif format == "fmt_checklist":
-            # Apply checklist formatting
-            self.document().setMarkdown("- [ ] ", MD_DIALECT)
 
-        cursor.insertText(" ")
+        block = cursor.block()
+        text_list = block.textList()
+
+        if text_list is not None:
+            # Convert existing list item to checkbox.
+            # Qt stores block text WITHOUT the list marker,
+            # so block.text() gives us the clean content.
+            line_text = block.text().strip()
+
+            # Remove this block from the QTextList
+            text_list.remove(block)
+
+            # Reset the block indent that the QTextList left behind
+            block_fmt = cursor.blockFormat()
+            block_fmt.setIndent(0)
+            cursor.setBlockFormat(block_fmt)
+
+            # Select all content in the block and delete it
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+            cursor.movePosition(
+                QTextCursor.MoveOperation.EndOfBlock,
+                QTextCursor.MoveMode.KeepAnchor,
+            )
+            cursor.removeSelectedText()
+
+            # Insert checkbox + original text
+            self._insert_checkbox_at_cursor(cursor)
+            cursor.insertText(line_text)
+        else:
+            # Original behavior for plain text
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+            if cursor.block().text().strip():
+                cursor.insertBlock()
+                cursor.movePosition(QTextCursor.MoveOperation.PreviousBlock)
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+
+            self._insert_checkbox_at_cursor(cursor)
+
         cursor.endEditBlock()
-        # Move cursor to end
-        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self._suppress_formatting = False
         self.setTextCursor(cursor)
+        self.setFocus()
+
+    def set_format(self, format: str) -> None:
+        """Set up the bullet/numbered/checklist formatting."""
+        if format == "fmt_checklist":
+            self._insert_fmt_checklist()
+            return
+
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+
+        if format == "fmt_bullet":
+            list_fmt = QTextListFormat()
+            list_fmt.setStyle(QTextListFormat.Style.ListDisc)
+            cursor.createList(list_fmt)
+        elif format == "fmt_number":
+            list_fmt = QTextListFormat()
+            list_fmt.setStyle(QTextListFormat.Style.ListDecimal)
+            cursor.createList(list_fmt)
+
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+        self.setFocus()
+
+    def paintEvent(self, event) -> None:
+        """Override paintEvent to make sure the placeholder text is not
+        displayed when an empty list is added to an empty document."""
+        if (
+            self.placeholderText()
+            and self.document().isEmpty()
+            and self._has_list_block()
+        ):
+            self._suppress_formatting = True
+            saved = self.placeholderText()
+            super().setPlaceholderText("")
+            super().paintEvent(event)
+            super().setPlaceholderText(saved)
+            self._suppress_formatting = False
+            return
+        super().paintEvent(event)
+
+    def _has_list_block(self) -> bool:
+        block = self.document().begin()
+        while block.isValid():
+            if block.textList() is not None:
+                return True
+            block = block.next()
+        return False
+
+
+NO_CATEGORY = {
+    "text": "Category",
+    "short_text": "Category",
+    "icon": "close_small",
+    "color": "#707070",
+}
 
 
 def _dict_from_comment_category(
     comment_categories: list[CommentCategory],
 ) -> list[dict]:
     if comment_categories:
-        return [
+        return [NO_CATEGORY] + [
             {
                 "text": c.name,
                 "short_text": c.name,
@@ -262,26 +603,21 @@ def _dict_from_comment_category(
             }
             for c in comment_categories
         ]
-    return [
-        {
-            "text": "No category",
-            "short_text": "No category",
-            "icon": "crop_square",
-            "color": "#707070",
-        }
-    ]
+    return [NO_CATEGORY]
 
 
 class AttachmentWidget(QtWidgets.QWidget):
     """Widget to display a single attachment thumbnail with remove button."""
 
-    remove_clicked = Signal(int)  # Signal emits the attachment index
+    remove_clicked = Signal(int, str)  # Signal emits (index, type: 'screenshot' or 'file')
+    thumbnail_clicked = Signal(int, str)  # Signal emits (index, type) when thumbnail clicked
 
-    def __init__(self, parent=None, index=0, filename="", file_path=""):
+    def __init__(self, parent=None, index=0, filename="", file_path="", attachment_type="file"):
         super().__init__(parent)
         self.index = index
         self.filename = filename
         self.file_path = file_path
+        self.attachment_type = attachment_type  # 'screenshot' or 'file'
         self.setup_ui()
         self.load_image()
 
@@ -289,12 +625,21 @@ class AttachmentWidget(QtWidgets.QWidget):
         # Use a container for the thumbnail with overlay button
         container = QtWidgets.QWidget(self)
         container.setFixedSize(80, 60)
+        container.setCursor(Qt.CursorShape.PointingHandCursor)
 
         # Thumbnail
         self.thumbnail_label = QLabel(container)
         self.thumbnail_label.setFixedSize(80, 60)
         self.thumbnail_label.setScaledContents(True)
         self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.thumbnail_label.setStyleSheet(
+            "QLabel { background-color: #2b2b2b; border: 1px solid #3d3d3d; }"
+        )
+        
+        # Make thumbnail clickable
+        self.thumbnail_label.mousePressEvent = lambda e: self.thumbnail_clicked.emit(
+            self.index, self.attachment_type
+        )
 
         # Remove button overlaid on top-right corner
         self.remove_btn = AYButton(
@@ -303,10 +648,10 @@ class AttachmentWidget(QtWidgets.QWidget):
         self.remove_btn.setFixedSize(18, 18)
         self.remove_btn.move(62, 0)  # Position at top-right corner
         self.remove_btn.clicked.connect(
-            lambda: self.remove_clicked.emit(self.index)
+            lambda: self.remove_clicked.emit(self.index, self.attachment_type)
         )
-        # Ensure button is on top
         self.remove_btn.raise_()
+        
         # Main layout
         layout = AYVBoxLayout(margin=4, spacing=2)
         layout.addWidget(container)
@@ -314,67 +659,42 @@ class AttachmentWidget(QtWidgets.QWidget):
         # Filename label (truncated)
         self.filename_label = QLabel(self)
         self.filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.filename_label.setStyleSheet("font-size: 10px; color: #9aa4ad;")
         layout.addWidget(self.filename_label)
-
+        
+        self.setLayout(layout)
         self.update_display()
+        
+        # Set tooltip
+        self.setToolTip(self.filename)
 
     def load_image(self):
-        """Load thumbnail from file_path or base64"""
-        if self.file_path.startswith("data:image"):
-            # Base64 encoded image
-            import base64
-
-            # Extract base64 data
-            base64_data = (
-                self.file_path.split(",", 1)[1]
-                if "," in self.file_path
-                else self.file_path
+        """Load thumbnail from file_path"""
+        pixmap = QPixmap(self.file_path)
+        if not pixmap.isNull():
+            self.thumbnail_label.setPixmap(
+                pixmap.scaled(
+                    80,
+                    60,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             )
-            try:
-                image_data = base64.b64decode(base64_data)
-                pixmap = QPixmap()
-                pixmap.loadFromData(image_data)
-                self.thumbnail_label.setPixmap(
-                    pixmap.scaled(
-                        80,
-                        60,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-            except Exception as e:
-                logger.error("Failed to load base64 image: %s", e)
-                self.thumbnail_label.setText("Image")
         else:
-            # File path
-            pixmap = QPixmap(self.file_path)
-            if not pixmap.isNull():
-                self.thumbnail_label.setPixmap(
-                    pixmap.scaled(
-                        80,
-                        60,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-            else:
-                self.thumbnail_label.setText("Image")
+            self.thumbnail_label.setText("Image")
 
     def update_display(self):
         """Update the display with current filename and image"""
         # Update filename label
-        self.filename_label.setText(
-            self.filename[:12] + "..."
-            if len(self.filename) > 12
-            else self.filename
-        )
-        # Reload image
+        display_name = self.filename[:10] + "..." if len(self.filename) > 10 else self.filename
+        self.filename_label.setText(display_name)
         self.load_image()
 
     def update_content(self, filename="", file_path=""):
         """Update the widget content"""
         if filename:
             self.filename = filename
+            self.setToolTip(filename)
         if file_path:
             self.file_path = file_path
         self.update_display()
@@ -402,8 +722,10 @@ class AYTextBox(AYContainer):
     }
     mention_map = {
         "person": "@",
-        "layers": "@@",
-        "check_circle": "@@@",
+        # TODO: Implement support for version and task mentions in completer
+        #  before enabling these
+        # "layers": "@@",
+        # "check_circle": "@@@",
     }
 
     def __init__(
@@ -428,9 +750,9 @@ class AYTextBox(AYContainer):
         self.comment_categories: list[dict] = _dict_from_comment_category([])
         self.category = self.comment_categories[0]["text"]
         self._user_list: list[User] = user_list or []
-        # Store image annotation data
-        self._annotation_attachments: list[dict] = []
-        self._file_attachments: list[str] = []  # Store file paths only
+        # Store attachments - unified list for both screenshots and files
+        self._attachments = []  # List of dicts: {'type': 'screenshot'|'file', 'path': str, 'filename': str}
+        self.screenshot_handler = None  # Will be initialized in _build
         self._build(num_lines)
 
     def _build_upper_bar(self):
@@ -461,6 +783,10 @@ class AYTextBox(AYContainer):
             )
             lyt.addWidget(getattr(self, var))
         lyt.addSpacing(grp_spacing)
+        self.screenshot_btn = AYButton(
+            self, variant=AYButton.Variants.Nav, icon="photo_camera"
+        )
+        lyt.addWidget(self.screenshot_btn)
         self.attach_file_btn = AYButton(
             self, variant=AYButton.Variants.Nav, icon="attach_file"
         )
@@ -469,7 +795,7 @@ class AYTextBox(AYContainer):
         return lyt
 
     def _build_attachment_area(self):
-        """Build the scrollable attachment display area."""
+        """Build the unified scrollable attachment display area for both screenshots and files."""
         # Container for attachments
         self.attachment_container = QtWidgets.QWidget(self)
         self.attachment_layout = AYHBoxLayout(
@@ -506,6 +832,9 @@ class AYTextBox(AYContainer):
             getattr(self, var).clicked.connect(
                 partial(self.edit_field.set_format, var)
             )
+
+        self.edit_field.submitted.connect(self._on_comment_clicked)
+
         return self.edit_field
 
     def _build_lower_bar(self):
@@ -528,13 +857,22 @@ class AYTextBox(AYContainer):
 
     def _on_comment_clicked(self) -> None:
         """Handle comment button click and emit signal with markdown content."""
-        markdown_content = self.edit_field.document().toMarkdown(MD_DIALECT)
+        markdown_content = self.edit_field.as_markdown()
+        
+        # Get all attachment paths
+        all_attachment_paths = [att['path'] for att in self._attachments]
+        
         self.signals.comment_submitted.emit(
-            markdown_content, self.category, self._file_attachments
+            markdown_content, self.category, all_attachment_paths
         )
         self.edit_field.clear()
-        self.clear_annotation_attachment()
-        self.clear_file_attachments()
+        if self.show_categories:
+            self.com_cat.setCurrentIndex(0)
+        self.clear_all_attachments()
+        
+        # Clear screenshots after submission
+        if self.screenshot_handler:
+            self.screenshot_handler.clear_screenshots()
 
     def _add_mention_to_editor(self, mention: str) -> None:
         """Add mention text to the editor at cursor position."""
@@ -544,7 +882,7 @@ class AYTextBox(AYContainer):
         self.edit_field.setFocus()
 
     def _on_category_changed(self, category: str) -> None:
-        self.category = category
+        self.category = category if category != NO_CATEGORY["text"] else ""
 
     def _on_attach_file_clicked(self) -> None:
         """Handle attach file button click and open file dialog."""
@@ -556,271 +894,133 @@ class AYTextBox(AYContainer):
         )
 
         if file_paths:
-            self.add_file_attachments(file_paths)
+            for file_path in file_paths:
+                self.add_attachment(file_path, 'file')
 
-    def _on_annotation_attachment_removed(self, index: int) -> None:
-        """Handle removal of an image annotation attachment."""
-        if 0 <= index < len(self._annotation_attachments):
-            file_path = self._annotation_attachments[index].get(
-                "file_path", ""
-            )
-            if os.path.exists(file_path):
-                os.remove(file_path)  # Optionally delete the file
-            self._annotation_attachments.pop(index)
+    def _on_attachment_removed(self, index: int, attachment_type: str) -> None:
+        """Handle removal of an attachment."""
+        if 0 <= index < len(self._attachments):
+            attachment = self._attachments[index]
+            # Optionally delete temp files (screenshots)
+            if attachment['type'] == 'screenshot':
+                file_path = attachment['path']
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove temp file {file_path}: {e}")
+            
+            self._attachments.pop(index)
             self._refresh_attachment_display()
+            self._update_attachment_buttons()
 
-    def _on_file_attachment_removed(self, index: int) -> None:
-        """Handle removal of a file attachment."""
-        if 0 <= index < len(self._file_attachments):
-            self._file_attachments.pop(index)
-            self._refresh_file_attachment_display()
+    def _on_thumbnail_clicked(self, index: int, attachment_type: str) -> None:
+        """Handle thumbnail click to open gallery."""
+        if not self._attachments:
+            return
+            
+        from .gallery_dialog import GalleryDialog
+        
+        # Prepare images list for GalleryDialog
+        images = [
+            (att['path'], att['filename'])
+            for att in self._attachments
+        ]
+        
+        dialog = GalleryDialog(images, current_index=index, parent=self)
+        dialog.setWindowTitle("Attachments Preview")
+        dialog.exec_()
 
     def _refresh_attachment_display(self) -> None:
-        """Refresh the attachment display area."""
-        # Keep track of existing widgets by index
-        existing_widgets = {}
-        for idx in range(self.attachment_layout.count()):
-            item = self.attachment_layout.itemAt(idx)
-            if item and item.widget() and hasattr(item.widget(), "index"):
-                widget = item.widget()
-                if widget is not None:
-                    existing_widgets[widget.index] = widget
-
-        # Update or create widgets
-        if self._annotation_attachments:
-            for idx, attachment in enumerate(self._annotation_attachments):
-                logger.info(
-                    "Displaying attachment: %s with path: %s",
-                    attachment.get("filename"),
-                    attachment.get("file_path"),
-                )
-
-                if idx in existing_widgets:
-                    # Update existing widget
-                    widget = existing_widgets[idx]
-                    widget.update_content(
-                        filename=attachment.get(
-                            "filename", f"attachment_{idx}"
-                        ),
-                        file_path=attachment.get("file_path", ""),
-                    )
-                    # Update index if it changed
-                    widget.index = idx
-                else:
-                    # Create new widget
-                    widget = AttachmentWidget(
-                        parent=self.attachment_container,
-                        index=idx,
-                        filename=attachment.get(
-                            "filename", f"attachment_{idx}"
-                        ),
-                        file_path=attachment.get("file_path", ""),
-                    )
-                    widget.remove_clicked.connect(
-                        self._on_annotation_attachment_removed
-                    )
-                    self.attachment_layout.insertWidget(idx, widget)
-
-            # Remove any extra widgets that shouldn't be there
-            for idx in list(existing_widgets.keys()):
-                if idx >= len(self._annotation_attachments):
-                    widget = existing_widgets[idx]
-                    self.attachment_layout.removeWidget(widget)
-                    widget.deleteLater()
-
-            # Make sure we have a stretch at the end
-            if self.attachment_layout.count() > 0 and (
-                not isinstance(
-                    self.attachment_layout.itemAt(
-                        self.attachment_layout.count() - 1
-                    ).widget(),
-                    type(None),
-                )
-            ):
-                self.attachment_layout.addStretch()
-
-            self.attachment_scroll.show()
-        else:
-            # Remove all widgets if no attachments
-            while self.attachment_layout.count():
-                item = self.attachment_layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-            self.attachment_scroll.hide()
-
-        # Force a complete refresh
-        self.attachment_container.update()
-        self.attachment_scroll.viewport().update()
-
-    def _build_file_attachment_area(self):
-        """Build the scrollable file attachment display area."""
-        # Container for file attachments
-        self.file_attachment_container = QtWidgets.QWidget(self)
-        self.file_attachment_layout = AYVBoxLayout(
-            self.file_attachment_container, margin=4, spacing=2
-        )
-
-        # Scroll area
-        self.file_attachment_scroll = QScrollArea(self)
-        self.file_attachment_scroll.setWidget(self.file_attachment_container)
-        self.file_attachment_scroll.setWidgetResizable(True)
-        self.file_attachment_scroll.setFixedHeight(60)
-        self.file_attachment_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.file_attachment_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.file_attachment_scroll.hide()  # Hidden by default
-
-        return self.file_attachment_scroll
-
-    def _refresh_file_attachment_display(self) -> None:
-        """Refresh the file attachment display area."""
+        """Refresh the unified attachment display area."""
         # Clear existing widgets
-        while self.file_attachment_layout.count():
-            item = self.file_attachment_layout.takeAt(0)
+        while self.attachment_layout.count():
+            item = self.attachment_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
 
-        # Add file attachment items
-        if self._file_attachments:
-            for idx, file_path in enumerate(self._file_attachments):
-                filename = os.path.basename(file_path)
-
-                # Create a container for the file item
-                file_item = QtWidgets.QWidget(self.file_attachment_container)
-                file_item_layout = AYHBoxLayout(file_item, margin=2, spacing=4)
-
-                # File label
-                file_label = QLabel(filename, file_item)
-                file_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-                file_item_layout.addWidget(file_label)
-
-                # Remove button
-                remove_btn = AYButton(
-                    "×", variant=AYButton.Variants.Nav, parent=file_item
+        # Add attachment widgets
+        if self._attachments:
+            for idx, attachment in enumerate(self._attachments):
+                widget = AttachmentWidget(
+                    parent=self.attachment_container,
+                    index=idx,
+                    filename=attachment['filename'],
+                    file_path=attachment['path'],
+                    attachment_type=attachment['type']
                 )
-                remove_btn.setFixedSize(20, 20)
-                remove_btn.clicked.connect(
-                    lambda checked=False,
-                    i=idx: self._on_file_attachment_removed(i)
-                )
-                file_item_layout.addWidget(remove_btn)
+                widget.remove_clicked.connect(self._on_attachment_removed)
+                widget.thumbnail_clicked.connect(self._on_thumbnail_clicked)
+                self.attachment_layout.addWidget(widget)
 
-                self.file_attachment_layout.addWidget(file_item)
-
-            self.file_attachment_layout.addStretch()
-            self.file_attachment_scroll.show()
+            self.attachment_layout.addStretch()
+            self.attachment_scroll.show()
         else:
-            self.file_attachment_scroll.hide()
+            self.attachment_scroll.hide()
 
-        self.file_attachment_container.update()
+        self.attachment_container.update()
+        self.attachment_scroll.viewport().update()
 
-    def add_annotation_attachments(self, attachments: list[dict]) -> None:
-        """Add multiple image annotation attachments at once.
-
+    def add_attachment(self, file_path: str, attachment_type: str = 'file') -> None:
+        """Add a single attachment (screenshot or file).
+        
         Args:
-            attachments: List of attachment dictionaries with 'file_path'
-                        and 'filename' keys
+            file_path: Path to the file
+            attachment_type: 'screenshot' or 'file'
         """
-        if not attachments:
+        if not file_path or file_path in [att['path'] for att in self._attachments]:
             return
-
-        for attachment in attachments:
-            file_pattern = attachment.get("file_pattern", "")
-            current_frame = attachment.get("current_frame", 0)
-            filename = attachment.get("filename", "")
-            file_path = attachment.get("file_path", "")
-            timestamp = attachment.get("timestamp", 0)
-
-            # Find existing attachment that matches
-            existing_attachments = [
-                existing
-                for existing in self._annotation_attachments
-                if existing.get("file_pattern") == file_pattern
-                and existing.get("current_frame") == current_frame
-            ]
-            if existing_attachments:
-                # Update the first matching attachment (should be only one)
-                existing = existing_attachments[0]
-                logger.info(
-                    "Attachment already exists, updating: %s", filename
-                )
-                existing.update(
-                    {
-                        "file_path": file_path,
-                        "filename": filename,
-                        "timestamp": timestamp,
-                    }
-                )
-                self._refresh_attachment_display()
-
-            else:
-                # Add new attachment
-                self._annotation_attachments.append(
-                    {
-                        "file_pattern": file_pattern,
-                        "current_frame": current_frame,
-                        "file_path": file_path,
-                        "filename": filename,
-                        "timestamp": timestamp,
-                    }
-                )
-
+            
+        filename = os.path.basename(file_path)
+        if attachment_type == 'screenshot':
+            # Generate screenshot number
+            screenshot_count = sum(1 for att in self._attachments if att['type'] == 'screenshot')
+            filename = f"Screenshot {screenshot_count + 1}"
+        
+        self._attachments.append({
+            'type': attachment_type,
+            'path': file_path,
+            'filename': filename
+        })
+        
         self._refresh_attachment_display()
+        self._update_attachment_buttons()
 
-    def add_file_attachments(self, file_paths: list[str]) -> None:
-        """Add multiple file attachments at once.
+    def _update_attachment_buttons(self) -> None:
+        """Update button badges to show counts."""
+        screenshot_count = sum(1 for att in self._attachments if att['type'] == 'screenshot')
+        file_count = sum(1 for att in self._attachments if att['type'] == 'file')
+        
+        # Update screenshot button
+        if screenshot_count > 0:
+            self.screenshot_btn.setText(f"{screenshot_count}")
+            self.screenshot_btn.setStyleSheet("background-color: rgba(92, 173, 214, .4);")
+        else:
+            self.screenshot_btn.setText("")
+            self.screenshot_btn.setStyleSheet("")
+        
+        # Update attach file button
+        if file_count > 0:
+            self.attach_file_btn.setText(f"{file_count}")
+            self.attach_file_btn.setStyleSheet("background-color: rgba(92, 173, 214, .4);")
+        else:
+            self.attach_file_btn.setText("")
+            self.attach_file_btn.setStyleSheet("")
 
-        Args:
-            file_paths: List of file paths to attach
-        """
-        if not file_paths:
-            return
-
-        added_count = 0
-        for file_path in file_paths:
-            # Check for duplicates
-            if file_path in self._file_attachments:
-                logger.info("File attachment already exists: %s", file_path)
-                continue
-
-            self._file_attachments.append(file_path)
-            added_count += 1
-
-        # Refresh display only once after all additions
-        if added_count > 0:
-            self._refresh_file_attachment_display()
-            logger.info("Added %d file attachment(s)", added_count)
-
-    def clear_annotation_attachment(self) -> None:
-        """Clear all image annotations from the editor."""
-        self._annotation_attachments.clear()
+    def clear_all_attachments(self) -> None:
+        """Clear all attachments."""
+        self._attachments.clear()
         self._refresh_attachment_display()
-
-    def clear_file_attachments(self) -> None:
-        """Clear all file attachments from the editor."""
-        self._file_attachments.clear()
-        self._refresh_file_attachment_display()
+        self._update_attachment_buttons()
 
     def get_attachments(self) -> list[dict]:
-        """Get the current list of image annotations.
-
+        """Get the current list of attachments.
+        
         Returns:
-            List of annotation attachment dictionaries
+            List of attachment dictionaries
         """
-        return self._annotation_attachments.copy()
-
-    def get_file_attachments(self) -> list[str]:
-        """Get the current list of file attachments.
-
-        Returns:
-            List of file paths
-        """
-        return self._file_attachments.copy()
+        return self._attachments.copy()
 
     @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData):
@@ -834,17 +1034,31 @@ class AYTextBox(AYContainer):
 
     def _build(self, num_lines):
         self.add_layout(self._build_upper_bar())
+        
+        # Initialize screenshot handler after screenshot_btn is created
+        from .screenshot_capture import ScreenshotHandler
+        self.screenshot_handler = ScreenshotHandler(self, self.screenshot_btn)
+        
+        # Click to capture, but if screenshots exist, show gallery
+        self.screenshot_btn.clicked.connect(self._on_screenshot_btn_clicked)
+        
         self.add_widget(
             self._build_attachment_area()
-        )  # Add image annotation area
-        self.add_widget(
-            self._build_file_attachment_area()
-        )  # Add file attachment area
+        )  # Add unified attachment area
         self.add_widget(self._build_edit_field(num_lines), stretch=10)
         self.add_layout(self._build_lower_bar())
 
     def set_markdown(self, md: str):
-        self.edit_field.document().setMarkdown(md, MD_DIALECT)
+        """Set markdown content with checkbox support.
+
+        Args:
+            md: Markdown text to display
+        """
+        self.edit_field.set_markdown(md)
+
+    def _on_screenshot_btn_clicked(self):
+        """Handle screenshot button click - always capture new screenshot."""
+        self.screenshot_handler.launch_capture()
 
 
 # TEST ------------------------------------------------------------------------
@@ -856,7 +1070,9 @@ if __name__ == "__main__":
 
     def build():
         w = AYContainer(layout=AYContainer.Layout.HBox, margin=8)
-        ww = AYTextBox(parent=w, variant=AYTextBox.Variants.High)
+        ww = AYTextBox(
+            parent=w, variant=AYTextBox.Variants.High, show_categories=True
+        )
         ww.set_markdown(
             "## Title\nText can be **bold** or *italic*, as expected !\n"
             "- [ ] Do this\n- [ ] Do that\n"
@@ -886,4 +1102,4 @@ if __name__ == "__main__":
 
         return w
 
-    test(build, style=Style.AyonStyleOverCSS)
+    test(build, style=Style.AyonStyle)

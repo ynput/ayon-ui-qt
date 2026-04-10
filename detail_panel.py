@@ -6,7 +6,6 @@ from __future__ import annotations
 from qtpy.QtCore import QObject, Qt, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import QWidget
 
-from ayon_ui_qt import style_widget_and_siblings
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.combo_box import AYComboBox
 from ayon_ui_qt.components.container import AYContainer
@@ -206,7 +205,7 @@ class AYDetailPanel(AYContainer):
         Constructs all sub-sections (thumbnail, status, assignee, etc.)
         and arranges them in a grid layout within the main container.
         """
-        self.entity_path = AYEntityPath(self)
+        self.entity_path = AYEntityPath(parent=self)
         self.thumbnail = self._build_thumbnail()
         self.status = self._build_status()
         self.assignee = self._build_assignee()
@@ -236,7 +235,7 @@ class AYDetailPanel(AYContainer):
     @block_signals("status")
     def _update_status(self):
         current_status = self._version_data.status
-        print(f"current_status = {current_status}")
+        # print(f"current_status = {current_status}")
         if current_status:
             self.status.setCurrentText(current_status)
 
@@ -256,19 +255,19 @@ class AYDetailPanel(AYContainer):
 
     @Slot(ProjectData)
     def on_ctlr_project_changed(self, data: ProjectData) -> None:
-        """Project was updated by the controler."""
+        """Project was updated by the controller."""
         self._project = data
         self._update_status_items()
 
     @Slot(str)
     def on_ctlr_version_status_changed(self, new_status: str):
-        """Status was updated by the controler."""
+        """Status was updated by the controller."""
         self._version_data.status = new_status
         self._update_status()
 
     @Slot(VersionData)
     def on_ctlr_version_data_changed(self, data: VersionData):
-        """version data was updated by the controler."""
+        """version data was updated by the controller."""
         self._version_data = data
         self._update_status()
         # self._update_priority()
