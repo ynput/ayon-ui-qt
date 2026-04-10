@@ -116,7 +116,22 @@ def _enum_values(enum):
     enum_index = meta_object.indexOfEnumerator(enum.__name__)
     meta_enum: QtCore.QMetaEnum = meta_object.enumerator(enum_index)
     num_keys = meta_enum.keyCount()
-    vals = [v for v in range(num_keys) if meta_enum.key(v)]
+    vals = [meta_enum.value(v) for v in range(num_keys) if meta_enum.key(v)]
+    # print(f"=== enum = {meta_enum.scope()}.{meta_enum.enumName()} -> {keys}")
+    return vals
+
+
+def _enum_values_dict(enum):
+    # qmeta = QtCore.QMetaEnum(enum)
+    meta_object: QtCore.QMetaObject = QStyle.staticMetaObject  # type: ignore
+    enum_index = meta_object.indexOfEnumerator(enum.__name__)
+    meta_enum: QtCore.QMetaEnum = meta_object.enumerator(enum_index)
+    num_keys = meta_enum.keyCount()
+    vals = {
+        meta_enum.key(i): meta_enum.value(i)
+        for i in range(num_keys)
+        if meta_enum.key(i)
+    }
     # print(f"=== enum = {meta_enum.scope()}.{meta_enum.enumName()} -> {keys}")
     return vals
 
