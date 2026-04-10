@@ -32,10 +32,10 @@ class AYScrollBar(QScrollBar):
         super().initStyleOption(option)
         SC = QStyle.SubControl
         option.subControls = (
-            SC.SC_All
-            & ~SC.SC_ScrollBarAddLine
-            & ~SC.SC_ScrollBarSubLine
-            & ~SC.SC_ScrollBarFirst
+            SC.SC_None
+            | SC.SC_ScrollBarAddPage
+            | SC.SC_ScrollBarSubPage
+            | SC.SC_ScrollBarSlider
         )
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
