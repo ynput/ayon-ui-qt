@@ -33,7 +33,13 @@ from dataclasses import dataclass, field
 from functools import total_ordering
 from typing import Any, Callable
 
-from qtpy.QtCore import Qt, QThread, QTimer, Signal, Slot
+from qtpy.QtCore import (
+    Qt,
+    QThread,
+    QTimer,
+    Signal,  # type: ignore
+    Slot,  # type: ignore
+)
 
 log = logging.getLogger(__name__)
 
@@ -186,6 +192,8 @@ class AsyncTaskQueue(QThread):
     task_completed = Signal(str, object)  # (task_name, result)
     task_failed = Signal(str, str)  # (task_name, error_message)
     task_cancelled = Signal(str, str)  # (task_name, context_id)
+    task_enqueued = Signal(str, int)  # (task_name, priority)
+    task_started = Signal(str)  # (task_name)
     queue_empty = Signal()
     # No-arg ping signal: tells the main thread to drain _callback_queue.
     # Never passes Python objects through Qt's cross-thread signal system.
@@ -227,7 +235,7 @@ class AsyncTaskQueue(QThread):
         # Connect the no-arg ping to the drain slot on the main thread.
         self.invoke_callback.connect(
             self._drain_callback_queue,
-            Qt.QueuedConnection,
+            Qt.ConnectionType.QueuedConnection,
         )
 
     @Slot()
@@ -355,7 +363,16 @@ class AsyncTaskQueue(QThread):
             log.debug("Skipping cancelled task (pool): %s", task.name)
             return
 
-        log.debug("Processing task: %s (context=%s)", task.name, task.context_id)
+        log.debug(
+            "Processing task: %s (context=%s)", task.name, task.context_id
+        )
+
+        try:
+            self.task_started.emit(task.name)
+        except Exception:
+            log.debug(
+                "Failed to emit task_started for %s.", task.name, exc_info=True
+            )
 
         try:
             result = task.function()
@@ -374,9 +391,11 @@ class AsyncTaskQueue(QThread):
             try:
                 self.task_completed.emit(task.name, result)
             except Exception:
-                pass  # Signal emission from pool threads may fail on some
-                # Qt bindings; the signal is not connected to anything
-                # critical so we swallow the error silently.
+                log.debug(
+                    "Failed to emit task_completed for %s.",
+                    task.name,
+                    exc_info=True,
+                )
 
             log.debug("Task completed successfully: %s", task.name)
 
@@ -389,7 +408,11 @@ class AsyncTaskQueue(QThread):
             try:
                 self.task_failed.emit(task.name, str(e))
             except Exception:
-                pass
+                log.debug(
+                    "Failed to emit task_failed for %s.",
+                    task.name,
+                    exc_info=True,
+                )
 
     def _invoke_callback_safely(
         self, callback: Callable, result: Any, task_name: str
@@ -434,6 +457,15 @@ class AsyncTaskQueue(QThread):
 
         # Add to priority queue
         self._task_queue.put((task.priority, task))
+        # Notify observers that a task has been enqueued.
+        try:
+            self.task_enqueued.emit(task.name, task.priority)
+        except Exception:
+            log.debug(
+                "Failed to emit task_enqueued for %s.",
+                task.name,
+                exc_info=True,
+            )
         # Wake the dispatch loop immediately — no idle wait.
         self._task_available.set()
         log.debug(
@@ -550,7 +582,9 @@ class AsyncTaskQueue(QThread):
                     else:
                         affected_count += 1
                         if emit_signal:
-                            self.task_cancelled.emit(task.name, task.context_id)
+                            self.task_cancelled.emit(
+                                task.name, task.context_id
+                            )
 
                 except queue.Empty:
                     break

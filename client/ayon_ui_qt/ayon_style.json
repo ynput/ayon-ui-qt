@@ -696,6 +696,23 @@
                     "highlight-color": "--md-sys-color-tertiary-dark"
                 }
             }
+        },
+        "AsyncTaskQueueMonitor": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-low-dark",
+                    "outline-color": "--md-sys-color-surface-container-dark",
+                    "high-priority-color": "--md-ref-palette-primary50",
+                    "medium-priority-color": "--md-ref-palette-secondary50",
+                    "low-priority-color": "--md-ref-palette-tertiary50",
+                    "failed-color": "--md-ref-palette-error60",
+                    "completed-alpha": 0.45,
+                    "pending-alpha": 0.7,
+                    "segment-gap": 2,
+                    "bar-radius": 3
+                }
+            }
         }
     },
     "layouts": {},

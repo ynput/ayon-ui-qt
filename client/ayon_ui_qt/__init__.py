@@ -127,6 +127,7 @@ __all__ = [
     "__version__",
     "AYONStyle",
     "get_ayon_style",
+    "get_ayon_style_data",
     "style_widget_and_siblings",
     "UIQtAddon",
 ]
