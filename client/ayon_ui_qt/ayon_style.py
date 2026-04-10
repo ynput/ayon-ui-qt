@@ -1706,6 +1706,99 @@ class ItemViewItemDrawer:
         painter.restore()
 
 
+class ProgressBarDrawer:
+    base_class = {"QProgressBar": QtWidgets.QProgressBar}
+
+    def __init__(self, style: "AYONStyle") -> None:
+        self.style = style
+
+    def register_drawers(self) -> dict:
+        return {
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ProgressBar,
+                "QProgressBar",
+            ): self._draw_progress_bar,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ProgressBarGroove,
+                "QProgressBar",
+            ): self._draw_groove,
+            enum_to_str(
+                QStyle.ControlElement,
+                QStyle.ControlElement.CE_ProgressBarContents,
+                "QProgressBar",
+            ): self._draw_contents,
+        }
+
+    def _draw_progress_bar(self, option, painter: QPainter, w) -> None:
+        """Draw groove and fill in one pass using the same frozen rect."""
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Normalise to origin — option.rect is always in widget-local coords
+        # for CE_ProgressBar, so width/height are stable; x/y may drift.
+        r = option.rect
+        rect = QRectF(0, 0, r.width(), r.height())
+        radius = rect.height() / 2
+
+        # Groove
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor("#2b2b2b")))
+        painter.drawRoundedRect(rect, radius, radius)
+
+        # Fill — cap fill_width so it never exceeds groove width
+        minimum = option.minimum
+        maximum = option.maximum
+        progress = option.progress
+        if maximum > minimum:
+            ratio = (progress - minimum) / (maximum - minimum)
+            fill_width = min(rect.width() * ratio, rect.width())
+        else:
+            fill_width = rect.width()
+
+        if fill_width > 0:
+            fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
+            painter.setBrush(QBrush(QColor("#5cadd6")))
+            painter.drawRoundedRect(fill_rect, radius, radius)
+
+        painter.restore()
+
+    def _draw_groove(self, option, painter: QPainter, w) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(w.rect() if w else option.rect)
+        radius = rect.height() / 2
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor("#2b2b2b")))
+        painter.drawRoundedRect(rect, radius, radius)
+        painter.restore()
+
+    def _draw_contents(self, option, painter: QPainter, w) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(w.rect() if w else option.rect)
+        radius = rect.height() / 2
+
+        minimum = option.minimum
+        maximum = option.maximum
+        progress = option.progress
+        if maximum > minimum:
+            ratio = (progress - minimum) / (maximum - minimum)
+            fill_width = rect.width() * ratio
+        else:
+            fill_width = rect.width()
+
+        if fill_width > 0:
+            fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
+            painter.setClipRect(rect)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor("#5cadd6")))
+            painter.drawRoundedRect(fill_rect, radius, radius)
+
+        painter.restore()
+
+
 # ----------------------------------------------------------------------------
 
 
@@ -1735,6 +1828,7 @@ class AYONStyle(QCommonStyle):
             ScrollBarDrawer(self),
             FrameDrawer(self),
             ItemViewItemDrawer(self),
+            ProgressBarDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)

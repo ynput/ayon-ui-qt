@@ -54,6 +54,7 @@ from .comment_completion import (
 )
 from .container import AYContainer
 from .layouts import AYHBoxLayout, AYVBoxLayout
+from .progress_bar import AYProgressBar
 from .text_edit import AYTextEdit
 
 logger = logging.getLogger(__name__)
@@ -703,7 +704,8 @@ class AttachmentWidget(QtWidgets.QWidget):
 class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str, list)  # type: ignore
-
+    comment_progress_updated = Signal(int, int)  # (value, total)  # type: ignore
+    comment_progress_completed = Signal()  # type: ignore
 
 class AYTextBox(AYContainer):
     signals = AYTextBoxSignals()
@@ -848,6 +850,18 @@ class AYTextBox(AYContainer):
         lyt.addSpacerItem(
             QtWidgets.QSpacerItem(0, 0, QSizePolicy.Policy.MinimumExpanding)
         )
+        # Progress Bar for comment submission
+        self.comment_progress_bar = AYProgressBar(parent=self)
+        self.comment_progress_bar.setFixedWidth(120)
+        self.comment_progress_bar.setFixedHeight(20)
+        self.comment_progress_bar.progress_bar.setRange(0, 100)
+        self.comment_progress_bar.hide()
+        self.signals.comment_progress_updated.connect(
+            self.comment_progress_bar.set_progress
+        )
+        lyt.addWidget(self.comment_progress_bar)
+        lyt.addSpacing(4)
+
         self.comment_button = AYButton(
             "Comment", variant=AYButton.Variants.Filled
         )

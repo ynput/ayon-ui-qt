@@ -154,6 +154,28 @@ class ActivityPanel(AYContainer):
         self.editor.add_attachments(annotation_list)
 
 
+    @Slot(object, list)
+    def on_ctlr_annotation_export_started(self, thread, export_jobs):
+        if not export_jobs:
+            return
+
+        total_jobs = len(export_jobs)
+        self.editor.signals.comment_progress_updated.emit(0, total_jobs)
+        self.editor.comment_progress_bar.show()
+        thread.progress_changed.connect(
+            lambda completed, total, *_:
+                self.editor.signals.comment_progress_updated.emit(
+                    completed, total
+                )
+        )
+
+        def _on_finished():
+            self.editor.comment_progress_bar.reset()
+            self.editor.comment_progress_bar.hide()
+
+        thread.finished.connect(_on_finished)
+        thread.failed.connect(_on_finished)
+
 #  TEST =======================================================================
 
 
