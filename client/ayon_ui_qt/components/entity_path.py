@@ -31,15 +31,33 @@ class AYEntityPathSegment(AYLabel):
 
 
 class AYEntityPath(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        path: str = "",
+        simple: bool = False,
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self.setStyle(get_ayon_style())
-        self._path = ""
+        self._path = path
         self._path_segments = []
         self._entity_id = None
-        self.setLayout(AYHBoxLayout(self))
+        self._simple = simple
 
-        self.entity_path = "-/-/-"
+        lyt = AYHBoxLayout(self, spacing=1)
+        self.setLayout(lyt)
+
+        if self._simple:
+            self._label = AYLabel(
+                self._path,
+                dim=True,
+                rel_text_size=-2,
+                elide_mode=Qt.TextElideMode.ElideMiddle,
+            )
+            lyt.addWidget(self._label)
+            lyt.addStretch(100)
+
+        self.entity_path = path
 
     @property
     def entity_path(self):
@@ -47,9 +65,12 @@ class AYEntityPath(QWidget):
 
     @entity_path.setter
     def entity_path(self, value):
-        self._path_segments = normpath(value).split("/")
         self._path = value
-        self._build()
+        if not self._simple:
+            self._path_segments = normpath(value).split("/")
+            self._build()
+        else:
+            self._label.setText(self._path.replace("/", " / "))
 
     def _build(self):
         lyt = self.layout()
@@ -63,3 +84,22 @@ class AYEntityPath(QWidget):
             if p != self._path_segments[-1]:
                 lyt.addWidget(AYEntityPathSegment("/", parent=self))
         lyt.addStretch(100)
+
+
+if __name__ == "__main__":
+    from ..tester import Style, test
+    from .container import AYContainer
+
+    def _build():
+        w = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYContainer.Variants.Low,
+            layout_margin=20,
+            layout_spacing=10,
+        )
+        w.add_widget(AYLabel("AYEntityPath", bold=True, rel_text_size=2))
+        w.add_widget(AYEntityPath("project/asset/shot/comp", simple=False))
+        w.add_widget(AYEntityPath("project/asset/shot/comp", simple=True))
+        return w
+
+    test(_build, style=Style.AyonStyleOverCSS)

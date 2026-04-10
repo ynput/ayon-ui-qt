@@ -5,12 +5,17 @@ from typing import Optional
 from qtpy import QtWidgets
 from qtpy.QtCore import QPoint, QRect, QSize, Qt
 
+from ..utils import clear_layout
+
 
 class AYHBoxLayout(QtWidgets.QHBoxLayout):
     def __init__(self, *args, margin=4, spacing=4):
         super().__init__(*args)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
+
+    def clear(self):
+        clear_layout(self)
 
 
 class AYVBoxLayout(QtWidgets.QVBoxLayout):
@@ -19,12 +24,18 @@ class AYVBoxLayout(QtWidgets.QVBoxLayout):
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
 
+    def clear(self):
+        clear_layout(self)
+
 
 class AYGridLayout(QtWidgets.QGridLayout):
     def __init__(self, *args, margin=4, spacing=4):
         super().__init__(*args)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
+
+    def clear(self):
+        clear_layout(self)
 
 
 class AYFlowLayout(QtWidgets.QLayout):
@@ -178,3 +189,6 @@ class AYFlowLayout(QtWidgets.QLayout):
         if parent.isWidgetType():
             return parent.style().pixelMetric(pm, None, parent)
         return parent.spacing()
+
+    def clear(self):
+        clear_layout(self)

@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 from pathlib import Path
 from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 
+from .. import get_ayon_style
+from ..ayon_style import StyleData
 from ..image_cache import ImageCache
+from ..variants import AYUserImageVariants
+
+log = logging.getLogger(__name__)
 
 
 class AYUserImage(QtWidgets.QLabel):
+    Variants = AYUserImageVariants
+
     def __init__(
         self,
         *args,
@@ -20,6 +28,7 @@ class AYUserImage(QtWidgets.QLabel):
         highlight: bool = False,
         outline: bool = True,
         file_cacher: Callable | None = None,
+        variant=Variants.Default,
         **kwargs,
     ):
         # file path to icon
@@ -36,23 +45,42 @@ class AYUserImage(QtWidgets.QLabel):
         self._outline = outline
         # a file loader function for the image cache: src is the cache key.
         self._file_cacher = file_cacher
-        # background color for initials
-        self._bg = QtGui.QColor("#484875")
-        self._grey = QtGui.QColor(225, 225, 225)
-        self._green = QtGui.QColor(107, 225, 172)
+        # Variant string for looking up style data
+        self._variant_str = variant.value
 
         super().__init__(*args, **kwargs)
+        stl = get_ayon_style()
+        self.setStyle(stl)
+        self._style = stl.model.get_style(
+            "AYUserImage", variant=self._variant_str
+        )
 
         self.set_image()
 
-    def set_image(self):
+    def _get_colors(
+        self,
+    ) -> tuple[QtGui.QColor, QtGui.QColor, QtGui.QColor, QtGui.QColor]:
+        """Read image colors from the AYUserImage style data.
+
+        Returns:
+            A tuple of (initials_bg, outline_color, highlight_color).
+        """
+        style = self._style
+        fg = QtGui.QColor(style.get("initials-color", "#ffffff"))
+        bg = QtGui.QColor(style.get("initials-background-color", "#484875"))
+        outline = QtGui.QColor(style.get("outline-color", "#e1e1e1"))
+        highlight = QtGui.QColor(style.get("highlight-color", "#6be1ac"))
+        return fg, bg, outline, highlight
+
+    def set_image(self) -> None:
+        """Render the user avatar pixmap and assign it to this label."""
+        fg_color, bg_color, outline_color, highlight_color = self._get_colors()
+        active_outline = highlight_color if self._highlight else outline_color
+
         self.pxm = QtGui.QPixmap(self._size, self._size)
         self.pxm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(self.pxm)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-
-        # Define colors
-        outline_color = self._green if self._highlight else self._grey
 
         if self._src:
             if not Path(str(self._src)).exists() and self._file_cacher:
@@ -89,7 +117,7 @@ class AYUserImage(QtWidgets.QLabel):
                 # Reset clipping
                 painter.setClipping(False)
             else:
-                print(f"Could not load src {self._src}")
+                log.warning("Could not load src %s", self._src)
         else:
             initials = "?"
             if self._full_name:
@@ -99,13 +127,13 @@ class AYUserImage(QtWidgets.QLabel):
 
             # Draw a circle with white initials over a color background
 
-            # Fill circle with grey background
-            painter.setBrush(QtGui.QBrush(QtGui.QColor(self._bg)))
+            # Fill circle with background color from style
+            painter.setBrush(QtGui.QBrush(bg_color))
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             painter.drawEllipse(0, 0, self._size, self._size)
 
             # Draw white initials
-            painter.setPen(QtGui.QColor(255, 255, 255))
+            painter.setPen(QtGui.QPen(fg_color))
             font = painter.font()
             point_size = max(8, self._size // 2)
             font.setPointSize(point_size)
@@ -120,7 +148,7 @@ class AYUserImage(QtWidgets.QLabel):
         # Draw outline
         if self._outline or self._highlight:
             painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.setPen(QtGui.QPen(outline_color, 1))
+            painter.setPen(QtGui.QPen(active_outline, 1))
             painter.drawEllipse(1, 1, self._size - 2, self._size - 2)
 
         painter.end()
@@ -153,17 +181,57 @@ if __name__ == "__main__":
             layout_spacing=4,
         )
         w.add_widget(AYUserImage(src="avatar1", file_cacher=resource_loader))
-        w.add_widget(AYUserImage(src="avatar2", highlight=True, file_cacher=resource_loader))
-        w.add_widget(AYUserImage(src="avatar3", outline=False, file_cacher=resource_loader))
+        w.add_widget(
+            AYUserImage(
+                src="avatar2", highlight=True, file_cacher=resource_loader
+            )
+        )
+        w.add_widget(
+            AYUserImage(
+                src="avatar3", outline=False, file_cacher=resource_loader
+            )
+        )
         w.add_widget(AYUserImage(full_name="Oliver Cromwell"))
         w.add_widget(AYUserImage(name="Oliver"))
         w.add_widget(AYUserImage(highlight=True))
         w.add_widget(AYUserImage(name="Oliver", outline=False))
         w.add_widget(AYUserImage(name="Oliver", outline=False, highlight=True))
-        w.add_widget(AYUserImage(src="avatar1", outline=False, size=60, file_cacher=resource_loader))
-        w.add_widget(AYUserImage(src="avatar2", highlight=True, size=60, file_cacher=resource_loader))
+        w.add_widget(
+            AYUserImage(
+                src="avatar1",
+                outline=False,
+                size=60,
+                file_cacher=resource_loader,
+            )
+        )
+        w.add_widget(
+            AYUserImage(
+                src="avatar2",
+                highlight=True,
+                size=60,
+                file_cacher=resource_loader,
+            )
+        )
         w.add_widget(AYUserImage(full_name="Oliver Cromwell", size=60))
         w.add_widget(AYUserImage(name="Oliver", outline=False, size=60))
+        w.add_widget(
+            AYUserImage(
+                name="Milan",
+                outline=False,
+                size=24,
+                variant=AYUserImage.Variants.Entity_Card,
+            )
+        )
+        w.add_widget(
+            AYUserImage(
+                src="avatar1",
+                file_cacher=resource_loader,
+                name="Milan",
+                outline=False,
+                size=24,
+                variant=AYUserImage.Variants.Entity_Card,
+            )
+        )
         return w
 
     test(build, style=Style.AyonStyleOverCSS)

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt
+from PySide6.QtCore import QRect, QSize
 from qtpy.QtGui import QPainter, QPaintEvent
-from qtpy.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
+from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
 from .. import get_ayon_style
+from ..variants import QCheckBoxVariants
 
 
 class AYCheckBox(QCheckBox):
@@ -19,32 +20,97 @@ class AYCheckBox(QCheckBox):
         **kwargs: Keyword arguments passed to QCheckBox.
     """
 
-    def __init__(self, *args, **kwargs):
+    Variants = QCheckBoxVariants
+
+    def __init__(
+        self,
+        *args,
+        variant: Variants = Variants.Default,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
+        self._variant_str = variant.value
+        self._style_dict = None
         self.setStyle(get_ayon_style())
 
+        if variant == AYCheckBox.Variants.Button:
+            self.setFixedSize(self.sizeHint())
+
+    @property
+    def style_dict(self):
+        if self._style_dict is None:
+            self._style_dict = get_ayon_style().model.get_style(
+                "QCheckBox", variant=self._variant_str
+            )
+        return self._style_dict
+
     def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if self.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            p = QPainter(self)
-            option = QStyleOptionButton()
-            self.initStyleOption(option)
-            _style = get_ayon_style()
+        p = QPainter(self)
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        _style = get_ayon_style()
+
+        _expanding = self.sizePolicy().horizontalPolicy() in (
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.MinimumExpanding,
+        )
+        if _expanding:
+            ind_w = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, self
+            )
+            ind_h = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorHeight, option, self
+            )
+            spacing = _style.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, self
+            )
+            cy = self.height() // 2
+
+            ind_opt = QStyleOptionButton(option)
+            ind_opt.rect = QRect(0, cy - ind_h // 2, ind_w, ind_h)
+            _style.drawPrimitive(
+                QStyle.PrimitiveElement.PE_IndicatorCheckBox, ind_opt, p, self
+            )
+
+            label_opt = QStyleOptionButton(option)
+            label_opt.rect = QRect(
+                ind_w + spacing,
+                0,
+                self.width() - ind_w - spacing,
+                self.height(),
+            )
+            _style.drawControl(
+                QStyle.ControlElement.CE_CheckBoxLabel, label_opt, p, self
+            )
+        else:
             _style.drawControl(
                 QStyle.ControlElement.CE_CheckBox, option, p, self
             )
-            return
 
-        super().paintEvent(arg__1)
+    def sizeHint(self) -> QSize:
+        size = super().sizeHint()
+
+        if self._variant_str == AYCheckBox.Variants.Button.value:
+            h_pad, v_pad = self.style_dict.get("padding", [6, 6])
+            size.setWidth(size.width() + h_pad * 2)
+            size.setHeight(size.height() + v_pad * 2)
+
+        return size
 
 
 if __name__ == "__main__":
-    from ..tester import test
+    from ..tester import test, Style
     from .container import AYContainer
 
     def _build():
-        container = AYContainer(layout_margin=10)
-        cb1 = AYCheckBox("Regular Checkbox")
-        container.add_widget(cb1)
+        container = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            layout_margin=20,
+            layout_spacing=20,
+        )
+        for variant in AYCheckBox.Variants:
+            cb1 = AYCheckBox(f"{variant.name} Checkbox", variant=variant)
+            container.add_widget(cb1)
         return container
 
-    test(_build)
+    test(_build, style=Style.AyonStyleOverCSS)

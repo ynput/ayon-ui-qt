@@ -37,14 +37,13 @@ class AYFrame(QtWidgets.QFrame):
         self.setContentsMargins(margin, margin, margin, margin)
 
     def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
-        if self.testAttribute(QtCore.Qt.WidgetAttribute.WA_StyleSheet):
-            p = QtGui.QPainter(self)
-            option = QtWidgets.QStyleOptionFrame()
-            self.initStyleOption(option)
-            return get_ayon_style().drawControl(
-                QtWidgets.QStyle.ControlElement.CE_ShapedFrame, option, p, self
-            )
-        super().paintEvent(arg__1)
+        p = QtGui.QPainter(self)
+        option = QtWidgets.QStyleOptionFrame()
+        self.initStyleOption(option)
+        # print(f"opt: {option}")
+        get_ayon_style().drawControl(
+            QtWidgets.QStyle.ControlElement.CE_ShapedFrame, option, p, self
+        )
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:

@@ -205,7 +205,7 @@ class AYDetailPanel(AYContainer):
         Constructs all sub-sections (thumbnail, status, assignee, etc.)
         and arranges them in a grid layout within the main container.
         """
-        self.entity_path = AYEntityPath(self)
+        self.entity_path = AYEntityPath(parent=self)
         self.thumbnail = self._build_thumbnail()
         self.status = self._build_status()
         self.assignee = self._build_assignee()
