@@ -853,7 +853,6 @@ class AYTextBox(AYContainer):
         self.comment_progress_bar = AYProgressBar(parent=self)
         self.comment_progress_bar.setFixedWidth(120)
         self.comment_progress_bar.setFixedHeight(20)
-        self.comment_progress_bar.progress_bar.setRange(0, 100)
         self.comment_progress_bar.hide()
         self.signals.comment_progress_updated.connect(
             self.comment_progress_bar.set_progress
