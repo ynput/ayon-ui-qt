@@ -705,7 +705,6 @@ class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str, list)  # type: ignore
     comment_progress_updated = Signal(int, int)  # (value, total)  # type: ignore
-    comment_progress_completed = Signal()  # type: ignore
 
 class AYTextBox(AYContainer):
     signals = AYTextBoxSignals()
