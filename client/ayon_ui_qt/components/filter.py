@@ -23,6 +23,7 @@ from ..variants import QFrameVariants, QStyledItemDelegateVariants
 
 from .buttons import AYButton
 from .container import AYContainer
+from .dropdown import AYDropdownPopup
 from .frame import AYFrame
 from .label import AYLabel
 from .layouts import AYVBoxLayout
@@ -173,7 +174,7 @@ class FilterCheckboxDelegate(QtWidgets.QStyledItemDelegate):
         return super().editorEvent(event, model, option, index)
 
 
-class FilterDropdownPopup(AYFrame):
+class FilterDropdownPopup(AYDropdownPopup):
     """Floating popup widget for filter selection.
 
     This popup appears below the toggle button and contains a list of
@@ -183,11 +184,11 @@ class FilterDropdownPopup(AYFrame):
     Signals:
         item_toggled: Emitted when a filter item is toggled.
                       Passes (key: str, selected: bool).
-        popup_closed: Emitted when the popup is closed.
+        popup_closed: Inherited from ``AYDropdownPopup``. Emitted when
+            the popup is closed.
     """
 
     item_toggled = Signal(str, bool)  # (key, selected)
-    popup_closed = Signal()
 
     # Styling constants
     POPUP_MIN_WIDTH = 180
@@ -202,15 +203,7 @@ class FilterDropdownPopup(AYFrame):
         Args:
             parent: Optional parent widget.
         """
-        super().__init__(parent, variant=AYFrame.Variants.Low)
-
-        # Set popup window flags
-        self.setWindowFlags(
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_WindowPropagation)
+        super().__init__(parent, variant=AYDropdownPopup.Variants.Low)
 
         self._init_ui()
 
@@ -304,32 +297,6 @@ class FilterDropdownPopup(AYFrame):
                 )
                 break
 
-    def show_below(self, widget: QtWidgets.QWidget) -> None:
-        """Show the popup positioned below the given widget.
-
-        Args:
-            widget: Widget to position the popup below.
-        """
-        # Get global position of the bottom-left of the widget
-        global_pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height()))
-
-        # Ensure popup doesn't go off screen
-        screen = QtWidgets.QApplication.screenAt(global_pos)
-        if screen:
-            screen_geo = screen.availableGeometry()
-
-            # Adjust horizontal position if needed
-            if global_pos.x() + self.width() > screen_geo.right():
-                global_pos.setX(screen_geo.right() - self.width())
-
-            # Show above if not enough space below
-            if global_pos.y() + self.height() > screen_geo.bottom():
-                global_pos = widget.mapToGlobal(QtCore.QPoint(0, 0))
-                global_pos.setY(global_pos.y() - self.height())
-
-        self.move(global_pos)
-        self.show()
-
     def _on_item_clicked(self, index: QtCore.QModelIndex) -> None:
         """Handle list item click - emit toggle signal.
 
@@ -345,26 +312,6 @@ class FilterDropdownPopup(AYFrame):
         new_selected = current_state == QtCore.Qt.CheckState.Checked
 
         self.item_toggled.emit(key, new_selected)
-
-    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
-        """Handle key press events.
-
-        Args:
-            event: The key event.
-        """
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
-
-    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        """Handle close event.
-
-        Args:
-            event: The close event.
-        """
-        self.popup_closed.emit()
-        super().closeEvent(event)
 
 
 class AYFilter(AYFrame):

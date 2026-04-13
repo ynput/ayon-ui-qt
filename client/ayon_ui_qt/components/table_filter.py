@@ -5,14 +5,12 @@ from dataclasses import dataclass, field
 from qtpy.QtCore import (
     QModelIndex,
     QPersistentModelIndex,
-    QPoint,
     QSortFilterProxyModel,
     Qt,
     Signal,
 )
 from qtpy.QtGui import QMouseEvent
 from qtpy.QtWidgets import (
-    QApplication,
     QFrame,
     QScrollArea,
     QSizePolicy,
@@ -23,6 +21,7 @@ from qtpy.QtWidgets import (
 from .buttons import AYButton
 from .check_box import AYCheckBox
 from .container import AYContainer
+from .dropdown import AYDropdownPopup
 from .frame import AYFrame
 from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout
@@ -200,7 +199,7 @@ class AYTableFilterProxyModel(QSortFilterProxyModel):
 # ---------------------------------------------------------------------------
 
 
-class _FilterDropdown(AYFrame):
+class _FilterDropdown(AYDropdownPopup):
     """Two-page floating dropdown for attribute + value selection.
 
     Page 0: attribute list (with live search).
@@ -208,14 +207,14 @@ class _FilterDropdown(AYFrame):
 
     Signals:
         criterion_ready: Emitted when the user clicks Apply.
-                         Passes (key, values, use_substring).
-        closed: Emitted when the popup is dismissed.
+                         Passes (key, values, use_substring, excludes).
+        popup_closed: Inherited from ``AYDropdownPopup``. Emitted when
+            the popup is dismissed.
     """
 
     criterion_ready = Signal(
         str, list, bool, bool
     )  # key, values, use_substring
-    closed = Signal()
 
     def __init__(
         self,
@@ -223,7 +222,11 @@ class _FilterDropdown(AYFrame):
         table_filter: AYTableFilter,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent, variant=AYFrame.Variants.Low_Framed_Thin)
+        super().__init__(
+            parent,
+            variant=AYDropdownPopup.Variants.Low_Framed_Thin,
+            translucent_bg=False,
+        )
         self._model = model
         self._table_filter = table_filter
         self._current_key: str = ""
@@ -231,12 +234,6 @@ class _FilterDropdown(AYFrame):
         self._value_buttons: dict[str, AYButton] = {}
         self._is_free_text: bool = False
 
-        self.setWindowFlags(
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setMinimumWidth(220)
 
         self._build()
@@ -290,6 +287,9 @@ class _FilterDropdown(AYFrame):
         """Build Page 1 - value selector."""
         page = AYFrame(variant=AYFrame.Variants.Low)
         layout = AYVBoxLayout(page, margin=0, spacing=4)
+        layout.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
 
         # Content area (swapped depending on column type)
         self._value_content_container = AYFrame(variant=AYFrame.Variants.Low)
@@ -342,7 +342,7 @@ class _FilterDropdown(AYFrame):
         self._populate_attribute_page()
         self._attr_search.clear()
         self._stack.setCurrentIndex(0)
-        self._show_below(anchor)
+        self.show_below(anchor)
         self._attr_search.setFocus()
 
     def open_for_edit(
@@ -362,7 +362,7 @@ class _FilterDropdown(AYFrame):
             criterion.values,
         )
         self._stack.setCurrentIndex(1)
-        self._show_below(anchor)
+        self.show_below(anchor)
 
     # ------------------------------------------------------------------
     # Attribute page helpers
@@ -514,26 +514,6 @@ class _FilterDropdown(AYFrame):
     # Positioning / layout helpers
     # ------------------------------------------------------------------
 
-    def _show_below(self, widget: QWidget) -> None:
-        # Use minimumHeight — set synchronously by setFixedHeight in _adjust_height.
-        # This is reliable before show(), unlike self.height() which depends on
-        # the native window being created.
-        h = self.minimumHeight()
-
-        global_pos = widget.mapToGlobal(QPoint(0, widget.height() + 2))
-
-        screen = QApplication.screenAt(global_pos)
-        if screen:
-            geo = screen.availableGeometry()
-            if global_pos.x() + self.width() > geo.right():
-                global_pos.setX(geo.right() - self.width())
-            if global_pos.y() + h > geo.bottom():
-                above = widget.mapToGlobal(QPoint(0, 0))
-                global_pos.setY(above.y() - h)
-
-        self.move(global_pos)
-        self.show()
-
     def _adjust_height(self) -> None:
         """Resize popup to fit current page content."""
         _MAX_H = 420
@@ -548,14 +528,10 @@ class _FilterDropdown(AYFrame):
             desired = search_h + _ROW_H * max(len(visible), 1) + _CHROME
         else:
             # value page: header + scrollable values + apply footer
-            desired = 280
+            desired = self._stack.currentWidget().sizeHint().height() + 8
 
         self.setFixedHeight(min(desired, _MAX_H))
         self.setMinimumWidth(self._table_filter.width())
-
-    def closeEvent(self, event) -> None:
-        self.closed.emit()
-        super().closeEvent(event)
 
 
 # ---------------------------------------------------------------------------

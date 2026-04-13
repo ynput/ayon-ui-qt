@@ -9,8 +9,10 @@ from qtpy.QtCore import Qt
 
 from .. import get_ayon_style, get_ayon_style_data
 from ..color_utils import compute_color_for_contrast
-from ..variants import QFrameVariants, QPushButtonVariants
+from ..variants import QPushButtonVariants
 from .container import AYContainer
+from .dropdown import AYDropdownPopup
+from .layouts import AYVBoxLayout
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +173,7 @@ class AYButton(QtWidgets.QPushButton):
         self.setIcon(icn)
 
 
-class _ButtonMenuDropdown(AYContainer):
+class _ButtonMenuDropdown(AYDropdownPopup):
     """Floating dropdown popup for AYButtonMenu.
 
     A frameless popup QFrame that is shown below (or above, if not
@@ -179,10 +181,9 @@ class _ButtonMenuDropdown(AYContainer):
     the user presses Escape.
 
     Signals:
-        popup_closed: Emitted when the popup is hidden/closed.
+        popup_closed: Inherited from ``AYDropdownPopup``. Emitted when
+            the popup is hidden/closed.
     """
-
-    popup_closed = QtCore.Signal()
 
     def __init__(
         self,
@@ -195,93 +196,10 @@ class _ButtonMenuDropdown(AYContainer):
         """
         super().__init__(
             parent,
-            variant=AYContainer.Variants.Low_Framed_Thin,
-            layout=AYContainer.Layout.VBox,
-            layout_margin=10,
-            layout_spacing=5,
+            variant=AYDropdownPopup.Variants.Low_Framed_Thin,
+            translucent_bg=True,
         )
-
-        self.setStyle(get_ayon_style())
-
-        self.setWindowFlags(
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_WindowPropagation)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(0)
-
-    def paintEvent(self, arg__1: QtGui.QPaintEvent) -> None:
-        """Paint the frame using the AYON style.
-
-        Args:
-            arg__1: The paint event.
-        """
-        p = QtGui.QPainter(self)
-        option = QtWidgets.QStyleOptionFrame()
-        self.initStyleOption(option)
-        get_ayon_style().drawControl(
-            QtWidgets.QStyle.ControlElement.CE_ShapedFrame,
-            option,
-            p,
-            self,
-        )
-
-    def show_below(self, widget: QtWidgets.QWidget) -> None:
-        """Position and show the popup below (or above) the widget.
-
-        The popup is left-aligned with the widget's left edge. If there
-        is not enough space below on the screen, the popup is shown
-        above instead.
-
-        Args:
-            widget: The reference widget to position against.
-        """
-        global_pos = widget.mapToGlobal(QtCore.QPoint(0, widget.height() + 2))
-        self.adjustSize()
-
-        screen = QtWidgets.QApplication.screenAt(global_pos)
-        if screen:
-            screen_geo = screen.availableGeometry()
-
-            # Shift left if popup would overflow right edge
-            if global_pos.x() + self.width() > screen_geo.right():
-                global_pos.setX(screen_geo.right() - self.width())
-
-            # Show above if not enough vertical space below
-            popup_bottom = global_pos.y() + self.height()
-            if popup_bottom > screen_geo.bottom():
-                above_y = (
-                    widget.mapToGlobal(QtCore.QPoint(0, 0)).y() - self.height()
-                )
-                global_pos.setY(above_y)
-
-        self.move(global_pos)
-        self.show()
-
-    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
-        """Close on Escape key.
-
-        Args:
-            event: The key event.
-        """
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
-
-    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        """Emit popup_closed when the popup is hidden.
-
-        Args:
-            event: The close event.
-        """
-        self.popup_closed.emit()
-        super().closeEvent(event)
+        AYVBoxLayout(self, margin=10, spacing=5)
 
 
 class AYButtonMenu(AYButton):
@@ -315,7 +233,7 @@ class AYButtonMenu(AYButton):
     def __init__(
         self,
         *args,
-        populate_callback: Callable[[AYContainer], None],
+        populate_callback: Callable[[QtWidgets.QFrame], None],
         **kwargs,
     ) -> None:
         """Initialize the AYButtonMenu.
@@ -428,7 +346,7 @@ if __name__ == "__main__":
             layout_margin=10,
         )
 
-        def populate_menu(container: AYContainer) -> None:
+        def populate_menu(container: QtWidgets.QFrame) -> None:
             layout = container.layout()
             assert layout is not None
             layout.setContentsMargins(10, 10, 10, 10)
