@@ -6,6 +6,7 @@ from qtpy.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontInfo,
     QFontMetrics,
     QIcon,
     QPainter,
@@ -111,8 +112,11 @@ class AYLabel(QtWidgets.QLabel):
         self._font = self.font()
 
         if self._rel_text_size != 0:
-            self._font.setPointSize(
-                self._font.pointSize() + self._rel_text_size
+            # _rel_text_size is in points but setting pixels is more reliable.
+            px_size = self._font.pixelSize()
+            px_to_pt = px_size / QFontInfo(self._font).pointSize()
+            self._font.setPixelSize(
+                round(px_size + self._rel_text_size * px_to_pt)
             )
 
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal

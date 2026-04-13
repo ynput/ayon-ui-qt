@@ -73,8 +73,8 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
 def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
     font = QtGui.QFont()
     font.setFamily(style["font-family"])
-    pt_size = w.font().pointSizeF() if w else style["font-size"]
-    font.setPointSizeF(pt_size)
+    px_size = style["font-size"]
+    font.setPixelSize(px_size)
     font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
     # log.debug(
     #     "FONT: %s, %g pts, w=%d",

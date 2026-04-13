@@ -52,9 +52,8 @@ class AYTag(AYFrame):
         self.lyt = QtWidgets.QHBoxLayout(self)
         self.lyt.setContentsMargins(2, 2, 2, 2)
         self.lyt.setSpacing(4)
-        self.lyt.setSizeConstraints(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize,
-            QtWidgets.QLayout.SizeConstraint.SetFixedSize,
+        self.lyt.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
 
         self.delete_button = AYButton(

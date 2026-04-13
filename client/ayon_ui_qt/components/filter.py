@@ -4,7 +4,8 @@ This module provides:
 - FilterItem: Data model for filter options
 - FilterCheckboxDelegate: Custom delegate for checkbox-style rendering
 - FilterDropdownPopup: Floating popup for filter selection
-- AYFilter: Main filter widget with tag bar and dropdown selection
+- AYFilter: Base filter widget with tag bar and dropdown toggle
+- AYFilterByCategory: Subclass managing FilterItem data and checkbox popup
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List
 
-from qtpy import QtCore, QtGui, QtWidgets
+from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from qtpy.QtGui import QColor, QPainter
 from qtpy.QtWidgets import QStyle, QStyleOptionViewItem
@@ -315,19 +316,18 @@ class FilterDropdownPopup(AYDropdownPopup):
 
 
 class AYFilter(AYFrame):
-    """Multi-select filter widget with tag display and dropdown selection.
+    """Base filter widget with tag bar and dropdown toggle.
 
-    Displays selected filters as dismissible tags in a top bar, with a
-    dropdown panel for selecting/deselecting filter options.
+    Provides the tag bar UI, toggle button, dropdown show/hide logic,
+    and tag management. Subclasses supply a popup widget via
+    ``_create_dropdown_popup()`` and handle tag removal via
+    ``_handle_tag_removed()``.
 
     Signals:
         filter_changed: Emitted when selection changes. Passes list of
-                        selected FilterItem keys.
+                        selected keys.
         filter_added: Emitted when a filter is selected. Passes the key.
         filter_removed: Emitted when a filter is deselected. Passes the key.
-
-    Attributes:
-        items: List of FilterItem objects representing available filters.
     """
 
     filter_changed = Signal(list)  # List[str] of selected keys
@@ -340,30 +340,74 @@ class AYFilter(AYFrame):
         self,
         parent: QtWidgets.QWidget | None = None,
         label: str = "Sort by",
-        items: List[FilterItem] | None = None,
         default_color: str = "#8fceff",
         variant: Variants = Variants.Low,
     ) -> None:
-        """Initialize the filter widget.
+        """Initialize the base filter widget.
 
         Args:
             parent: Optional parent widget.
             label: Text displayed before the filter tags.
-            items: Initial list of filter items.
             default_color: Default tag color when item has no color set.
             variant: Frame variant for background styling.
         """
-        super().__init__(parent, variant=variant, margin=0)
+        super().__init__(parent=parent, variant=variant, margin=0)
 
         self._label_text = label
-        self._items: List[FilterItem] = list(items) if items else []
         self._default_color = default_color
         self._tags: dict[str, AYTag] = {}
         self._dropdown_visible = False
 
         self._init_ui()
         self._connect_signals()
-        self._sync_tags_from_items()
+
+        self.setStyle(get_ayon_style())
+
+    def set_label(self, text: str) -> None:
+        """Set the label text.
+
+        Args:
+            text: New label text to display.
+        """
+        self._label_text = text
+        self._label.setText(text)
+
+    # --- Hooks for subclasses ---
+
+    def _create_dropdown_popup(
+        self,
+    ) -> AYDropdownPopup | None:
+        """Create and return the dropdown popup widget.
+
+        Subclasses override this to return a concrete popup instance.
+        The base implementation returns ``None`` (no popup).
+
+        Returns:
+            An ``AYDropdownPopup`` instance or ``None``.
+        """
+        return None
+
+    def _handle_tag_removed(self, key: str) -> None:
+        """React to a tag dismissal.
+
+        Called when the user clicks the X on a tag. Subclasses override
+        this to update their data model (e.g. call
+        ``set_filter_selected(key, False)``).
+
+        Args:
+            key: Key of the dismissed tag.
+        """
+
+    def get_selected_keys(self) -> List[str]:
+        """Return the list of selected filter keys.
+
+        The base implementation returns an empty list. Subclasses that
+        manage selection state must override this method.
+
+        Returns:
+            List of selected keys.
+        """
+        return []
 
     # --- UI Setup ---
 
@@ -373,20 +417,22 @@ class AYFilter(AYFrame):
 
         # Top bar
         self._top_bar = AYContainer(
+            parent=self,
             layout=AYContainer.Layout.HBox,
-            variant=AYContainer.Variants.Low,
+            variant=AYContainer.Variants.Low_Framed_Thin,
             layout_margin=4,
             layout_spacing=4,
         )
         main_layout.addWidget(self._top_bar)
 
         # Label
-        self._label = AYLabel(self._label_text)
+        self._label = AYLabel(self._label_text, parent=self)
         self._label.setContentsMargins(10, 0, 5, 0)
         self._top_bar.add_widget(self._label)
 
         # Tags container
         self._tags_container = AYContainer(
+            self,
             layout=AYContainer.Layout.HBox,
             variant=AYContainer.Variants.Default,
             layout_margin=0,
@@ -411,15 +457,165 @@ class AYFilter(AYFrame):
         self._toggle_btn.setContentsMargins(4, 4, 4, 10)
         self._top_bar.add_widget(self._toggle_btn)
 
-        # Create floating dropdown popup (not added to layout)
-        self._dropdown_popup = FilterDropdownPopup()
-        self._dropdown_popup.populate(self._items)
+        # Create floating dropdown popup via hook (not added to layout)
+        self._dropdown_popup = self._create_dropdown_popup()
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         self._toggle_btn.clicked.connect(self._on_toggle_dropdown)
-        self._dropdown_popup.item_toggled.connect(self._on_popup_item_toggled)
-        self._dropdown_popup.popup_closed.connect(self._on_popup_closed)
+        if self._dropdown_popup is not None:
+            self._dropdown_popup.popup_closed.connect(self._on_popup_closed)
+
+    # --- Tag management ---
+
+    def _sync_tags_from_items(self, items: List[FilterItem]) -> None:
+        """Synchronize tags with a list of filter items.
+
+        Args:
+            items: The current list of filter items.
+        """
+        for item in items:
+            if item.selected and item.key not in self._tags:
+                self._add_tag(item)
+            elif not item.selected and item.key in self._tags:
+                self._remove_tag(item.key)
+
+    def _add_tag(self, item: FilterItem) -> None:
+        """Create and add a tag widget for a filter item.
+
+        Args:
+            item: The FilterItem to create a tag for.
+        """
+        if item.key in self._tags:
+            return
+
+        color = QColor(item.color or self._default_color)
+        tag = AYTag(item.key, color, label=item.label)
+        tag.tag_removed.connect(self._on_tag_removed)
+        tag.tag_expanded.connect(self._on_tag_expanded)
+
+        self._tags[item.key] = tag
+        self._tags_container.add_widget(tag)
+
+    def _remove_tag(self, key: str) -> None:
+        """Remove a tag widget.
+
+        Args:
+            key: Key of the tag to remove.
+        """
+        if key not in self._tags:
+            return
+
+        tag = self._tags.pop(key)
+        tag.setParent(None)
+        tag.deleteLater()
+
+    def _emit_filter_changed(self) -> None:
+        """Emit filter_changed signal with current selection."""
+        self.filter_changed.emit(self.get_selected_keys())
+
+    # --- Event Handlers ---
+
+    def _on_toggle_dropdown(self) -> None:
+        """Handle toggle button click."""
+        if self._dropdown_popup is None:
+            return
+
+        if self._dropdown_visible:
+            self._dropdown_popup.close()
+        else:
+            self._dropdown_visible = True
+            self._toggle_btn.set_icon("keyboard_arrow_up")
+            self._dropdown_popup.show_below(self._top_bar)
+
+    def _on_popup_closed(self) -> None:
+        """Handle popup close event."""
+        self._dropdown_visible = False
+        self._toggle_btn.set_icon("keyboard_arrow_down")
+
+    def _on_tag_removed(self, key: str) -> None:
+        """Handle tag X button click.
+
+        Args:
+            key: Key of the removed tag.
+        """
+        self._handle_tag_removed(key)
+
+    def _on_tag_expanded(self, key: str) -> None:
+        """Handle tag expand button click - toggle dropdown.
+
+        Args:
+            key: Key of the expanded tag.
+        """
+        self._on_toggle_dropdown()
+
+
+class AYFilterByCategory(AYFilter):
+    """Category-based filter using FilterItem list and checkbox dropdown.
+
+    Manages a list of ``FilterItem`` objects and populates a
+    ``FilterDropdownPopup`` for the user to select/deselect items.
+
+    Signals:
+        filter_changed: Inherited. Emitted with list of selected keys.
+        filter_added: Inherited. Emitted when a filter is selected.
+        filter_removed: Inherited. Emitted when a filter is deselected.
+    """
+
+    def __init__(
+        self,
+        parent: QtWidgets.QWidget | None = None,
+        label: str = "Sort by",
+        items: List[FilterItem] | None = None,
+        default_color: str = "#8fceff",
+        variant: AYFilter.Variants = AYFilter.Variants.Low,
+    ) -> None:
+        """Initialize the category filter widget.
+
+        Args:
+            parent: Optional parent widget.
+            label: Text displayed before the filter tags.
+            items: Initial list of filter items.
+            default_color: Default tag color when item has no color set.
+            variant: Frame variant for background styling.
+        """
+        self._items: List[FilterItem] = list(items) if items else []
+        super().__init__(
+            parent,
+            label=label,
+            default_color=default_color,
+            variant=variant,
+        )
+        self._connect_category_signals()
+        self._sync_tags_from_items(self._items)
+
+    # --- Hooks ---
+
+    def _create_dropdown_popup(self) -> FilterDropdownPopup:
+        """Create and populate the category checkbox popup.
+
+        Returns:
+            A populated ``FilterDropdownPopup`` instance.
+        """
+        popup = FilterDropdownPopup()
+        popup.populate(self._items)
+        return popup
+
+    def _handle_tag_removed(self, key: str) -> None:
+        """Deselect the filter item when its tag is dismissed.
+
+        Args:
+            key: Key of the dismissed tag.
+        """
+        self.set_filter_selected(key, False)
+
+    # --- Additional signal wiring ---
+
+    def _connect_category_signals(self) -> None:
+        """Connect category-specific signals after popup is created."""
+        popup = self._dropdown_popup
+        if isinstance(popup, FilterDropdownPopup):
+            popup.item_toggled.connect(self._on_popup_item_toggled)
 
     # --- Public API ---
 
@@ -501,7 +697,9 @@ class AYFilter(AYFrame):
 
     def _repopulate_popup(self) -> None:
         """Repopulate the popup with current filter items."""
-        self._dropdown_popup.populate(self._items)
+        popup = self._dropdown_popup
+        if isinstance(popup, FilterDropdownPopup):
+            popup.populate(self._items)
 
     def _update_popup_item_state(self, key: str, selected: bool) -> None:
         """Update checkbox state of a popup item.
@@ -510,62 +708,11 @@ class AYFilter(AYFrame):
             key: Key of the item to update.
             selected: New selection state.
         """
-        self._dropdown_popup.update_item_state(key, selected)
-
-    def _sync_tags_from_items(self) -> None:
-        """Synchronize tags with current filter item states."""
-        for item in self._items:
-            if item.selected and item.key not in self._tags:
-                self._add_tag(item)
-            elif not item.selected and item.key in self._tags:
-                self._remove_tag(item.key)
-
-    def _add_tag(self, item: FilterItem) -> None:
-        """Create and add a tag widget for a filter item.
-
-        Args:
-            item: The FilterItem to create a tag for.
-        """
-        if item.key in self._tags:
-            return
-
-        color = QColor(item.color or self._default_color)
-        tag = AYTag(item.key, color, label=item.label)
-        tag.tag_removed.connect(self._on_tag_removed)
-        tag.tag_expanded.connect(self._on_tag_expanded)
-
-        self._tags[item.key] = tag
-        self._tags_container.add_widget(tag)
-
-    def _remove_tag(self, key: str) -> None:
-        """Remove a tag widget.
-
-        Args:
-            key: Key of the tag to remove.
-        """
-        if key not in self._tags:
-            return
-
-        tag = self._tags.pop(key)
-        tag.setParent(None)
-        tag.deleteLater()
-
-    def _emit_filter_changed(self) -> None:
-        """Emit filter_changed signal with current selection."""
-        self.filter_changed.emit(self.get_selected_keys())
+        popup = self._dropdown_popup
+        if isinstance(popup, FilterDropdownPopup):
+            popup.update_item_state(key, selected)
 
     # --- Event Handlers ---
-
-    def _on_toggle_dropdown(self) -> None:
-        """Handle toggle button click."""
-        if self._dropdown_visible:
-            # Close popup
-            self._dropdown_popup.close()
-        else:
-            # Show popup below the top bar
-            self._dropdown_visible = True
-            self._toggle_btn.set_icon("keyboard_arrow_up")
-            self._dropdown_popup.show_below(self._top_bar)
 
     def _on_popup_item_toggled(self, key: str, selected: bool) -> None:
         """Handle popup item toggle.
@@ -576,27 +723,6 @@ class AYFilter(AYFrame):
         """
         self.set_filter_selected(key, selected)
 
-    def _on_popup_closed(self) -> None:
-        """Handle popup close event."""
-        self._dropdown_visible = False
-        self._toggle_btn.set_icon("keyboard_arrow_down")
-
-    def _on_tag_removed(self, key: str) -> None:
-        """Handle tag X button click.
-
-        Args:
-            key: Key of the removed tag.
-        """
-        self.set_filter_selected(key, False)
-
-    def _on_tag_expanded(self, key: str) -> None:
-        """Handle tag expand button click - toggle dropdown.
-
-        Args:
-            key: Key of the expanded tag.
-        """
-        self._on_toggle_dropdown()
-
 
 if __name__ == "__main__":
     from ..tester import Style, test
@@ -606,7 +732,7 @@ if __name__ == "__main__":
         """Build test widget."""
         w = AYContainer(variant=AYContainer.Variants.High, layout_margin=10)
         w.add_widget(
-            AYFilter(
+            AYFilterByCategory(
                 label="Sort by",
                 items=[
                     FilterItem("task", "Task"),

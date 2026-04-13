@@ -1,26 +1,27 @@
-"""Visual regression tests for AYFilter."""
+"""Visual regression tests for AYFilterByCategory."""
 
 from __future__ import annotations
 
 from qtpy.QtWidgets import QWidget
 
 from widget_test import WidgetTest
-from ayon_ui_qt.components.filter import AYFilter, FilterItem
+from ayon_ui_qt.components.filter import AYFilterByCategory, FilterItem
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.label import AYLabel
 
 
 _FILTER_ITEMS = [
-    FilterItem(key="animation",  label="Animation",  color="#3498db"),
-    FilterItem(key="modeling",   label="Modeling",   color="#fa6e46"),
-    FilterItem(key="rigging",    label="Rigging",    color="#00f0b4"),
-    FilterItem(key="lookdev",    label="Lookdev",    color="#f4c430"),
-    FilterItem(key="compositing",label="Compositing",color="#cb1a1a"),
+    FilterItem(key="animation", label="Animation", color="#3498db"),
+    FilterItem(key="modeling", label="Modeling", color="#fa6e46"),
+    FilterItem(key="rigging", label="Rigging", color="#00f0b4"),
+    FilterItem(key="lookdev", label="Lookdev", color="#f4c430"),
+    FilterItem(key="compositing", label="Compositing", color="#cb1a1a"),
 ]
 
 
 class FilterTest(WidgetTest):
-    """Tests AYFilter with no selection and with some filters selected."""
+    """Tests AYFilterByCategory with no selection and with some filters
+    selected."""
 
     size = (600, 200)
     tolerance = 0.0
@@ -33,7 +34,7 @@ class FilterTest(WidgetTest):
         )
 
         root.add_widget(AYLabel("No filters active:"))
-        self._filter_empty = AYFilter(
+        self._filter_empty = AYFilterByCategory(
             label="Filter by",
             items=list(_FILTER_ITEMS),
         )
@@ -41,10 +42,15 @@ class FilterTest(WidgetTest):
 
         root.add_widget(AYLabel("Some filters active:"))
         active_items = [
-            FilterItem(key=i.key, label=i.label, color=i.color, selected=(i.key in ("animation", "rigging")))
+            FilterItem(
+                key=i.key,
+                label=i.label,
+                color=i.color,
+                selected=(i.key in ("animation", "rigging")),
+            )
             for i in _FILTER_ITEMS
         ]
-        self._filter_active = AYFilter(
+        self._filter_active = AYFilterByCategory(
             label="Filter by",
             items=active_items,
         )
