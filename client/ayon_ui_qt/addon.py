@@ -5,7 +5,6 @@ This module provides the client-side addon integration with AYON.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from ayon_core.addon import AYONAddon, IPluginPaths
 
@@ -23,14 +22,6 @@ class UIQtAddon(AYONAddon, IPluginPaths):
     name = "ui_qt"
     title = "AYON UI Qt"
     version = __version__
-
-    def initialize(self, settings: dict[str, Any]) -> None:
-        """Initialize the addon with settings from the server.
-
-        Args:
-            settings: Addon settings from AYON server.
-        """
-        self.enabled = settings.get("enabled", True)
 
     def get_plugin_paths(self) -> dict[str, list[str]]:
         """Return paths to plugin locations.
