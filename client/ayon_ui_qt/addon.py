@@ -4,7 +4,6 @@ This module provides the client-side addon integration with AYON.
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from ayon_core.addon import AYONAddon, IPluginPaths
@@ -42,21 +41,3 @@ class UIQtAddon(AYONAddon, IPluginPaths):
             Dictionary mapping plugin types to paths.
         """
         return {}
-
-    @classmethod
-    def get_addon_dir(cls) -> str:
-        """Return path to addon directory.
-
-        Returns:
-            Absolute path to addon directory.
-        """
-        return os.path.dirname(os.path.abspath(__file__))
-
-    @classmethod
-    def get_resources_dir(cls) -> str:
-        """Return path to resources directory.
-
-        Returns:
-            Absolute path to resources.
-        """
-        return os.path.join(cls.get_addon_dir(), "resources")
