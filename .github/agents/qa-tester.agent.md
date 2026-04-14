@@ -36,7 +36,7 @@ pytest tests/ --force-regen
 ```python
 from widget_test import WidgetTest
 from ayon_ui_qt.components.<module> import <Widget>
-from ayon_ui_qt import get_ayon_style  # apply before snapshot
+from ayon_ui_qt.ayon_style import get_ayon_style  # apply before snapshot
 ```
 
 ## Constraints
