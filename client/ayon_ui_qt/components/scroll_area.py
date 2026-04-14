@@ -11,7 +11,7 @@ from qtpy.QtWidgets import (
     QStyleOptionSlider,
 )
 
-from .. import get_ayon_style
+from ..style import get_ayon_style
 
 
 class AYScrollBar(QScrollBar):

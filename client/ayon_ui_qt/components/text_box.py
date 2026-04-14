@@ -30,7 +30,7 @@ from qtpy.QtWidgets import (
     QTextEdit,
 )
 
-from .. import get_ayon_style
+from ..style import get_ayon_style
 from ..data_models import CommentCategory, ProjectData, User
 from ..variants import QFrameVariants, QTextEditVariants
 from .buttons import AYButton

@@ -16,7 +16,7 @@ from qtpy.QtCore import (
 from qtpy.QtGui import QCloseEvent, QColor, QPainter, QPainterPath, QPen
 from qtpy.QtWidgets import QSizePolicy, QToolTip, QWidget
 
-from ayon_ui_qt import get_ayon_style_data
+from ..style import get_ayon_style_data
 
 from .task_queue import AsyncTaskQueue
 
