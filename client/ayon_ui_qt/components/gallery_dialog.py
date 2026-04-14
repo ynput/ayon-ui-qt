@@ -18,7 +18,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ayon_ui_qt import get_ayon_style
+from ayon_ui_qt.ayon_style import get_ayon_style
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.label import AYLabel

@@ -9,7 +9,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QStyle, QStyleOptionFrame, QTextEdit
 
-from .. import get_ayon_style
+from ..ayon_style import get_ayon_style
 
 
 class AYTextEdit(QTextEdit):
