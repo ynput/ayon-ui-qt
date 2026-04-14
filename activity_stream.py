@@ -6,7 +6,7 @@ import logging
 from typing import Literal
 import datetime
 
-# from ayon_ui_qt.ayon_style import style_widget_and_siblings
+# from ayon_ui_qt.style import style_widget_and_siblings
 from ayon_ui_qt.components.buttons import AYButton
 from ayon_ui_qt.components.comment import AYComment, AYPublish, AYStatusChange
 from ayon_ui_qt.components.container import AYContainer, AYHBoxLayout

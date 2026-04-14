@@ -7,7 +7,7 @@ from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ..ayon_style import get_ayon_style
+from ..style import get_ayon_style
 from ..image_cache import ImageCache
 from ..variants import AYUserImageVariants
 

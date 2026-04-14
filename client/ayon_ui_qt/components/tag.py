@@ -7,7 +7,7 @@ try:
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
-from ..ayon_style import get_ayon_style
+from ..style import get_ayon_style
 from .buttons import AYButton
 from .frame import AYFrame
 from .label import AYLabel

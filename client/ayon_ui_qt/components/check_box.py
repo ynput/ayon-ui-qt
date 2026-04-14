@@ -6,7 +6,7 @@ from PySide6.QtCore import QRect, QSize
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
-from ..ayon_style import get_ayon_style
+from ..style import get_ayon_style
 from ..variants import QCheckBoxVariants
 
 

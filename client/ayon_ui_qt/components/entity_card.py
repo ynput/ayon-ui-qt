@@ -49,7 +49,7 @@ from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
 
 
-from ..ayon_style import get_ayon_style, get_ayon_style_data
+from ..style import get_ayon_style, get_ayon_style_data
 from ..variants import QFrameVariants
 from .container import AYContainer
 from .entity_path import AYEntityPath

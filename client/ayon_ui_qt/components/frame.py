@@ -5,7 +5,7 @@ from enum import Enum
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ..ayon_style import get_ayon_style
+from ..style import get_ayon_style
 from ..utils import color_blend
 from ..variants import QFrameVariants
 

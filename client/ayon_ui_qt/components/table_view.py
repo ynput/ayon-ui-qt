@@ -28,7 +28,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import QHeaderView, QToolButton, QTreeView, QWidget
 
-from ..ayon_style import StyleData, TableItemDelegate, get_ayon_style
+from ..style import StyleData, TableItemDelegate, get_ayon_style
 from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
 from .table_model import PaginatedTableModel

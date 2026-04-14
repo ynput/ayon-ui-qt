@@ -7,7 +7,7 @@ from typing import Callable
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
 
-from ..ayon_style import get_ayon_style, get_ayon_style_data
+from ..style import get_ayon_style, get_ayon_style_data
 from ..color_utils import compute_color_for_contrast
 from ..variants import QPushButtonVariants
 from .container import AYContainer
