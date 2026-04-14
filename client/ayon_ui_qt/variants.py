@@ -64,6 +64,7 @@ class QFrameVariants(Enum):
     Criterion = "criterion"
     Entity_Card = "entity-card"
     Entity_Card_Tag = "entity-card-tag"
+    Surface = "surface"
     Debug_R = "debug-r"
     Debug_G = "debug-g"
     Debug_B = "debug-b"
@@ -100,6 +101,10 @@ class AYTableViewVariants(Enum):
 class AYUserImageVariants(Enum):
     Default = "default"
     Entity_Card = "entity-card"
+
+
+class AsyncTaskQueueMonitorVariants(Enum):
+    Default = "default"
 
 
 # END OF VARIANTs DEFINITIONS -------------------------------------------------

@@ -77,6 +77,7 @@ class FilterableList(QWidget):
 
         self._items_container = AYFrame(variant=AYFrame.Variants.Low)
         self._items_layout = AYVBoxLayout(margin=0, spacing=0)
+        self._items_layout.setAlignment(Qt.AlignTop)
         self._items_container.setLayout(self._items_layout)
         scroll_area.setWidget(self._items_container)
         layout.addWidget(scroll_area)
@@ -106,11 +107,7 @@ class FilterableList(QWidget):
     def clear_items(self) -> None:
         """Remove all items from the list."""
         self._items.clear()
-        while self._items_layout.count() > 0:
-            item = self._items_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
+        self._items_layout.clear()
 
     def search_field(self) -> AYLineEdit:
         """Return the search field widget.

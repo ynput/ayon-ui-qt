@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List
 
+from PySide6.QtGui import QMouseEvent
 from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from qtpy.QtGui import QColor, QPainter
@@ -548,6 +549,12 @@ class AYFilter(AYFrame):
             key: Key of the expanded tag.
         """
         self._on_toggle_dropdown()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._on_toggle_dropdown()
+            return
+        return super().mousePressEvent(event)
 
 
 class AYFilterByCategory(AYFilter):

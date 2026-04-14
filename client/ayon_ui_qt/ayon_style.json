@@ -494,6 +494,9 @@
                     "padding-h": 5,
                     "padding-v": 3
                 },
+                "surface":{
+                    "background-color": "--md-sys-color-surface-container-highest-dark"
+                },
                 "debug-r": {
                     "background-color": "#664444"
                 },
