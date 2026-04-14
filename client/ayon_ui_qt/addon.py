@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import os
 
-from ayon_core.addon import AYONAddon, IPluginPaths
+from ayon_core.addon import AYONAddon
 
 from .version import __version__
 
 
-class UIQtAddon(AYONAddon, IPluginPaths):
+class UIQtAddon(AYONAddon):
     """Addon providing AYON-styled Qt widgets.
 
     This addon provides a library of Qt widgets that match AYON's
