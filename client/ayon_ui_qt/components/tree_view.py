@@ -6,7 +6,7 @@ from qtpy.QtCore import Qt, Signal, QItemSelection
 from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette
 from qtpy.QtWidgets import QTreeView, QWidget
 
-from ..ayon_style import TreeViewItemDelegate, get_ayon_style
+from ..style import TreeViewItemDelegate, get_ayon_style
 from ..variants import QTreeViewVariants
 from .scroll_area import AYScrollBar
 

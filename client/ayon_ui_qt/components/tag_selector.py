@@ -19,7 +19,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ..ayon_style import get_ayon_style
+from ..style import get_ayon_style
 from .buttons import AYButton
 from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout

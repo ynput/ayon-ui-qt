@@ -44,15 +44,15 @@ This addon provides a comprehensive library of Qt widgets styled to match AYON's
 ### Basic Usage
 
 ```python
-from ayon_ui_qt.ayon_style import get_ayon_style, style_widget_and_siblings
+from ayon_ui_qt.style import get_ayon_style, style_widget_and_siblings
 from ayon_ui_qt.components import AYButton, AYContainer, AYLabel
 
 # Create a styled container with buttons
 container = AYContainer(
-    layout=AYContainer.Layout.VBox,
-    variant=AYContainer.Variants.Low,
-    layout_margin=10,
-    layout_spacing=8,
+   layout=AYContainer.Layout.VBox,
+   variant=AYContainer.Variants.Low,
+   layout_margin=10,
+   layout_spacing=8,
 )
 
 # Add styled widgets
@@ -138,7 +138,7 @@ ayon-ui-qt/
 ```bash
 # Run individual component tests
 uv run python -m ayon_ui_qt.components.buttons
-uv run python -m ayon_ui_qt.ayon_style
+uv run python -m ayon_ui_qt.style
 ```
 
 ### Building the Package
