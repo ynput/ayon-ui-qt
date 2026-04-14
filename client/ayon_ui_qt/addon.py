@@ -7,12 +7,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ayon_core.addon import AYONAddon, IPluginPaths
+from ayon_core.addon import AYONAddon
 
 from .version import __version__
 
 
-class UIQtAddon(AYONAddon, IPluginPaths):
+class UIQtAddon(AYONAddon):
     """Addon providing AYON-styled Qt widgets.
 
     This addon provides a library of Qt widgets that match AYON's
@@ -31,17 +31,6 @@ class UIQtAddon(AYONAddon, IPluginPaths):
             settings: Addon settings from AYON server.
         """
         self.enabled = settings.get("enabled", True)
-
-    def get_plugin_paths(self) -> dict[str, list[str]]:
-        """Return paths to plugin locations.
-
-        This addon provides a library, not plugins,
-        so this returns empty paths.
-
-        Returns:
-            Dictionary mapping plugin types to paths.
-        """
-        return {}
 
     @classmethod
     def get_addon_dir(cls) -> str:
