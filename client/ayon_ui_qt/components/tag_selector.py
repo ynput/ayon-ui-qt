@@ -9,12 +9,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt, Signal  # type: ignore
+from qtpy.QtCore import Signal  # type: ignore
 from qtpy.QtGui import QColor, QFocusEvent, QShowEvent
 from qtpy.QtWidgets import (
     QApplication,
-    QFrame,
-    QScrollArea,
     QSizePolicy,
     QWidget,
 )
@@ -25,8 +23,8 @@ from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .frame import AYFrame
 from .container import AYContainer
-from .line_edit import AYLineEdit
 from .dropdown import AYDropdownPopup
+from .filterable_list import FilterableList
 
 logger = logging.getLogger(__name__)
 
@@ -164,48 +162,14 @@ class TagDropdown(AYDropdownPopup):
 
     def _build(self) -> None:
         """Build the dropdown UI layout."""
-
-        # Search field with icon
-        search_container = AYContainer(
-            layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variants.Low_Square,
-            layout_margin=6,
-            layout_spacing=6,
+        self._filterable_list = FilterableList(
+            placeholder="Search tags...",
+            parent=self,
         )
-
-        self.search_icon = AYLabel(
-            icon="search",
-            icon_size=18,
-            icon_color="#ffffff",
-            variant=AYLabel.Variants.Default,
-        )
-        search_container.add_widget(self.search_icon)
-
-        self._search_field = AYLineEdit()
-        self._search_field.setPlaceholderText("Search tags...")
-        self._search_field.textChanged.connect(self._on_search_changed)
-        self._search_field.returnPressed.connect(self._on_enter_pressed)
-        search_container.add_widget(self._search_field)
-
-        self._content.addWidget(search_container)
-
-        # Scrollable tag list
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        scroll_area.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-
-        self._tags_container = AYFrame(variant=AYFrame.Variants.Low)
-        self._tags_layout = AYVBoxLayout(margin=0, spacing=0)
-        self._tags_container.setLayout(self._tags_layout)
-        scroll_area.setWidget(self._tags_container)
-
-        self._content.addWidget(scroll_area)
+        search = self._filterable_list.search_field()
+        search.textChanged.connect(self._on_search_changed)
+        search.returnPressed.connect(self._on_enter_pressed)
+        self._content.addWidget(self._filterable_list)
 
         # Populate tags
         self._populate_tags()
@@ -217,7 +181,7 @@ class TagDropdown(AYDropdownPopup):
             tag_widget = TagItemWidget(tag)
             tag_widget.setEnabled(False)
             self._tag_widgets[tag.name] = tag_widget
-            self._tags_layout.addWidget(tag_widget)
+            self._filterable_list.add_item(tag_widget)
             return
 
         for tag in self._tags:
@@ -225,9 +189,16 @@ class TagDropdown(AYDropdownPopup):
             tag_widget = TagItemWidget(tag, selected=selected)
             tag_widget.tag_clicked.connect(self._on_tag_clicked)
             self._tag_widgets[tag.name] = tag_widget
-            self._tags_layout.addWidget(tag_widget)
+            tag_name = tag.name
+            self._filterable_list.add_item(
+                tag_widget,
+                match_fn=lambda text, n=tag_name: (
+                    not text.lower().strip()
+                    or text.lower().strip() in n.lower()
+                ),
+            )
 
-        self._tags_layout.addStretch()
+        self._filterable_list.add_stretch()
 
     def _on_search_changed(self, text: str) -> None:
         """Filter tags based on search input.
@@ -235,18 +206,11 @@ class TagDropdown(AYDropdownPopup):
         Args:
             text: The current search text.
         """
-        search_lower = text.lower().strip()
-
-        # Show/hide tags based on search
-        for tag_name, widget in self._tag_widgets.items():
-            visible = not search_lower or search_lower in tag_name.lower()
-            widget.setVisible(visible)
-
         self._adjust_height()
 
     def _on_enter_pressed(self) -> None:
         """Handle Enter key press to create new tag if it doesn't exist."""
-        text = self._search_field.text().strip()
+        text = self._filterable_list.search_field().text().strip()
         if not text:
             return
 
@@ -272,7 +236,7 @@ class TagDropdown(AYDropdownPopup):
             # Create new tag
             self.add_new_tag.emit(text)
 
-        self._search_field.clear()
+        self._filterable_list.search_field().clear()
 
     def _on_tag_clicked(self, tag_name: str) -> None:
         """Handle tag item click to toggle selection.
@@ -311,10 +275,10 @@ class TagDropdown(AYDropdownPopup):
         """Calculate the ideal height based on visible content."""
         search_height = 40  # search field + margins
 
-        tags_height = 0
-        for widget in self._tag_widgets.values():
-            if widget.isVisible():
-                tags_height += widget.sizeHint().height()
+        tags_height = sum(
+            w.sizeHint().height()
+            for w in self._filterable_list.visible_items()
+        )
 
         margin = 2  # layout_margin from __init__
         return search_height + tags_height + (margin * 2)
@@ -327,8 +291,8 @@ class TagDropdown(AYDropdownPopup):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        self._search_field.setFocus()
-        self._adjust_height()  # Add this
+        self._filterable_list.search_field().setFocus()
+        self._adjust_height()
 
 
 class AYTagSelector(QWidget):
