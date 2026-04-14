@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from qtpy.QtCore import QPoint, Qt, Signal
+from qtpy.QtCore import Qt, Signal  # type: ignore
 from qtpy.QtGui import QColor, QFocusEvent, QShowEvent
 from qtpy.QtWidgets import (
     QApplication,
@@ -26,6 +26,7 @@ from .layouts import AYHBoxLayout, AYVBoxLayout
 from .frame import AYFrame
 from .container import AYContainer
 from .line_edit import AYLineEdit
+from .dropdown import AYDropdownPopup
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class TagItemWidget(AYButton):
         return self._tag.color
 
 
-class TagDropdown(AYContainer):
+class TagDropdown(AYDropdownPopup):
     """A floating dropdown window for tag selection.
 
     Features a search field and a scrollable list of tags. New tags can be
@@ -143,23 +144,21 @@ class TagDropdown(AYContainer):
             parent: Optional parent widget.
         """
         super().__init__(
-            parent,
-            layout=AYContainer.Layout.VBox,
-            variant=AYContainer.Variants.Low_Framed,
-            layout_margin=1,
+            parent=parent,
+            variant=AYFrame.Variants.Low_Framed,
+            translucent_bg=False,
         )
+        # Internal container to hold the actual widgets and layout
+        self._content = AYVBoxLayout(self, margin=1)
         self._tags = tags
         self._selected_tags = set(selected_tags)
         self._tag_widgets: dict[str, TagItemWidget] = {}
 
-        self.setWindowFlags(
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setMinimumWidth(min_width)
         self.setMaximumHeight(400)
+
+        # Propagate popup closed signal to a local closed signal
+        self.popup_closed.connect(self.closed.emit)
 
         self._build()
 
@@ -188,7 +187,7 @@ class TagDropdown(AYContainer):
         self._search_field.returnPressed.connect(self._on_enter_pressed)
         search_container.add_widget(self._search_field)
 
-        self.add_widget(search_container)
+        self._content.addWidget(search_container)
 
         # Scrollable tag list
         scroll_area = QScrollArea()
@@ -206,7 +205,7 @@ class TagDropdown(AYContainer):
         self._tags_container.setLayout(self._tags_layout)
         scroll_area.setWidget(self._tags_container)
 
-        self.add_widget(scroll_area)
+        self._content.addWidget(scroll_area)
 
         # Populate tags
         self._populate_tags()
@@ -473,10 +472,8 @@ class AYTagSelector(QWidget):
         self._dropdown.add_new_tag.connect(self._on_add_new_tag)
         self._dropdown.closed.connect(self._on_dropdown_closed)
 
-        # Position dropdown below the button
-        button_pos = self._button.mapToGlobal(QPoint(0, self._button.height()))
-        self._dropdown.move(button_pos)
-        self._dropdown.show()
+        # Position dropdown below the button using helper from AYDropdownPopup
+        self._dropdown.show_below(self._button)
 
     def _on_tag_toggled(self, tag_name: str, selected: bool) -> None:
         """Handle tag toggle from dropdown.
