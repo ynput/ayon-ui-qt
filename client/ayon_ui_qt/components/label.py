@@ -113,7 +113,8 @@ class AYLabel(QtWidgets.QLabel):
 
         if self._rel_text_size != 0:
             # _rel_text_size is in points but setting pixels is more reliable.
-            px_size = self._font.pixelSize()
+            # use QFontInfo in case PixelSize() or pointSize() returns -1
+            px_size = QFontInfo(self._font).pixelSize()
             px_to_pt = px_size / QFontInfo(self._font).pointSize()
             self._font.setPixelSize(
                 round(px_size + self._rel_text_size * px_to_pt)
