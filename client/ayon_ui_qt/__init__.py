@@ -9,7 +9,7 @@ try:
     from .addon import UIQtAddon
 except ImportError:
     # WE WANT TO BE ABLE TO TEST OUTSIDE THE LAUNCHER.
-    pass
+    UIQtAddon = None
 
 
 __all__ = [
