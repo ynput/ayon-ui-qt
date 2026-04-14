@@ -134,7 +134,7 @@ def show_images(*images: tuple[str, str, str]) -> None:
     from qtpy.QtCore import QSize
     from qtpy.QtWidgets import QApplication
 
-    from ayon_ui_qt import get_ayon_style
+    from ayon_ui_qt.ayon_style import get_ayon_style
     from ayon_ui_qt.components.container import AYContainer
     from ayon_ui_qt.components.scroll_area import AYScrollArea
 

@@ -20,7 +20,7 @@ from qtpy.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
 from qtpy.QtGui import QColor, QPainter
 from qtpy.QtWidgets import QStyle, QStyleOptionViewItem
 
-from .. import get_ayon_style
+from ..ayon_style import get_ayon_style
 from ..variants import QFrameVariants, QStyledItemDelegateVariants
 
 from .buttons import AYButton

@@ -16,7 +16,7 @@ from qtpy.QtCore import (
 from qtpy.QtGui import QColor, QIcon, QPainter, QPaintEvent, QPixmap
 from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
-from .. import get_ayon_style
+from ..ayon_style import get_ayon_style
 from ..image_cache import ImageCache
 from ..variants import QPushButtonVariants
 

@@ -241,7 +241,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._uses_incompatible_model = False
         super().__init__(parent, **kwargs)
         self._variant_str = variant.value
-        from .. import get_ayon_style
+        from ..ayon_style import get_ayon_style
 
         self.setStyle(get_ayon_style())
         self.setMouseTracking(True)
@@ -485,7 +485,7 @@ class AYComboBox(QtWidgets.QComboBox):
         Returns:
             The preferred :class:`QSize` for this widget.
         """
-        from .. import get_ayon_style
+        from ..ayon_style import get_ayon_style
 
         option = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(option)
@@ -538,7 +538,7 @@ class AYComboBox(QtWidgets.QComboBox):
         Args:
             arg__1: The paint event delivered by Qt.
         """
-        from .. import get_ayon_style
+        from ..ayon_style import get_ayon_style
 
         p = QPainter(self)
         option = QtWidgets.QStyleOptionComboBox()

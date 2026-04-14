@@ -44,7 +44,7 @@ This addon provides a comprehensive library of Qt widgets styled to match AYON's
 ### Basic Usage
 
 ```python
-from ayon_ui_qt import get_ayon_style, style_widget_and_siblings
+from ayon_ui_qt.ayon_style import get_ayon_style, style_widget_and_siblings
 from ayon_ui_qt.components import AYButton, AYContainer, AYLabel
 
 # Create a styled container with buttons

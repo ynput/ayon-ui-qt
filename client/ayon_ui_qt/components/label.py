@@ -21,7 +21,7 @@ try:
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
-from .. import get_ayon_style
+from ..ayon_style import get_ayon_style
 from ..color_utils import compute_color_for_contrast
 from ..variants import QLabelVariants
 
