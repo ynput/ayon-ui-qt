@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, QSize
+from qtpy.QtCore import QRect, QSize
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
@@ -99,7 +99,7 @@ class AYCheckBox(QCheckBox):
 
 
 if __name__ == "__main__":
-    from ..tester import test, Style
+    from ..tester import Style, test
     from .container import AYContainer
 
     def _build():
