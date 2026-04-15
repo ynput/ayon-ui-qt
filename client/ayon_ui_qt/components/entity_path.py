@@ -3,7 +3,7 @@ from __future__ import annotations
 from os.path import normpath
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget
 
 from ..style import get_ayon_style
