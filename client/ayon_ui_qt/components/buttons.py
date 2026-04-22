@@ -6,8 +6,9 @@ from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QFont, QFontMetrics, QPalette, QColor
 
-from ..style import get_ayon_style, get_ayon_style_data
+from ..style import get_ayon_style, get_ayon_style_data, StyleDict
 from ..color_utils import compute_color_for_contrast
 from ..variants import QPushButtonVariants
 from .container import AYContainer
@@ -37,47 +38,55 @@ class AYButton(QtWidgets.QPushButton):
         checkable=False,
         tooltip: str = "",
         name_id: str = "",
-        contrast_color: QtGui.QColor | None = QtGui.QColor(),
-        label_alignment: QtCore.Qt.AlignmentFlag | None = None,
+        contrast_color: QColor | None = None,
+        label_alignment: Qt.AlignmentFlag | None = None,
         fixed_width: bool | None = None,
         **kwargs,
     ):
+        # style params
+        self._variant_str: str = variant.value
+        self._style_data = StyleDict()
+        self._style_palette = QPalette()
+        self._style_font = QFont()
+        self._style_font_metrics: QFontMetrics | None = None
+
+        # widget params
+        self._icon_size = icon_size
+        self._tooltip = tooltip
+        self._icon = icon
+        self._icon_on = icon_on or icon
+        self._icon_fill = icon_fill
+        self._contrast_color = contrast_color
+
         super().__init__(*args, **kwargs)
         self.setCheckable(checkable)
 
-        # Convert enum to string if needed
-        style_dict = get_ayon_style_data("QPushButton", variant.value)
+        self._style = get_ayon_style()
+        self._style_data = get_ayon_style_data("QPushButton", variant.value)
+        self._style_data.set_context(self)
 
-        self._icon = icon
-        self._icon_on = icon_on or icon
-        self._variant_str = variant.value
-        self._icon_color = QtGui.QColor(
-            icon_color or style_dict.get("color", "#ffffff")
-        )
-        self._icon_fill = icon_fill
+        # Determine the icon color
+        color_str = icon_color or self._style_data.get("color", "#ffffff")
+        self._icon_color = QColor(color_str)
         # Adjust the icon color to have enough contrast with the background
-        self._contrast_color = contrast_color
-        if (
-            isinstance(contrast_color, QtGui.QColor)
-            and contrast_color.isValid()
-        ):
+        if isinstance(contrast_color, QColor) and contrast_color.isValid():
             self._icon_color = compute_color_for_contrast(
                 contrast_color.toTuple(),
                 self._icon_color.toTuple(),
                 min_contrast_ratio=7,
             )
+
         # compute a readable icon hover color
         self._icon_hover_color = self._icon_color
-        icon_hover_bg = style_dict.get("hover", {}).get("background-color")
+        icon_hover_bg = self._style_data.get("hover", {}).get(
+            "background-color", "#000000"
+        )
         if isinstance(icon_hover_bg, str) and self._icon_color.isValid():
             self._icon_hover_color = compute_color_for_contrast(
-                QtGui.QColor(icon_hover_bg).toTuple(),
+                QColor(icon_hover_bg).toTuple(),
                 self._icon_color.toTuple(),
                 min_contrast_ratio=7,
             )
-
-        self._icon_size = icon_size
-        self._tooltip = tooltip
 
         if self._icon:
             self.set_icon(self._icon)
@@ -93,7 +102,7 @@ class AYButton(QtWidgets.QPushButton):
             self._name_id = name_id
 
         use_fixed_width = (
-            style_dict.get("fixed-width", True)
+            self._style_data.get("fixed-width", True)
             if fixed_width is None
             else fixed_width
         )
@@ -108,11 +117,55 @@ class AYButton(QtWidgets.QPushButton):
                 QtWidgets.QSizePolicy.Policy.Fixed,
             )
 
+        # self._style.style_widget(self)
         self.setStyle(get_ayon_style())
 
     @property
     def contrast_color(self):
         return self._contrast_color
+
+    def _compute_contrast_text_color(
+        self,
+        bg_color: QColor | str | None,
+        fg_color: QColor,
+    ) -> QColor:
+        """Compute text color with sufficient contrast against background."""
+        if not bg_color:
+            return fg_color
+        qbg = QColor(bg_color) if isinstance(bg_color, str) else bg_color
+        return compute_color_for_contrast(
+            qbg.toTuple(),  # type: ignore
+            fg_color.toTuple(),
+            min_contrast_ratio=7.0,
+        )
+
+    def set_palette(self, palette: QPalette) -> None:
+        self._style_palette = palette
+
+        if self._style_data.get("contrast-text", False):
+            contrast_ref = self._contrast_color or self._icon_color
+            if not contrast_ref:
+                contrast_ref = self.palette().color(self.backgroundRole())
+            txt_color = self._compute_contrast_text_color(
+                contrast_ref,
+                self.palette().color(self.foregroundRole()),
+            )
+            print(f"contrast_ref: {contrast_ref} -> txt_color: {txt_color}")
+            self._style_palette.setColor(self.foregroundRole(), txt_color)
+
+    def palette(self) -> QPalette:
+        return self._style_palette
+
+    def set_font(self, font: QFont) -> None:
+        self._style_font = font
+        self._style_font_metrics = QFontMetrics(font)
+
+    def font(self) -> QFont:
+        return self._style_font
+
+    def fontMetrics(self) -> QFontMetrics:
+        assert self._style_font_metrics is not None
+        return self._style_font_metrics
 
     def initStyleOption(self, option: QtWidgets.QStyleOptionButton) -> None:
         super().initStyleOption(option)

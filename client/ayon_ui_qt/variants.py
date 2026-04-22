@@ -80,6 +80,13 @@ class QLabelVariants(Enum):
     Badge = "badge"
     Pill = "pill"
     Entity_Label = "entity-label"
+    Entity_Label_Filled = "entity-label-filled"
+
+
+class AYCardViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
 
 
 class QTreeViewVariants(Enum):

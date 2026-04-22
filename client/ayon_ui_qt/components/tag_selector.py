@@ -68,6 +68,7 @@ class TagItemWidget(AYButton):
             selected: Whether the tag is currently selected.
             parent: Optional parent widget.
         """
+        self._tag = tag
         super().__init__(
             tag.name,
             variant=AYButton.Variants.Tag_Menu,
@@ -76,7 +77,6 @@ class TagItemWidget(AYButton):
             checkable=True,
             parent=parent,
         )
-        self._tag = tag
 
         self.setChecked(selected)
         self.setSizePolicy(

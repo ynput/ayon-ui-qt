@@ -129,6 +129,7 @@ class AsyncTaskQueueMonitor(QWidget):
 
         # Load style configuration from AYON style system
         style_data = get_ayon_style_data("AsyncTaskQueueMonitor") or {}
+        style_data.set_context(self)
         if not style_data:
             log.warning(
                 "AsyncTaskQueueMonitor: Style data not available, using defaults"

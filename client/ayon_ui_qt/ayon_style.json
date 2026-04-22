@@ -200,7 +200,7 @@
                     "border-radius": 10
                 },
                 "tag": {
-                    "adjust-color-for-background": true,
+                    "contrast-text": true,
                     "color": "--md-ref-palette-neutral10",
                     "background-color": "transparent",
                     "border-radius": 8,
@@ -494,7 +494,7 @@
                     "padding-h": 5,
                     "padding-v": 3
                 },
-                "surface":{
+                "surface": {
                     "background-color": "--md-sys-color-surface-container-highest-dark"
                 },
                 "debug-r": {
@@ -531,12 +531,13 @@
                     "background-color": "transparent"
                 },
                 "tag": {
-                    "adjust-color-for-background": true
+                    "contrast-text": true
                 },
                 "badge": {
                     "auto-size": true,
                     "auto-size-padding": [1.5, 0.25],
                     "border-radius-fraction": 0.2,
+                    "background-color": "@_icon_color",
                     "fill-from-foreground": true,
                     "contrast-text": true
                 },
@@ -544,6 +545,7 @@
                     "auto-size": true,
                     "auto-size-padding": [1.5, 0.25],
                     "border-radius-fraction": 0.5,
+                    "background-color": "@_icon_color",
                     "fill-from-foreground": true,
                     "contrast-text": true
                 },
@@ -552,12 +554,18 @@
                     "color": "--md-sys-color-on-surface-dark",
                     "border-radius": 6,
                     "border-width": 0,
-                    "border-color": "#ffaaaa",
                     "icon-text-spacing": 4,
-                    "padding": [
-                        2,
-                        2
-                    ]
+                    "padding": [2, 2],
+                    "alignment": "center"
+                },
+                "entity-label-filled": {
+                    "background-color": "@_icon_color",
+                    "color": "--md-sys-color-surface-container-high-dark",
+                    "border-radius": 6,
+                    "border-width": 0,
+                    "icon-text-spacing": 4,
+                    "padding": [2, 2],
+                    "alignment": "center"
                 }
             }
         },

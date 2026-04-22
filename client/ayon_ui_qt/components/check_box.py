@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, QSize
+from qtpy.QtCore import QRect, QSize
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
@@ -42,6 +42,7 @@ class AYCheckBox(QCheckBox):
             self._style_dict = get_ayon_style().model.get_style(
                 "QCheckBox", variant=self._variant_str
             )
+            self._style_dict.set_context(self)
         return self._style_dict
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:

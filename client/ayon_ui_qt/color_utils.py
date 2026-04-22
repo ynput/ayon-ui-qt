@@ -117,10 +117,11 @@ def compute_color_for_contrast(
     final_l = high if should_lighten else low
     result.setHslF(h if h >= 0 else 0.0, s, max(0.0, min(1.0, final_l)))
     result.setAlpha(original_alpha)  # Preserve alpha
+    result = result.toRgb()
 
     # Verify and fallback to black/white if HSL adjustment isn't enough
     final_ratio = contrast_ratio(
-        bg_lum, relative_luminance(*result.toRgb().toTuple())
+        bg_lum, relative_luminance(*result.toTuple())
     )
     if final_ratio < min_contrast_ratio:
         # HSL adjustment insufficient (saturated colors can't reach target)

@@ -13,16 +13,15 @@ from qtpy.QtGui import (
     QPaintEvent,
     QPalette,
     QPen,
-    QResizeEvent,
 )
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
-    from ..vendor.qtmaterialsymbols import get_icon
+    from ..vendor.qtmaterialsymbols import get_icon  # type: ignore
 
-from ..style import get_ayon_style
 from ..color_utils import compute_color_for_contrast
+from ..style import StyleDict, get_ayon_style
 from ..variants import QLabelVariants
 
 
@@ -47,6 +46,14 @@ class AYLabel(QtWidgets.QLabel):
         elide_mode: Qt.TextElideMode = Qt.TextElideMode.ElideNone,
         **kwargs,
     ):
+        # style params
+        self._variant_str: str = variant.value
+        self._style_data = StyleDict()
+        self._style_palette = QPalette()
+        self._style_font = QFont()
+        self._style_font_metrics: QFontMetrics | None = None
+
+        # widget params
         self._dim = dim
         self._icon = icon
         self._icon_color = icon_color
@@ -56,11 +63,11 @@ class AYLabel(QtWidgets.QLabel):
         self._rel_text_size = rel_text_size
         self._text_color = text_color
         self._bold = bold
-        self._variant_str: str = variant.value
         self._text_setup_done = False
-        self._style_palette = None
         self._elide_mode = elide_mode
-        self._elided_text: str = ""
+        # copy the text because setting an icon will blank it, as a label is
+        # either text or pixmap.
+        self._text: str = ""
         # reference bg color to compute contrast-adapted text color
         self._contrast_color = (
             contrast_color
@@ -71,13 +78,31 @@ class AYLabel(QtWidgets.QLabel):
 
         super().__init__(*args, **kwargs)
         self._style = get_ayon_style()
+        self._style_data = self._style.model.get_style(
+            "QLabel", variant=self._variant_str
+        )
+        self._style_data.set_context(self)
         self.setStyle(self._style)
 
         # used to be in polish
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
 
-        self._text = self.text()
+        # set alignment from style data if specified.
+        alignment = self._style_data.get("alignment")
+        if alignment is not None:
+            if alignment == "center":
+                self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            elif alignment == "left":
+                self.setAlignment(
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                )
+            elif alignment == "right":
+                self.setAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                )
+
+        self._text = self.text()  # call before setting icon to preserve text
         self.setToolTip(tool_tip)
 
         self.set_icon()
@@ -86,16 +111,38 @@ class AYLabel(QtWidgets.QLabel):
     def contrast_color(self) -> QColor | None:
         return self._contrast_color
 
+    def set_palette(self, palette: QPalette) -> None:
+        """Set the widget palette and trigger a repaint."""
+        self._style_palette = palette
+        self._configure_palette()
+        self.update()
+
+    def set_font(self, font: QFont) -> None:
+        """Set the widget font and trigger a repaint."""
+        self._style_font = font
+        self._configure_font()
+        self.update()
+
+    # Private methods -------------------------------------------------------
+
     def set_icon(self, icon: str | None = None, color: str = "") -> None:
         if icon is not None:
             self._icon = icon
         if color:
             self._icon_color = color
+
         if self._icon:
-            icon_color = (
+            same_as_bg = (
                 self._icon_color
-                or self.palette().color(self.foregroundRole()).name()
+                and self._style_data.get("background-color", raw=True)
+                == "@_icon_color"
             )
+            icon_color = self._icon_color
+            if not icon_color:
+                icon_color = self.palette().color(self.foregroundRole()).name()
+            elif same_as_bg:
+                icon_color = self._style_data.get("color")
+
             icn: QIcon = get_icon(
                 self._icon,
                 color=icon_color,
@@ -103,7 +150,7 @@ class AYLabel(QtWidgets.QLabel):
             )
             self.setPixmap(icn.pixmap(QSize(self._icon_size, self._icon_size)))
 
-    def _ensure_font_setup(self) -> None:
+    def _configure_font(self) -> None:
         """Initialize font configuration on first paint."""
         if self._text_setup_done:
             return
@@ -123,24 +170,23 @@ class AYLabel(QtWidgets.QLabel):
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal
         self._font.setWeight(weight)
         self.setFont(self._font)
-        self._font_metrics = QFontMetrics(self._font)
-        self._update_elided_text()
+        self._style_font_metrics = QFontMetrics(self._font)
 
-    def _update_elided_text(self) -> None:
+    def _display_text(self) -> str:
         """Recompute the elided version of the stored text."""
         if (
             self._elide_mode == Qt.TextElideMode.ElideNone
-            or not self._text_setup_done
+            or not self._style_font_metrics
         ):
-            self._elided_text = self._text
-            return
+            return self._text
         available_w = self.contentsRect().width()
         if self._icon:
             spacing = self._icon_text_spacing
             available_w -= self._icon_size + spacing
-        self._elided_text = self._font_metrics.elidedText(
+        text = self._style_font_metrics.elidedText(
             self._text, self._elide_mode, max(0, available_w)
         )
+        return text
 
     def _resolve_color(self) -> QColor:
         """Get the effective foreground color (icon_color or palette)."""
@@ -166,19 +212,18 @@ class AYLabel(QtWidgets.QLabel):
             return fg_color
         qbg = self._to_qcolor(bg_color)
         return compute_color_for_contrast(
-            qbg.toTuple(),
+            qbg.toTuple(),  # type: ignore
             fg_color.toTuple(),
             min_contrast_ratio=7.0,
         )
 
-    def _apply_palette(self) -> None:
+    def _configure_palette(self) -> None:
         """Configure palette based on dim/contrast settings."""
         # _style_palette is guaranteed to be set in paintEvent before this call
         assert self._style_palette is not None
 
         if self._dim:
-            p = QPalette(self._style_palette)
-            p.setColor(
+            self._style_palette.setColor(
                 QPalette.ColorGroup.Active,
                 self.foregroundRole(),
                 self._style_palette.color(
@@ -186,30 +231,45 @@ class AYLabel(QtWidgets.QLabel):
                     QPalette.ColorRole.PlaceholderText,
                 ),
             )
-            self.setPalette(p)
             return
 
-        if self._contrast_color:
-            txt_color = self._compute_contrast_text_color(
-                self._contrast_color,
-                self._style_palette.color(self.foregroundRole()),
+        if self._text_color:
+            self._style_palette.setColor(
+                self.foregroundRole(), QColor(self._text_color)
             )
-            p = QPalette(self._style_palette)
-            p.setColor(self.foregroundRole(), txt_color)
-            self.setPalette(p)
-        else:
-            self.setPalette(self._style_palette)
 
-    def _paint_filled(self, style_data: dict) -> None:
+        if self._style_data.get("fill-from-foreground", False):
+            # background-color is resolved from @_icon_color via style refs
+            bg_val = self._style_data.get("background-color", "")
+            bg_color = (
+                QColor(bg_val)
+                if bg_val and bg_val != "transparent"
+                else self._style_palette.color(self.foregroundRole())
+            )
+            self._style_palette.setColor(self.backgroundRole(), bg_color)
+            if not self._contrast_color:
+                self._contrast_color = bg_color
+
+        if self._style_data.get("contrast-text", False):
+            contrast_ref = self._contrast_color or self._icon_color
+            txt_color = self._compute_contrast_text_color(
+                contrast_ref,
+                self.palette().color(self.foregroundRole()),
+            )
+            self._style_palette.setColor(self.foregroundRole(), txt_color)
+
+    def _paint_filled(self) -> None:
         """Render a filled-background label driven by style data."""
-        style = self._style
+        assert isinstance(self._style_font_metrics, QFontMetrics)
 
         # Auto-size from text metrics
-        if style_data.get("auto-size"):
-            padding = style_data.get("auto-size-padding", [0, 0])
-            t_rect = self._font_metrics.boundingRect(self.text())
-            padx = int(self._font_metrics.averageCharWidth() * padding[0])
-            pady = int(self._font_metrics.height() * padding[1])
+        if self._style_data.get("auto-size"):
+            padding = self._style_data.get("auto-size-padding", [0, 0])
+            t_rect = self._style_font_metrics.boundingRect(self.text())
+            padx = int(
+                self._style_font_metrics.averageCharWidth() * padding[0]
+            )
+            pady = int(self._style_font_metrics.height() * padding[1])
             self.setFixedSize(
                 t_rect.width() + padx,
                 t_rect.height() + pady,
@@ -226,16 +286,16 @@ class AYLabel(QtWidgets.QLabel):
         p.setPen(Qt.PenStyle.NoPen)
 
         # Border radius: fraction of height or fixed
-        radius_frac = style_data.get("border-radius-fraction")
+        radius_frac = self._style_data.get("border-radius-fraction")
         if radius_frac is not None:
             radius = self.rect().height() * radius_frac
         else:
-            radius = style_data.get("border-radius", 0)
+            radius = self._style_data.get("border-radius", 0)
 
         p.drawRoundedRect(self.rect(), radius, radius)
 
         # Text color with contrast computation
-        if style_data.get("contrast-text"):
+        if self._style_data.get("contrast-text"):
             contrast_ref = self._contrast_color or self._icon_color
             txt_color = self._compute_contrast_text_color(
                 contrast_ref,
@@ -243,7 +303,7 @@ class AYLabel(QtWidgets.QLabel):
             )
             p.setPen(QPen(QBrush(txt_color), 1.0))
 
-        style.drawItemText(
+        self._style.drawItemText(
             p,
             self.rect(),
             Qt.AlignmentFlag.AlignCenter,
@@ -254,7 +314,7 @@ class AYLabel(QtWidgets.QLabel):
         )
         p.end()
 
-    def _paint_icon_and_text(self, style_data: dict) -> None:
+    def _paint_icon_and_text(self) -> None:
         """Render label with both icon and text.
 
         The icon and text are treated as a single group and positioned
@@ -268,18 +328,19 @@ class AYLabel(QtWidgets.QLabel):
             style_data: Variant style properties resolved from the style
                 JSON for the current ``QLabel`` variant.
         """
-        style = self._style
+        assert isinstance(self._style_font_metrics, QFontMetrics)
+
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        text_rect = self._font_metrics.boundingRect(self._elided_text)
+        text_rect = self._style_font_metrics.boundingRect(self._display_text())
         text_rect.adjust(0, 0, 1, 0)  # +1 pixel for antialiasing
 
         icon_w = self._icon_size
         icon_h = self._icon_size
         spacing = int(
-            style_data.get("icon-text-spacing", self._icon_text_spacing)
+            self._style_data.get("icon-text-spacing", self._icon_text_spacing)
         )
         group_w = icon_w + spacing + text_rect.width()
         group_h = max(icon_h, text_rect.height())
@@ -305,7 +366,7 @@ class AYLabel(QtWidgets.QLabel):
         # Draw icon at the left of the group
         icon_y = group_y + (group_h - icon_h) // 2
         icn_rct = QRect(group_x, icon_y, icon_w, icon_h)
-        style.drawItemPixmap(
+        self._style.drawItemPixmap(
             p,
             icn_rct,
             Qt.AlignmentFlag.AlignCenter,
@@ -320,13 +381,13 @@ class AYLabel(QtWidgets.QLabel):
         txt_x = group_x + icon_w + spacing
         txt_y = group_y + (group_h - text_rect.height()) // 2
         txt_rct = QRect(txt_x, txt_y, text_rect.width(), text_rect.height())
-        style.drawItemText(
+        self._style.drawItemText(
             p,
             txt_rct,
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             pal,
             self.isEnabled(),
-            self._elided_text,
+            self._display_text(),
             textRole=self.foregroundRole(),
         )
 
@@ -347,19 +408,19 @@ class AYLabel(QtWidgets.QLabel):
             self.alignment(),
             self.palette(),
             self.isEnabled(),
-            self._elided_text,
+            self._display_text(),
             textRole=self.foregroundRole(),
         )
 
-    def _paint_background(self, style_data: dict) -> None:
+    def _paint_background(self) -> None:
         """Draw background if specified by style."""
-        bg_color = style_data.get("background-color")
+        bg_color = self._style_data.get("background-color")
         if bg_color and bg_color != "transparent":
             p = QPainter(self)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            border_radius = style_data.get("border-radius", 0)
-            border_width = style_data.get("border-width", 0)
-            border_color = style_data.get("border-color", "#00000000")
+            border_radius = self._style_data.get("border-radius", 0)
+            border_width = self._style_data.get("border-width", 0)
+            border_color = self._style_data.get("border-color", "#00000000")
             p.setBrush(QBrush(QColor(bg_color)))
             p.setPen(
                 QPen(QColor(border_color), border_width)
@@ -368,24 +429,22 @@ class AYLabel(QtWidgets.QLabel):
             )
             p.drawRoundedRect(self.rect(), border_radius, border_radius)
 
+    # QLabel overrides ----------------------------------------------------
+
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         if not self._style_palette:
             self._style_palette = self.palette()
 
-        self._ensure_font_setup()
-        self._apply_palette()
-
-        # Resolve style from JSON (guard for non-AYONStyle environments)
-        qt_style = self._style
-        style_data = qt_style.model.get_style("QLabel", self._variant_str)
+        # self._configure_font()
+        # self._configure_palette()
 
         # Filled-background rendering (driven by JSON properties)
-        if style_data.get("fill-from-foreground"):
-            self._paint_filled(style_data)
+        if self._style_data.get("fill-from-foreground"):
+            self._paint_filled()
         else:
-            self._paint_background(style_data)
+            self._paint_background()
             if self._text and self._icon:
-                self._paint_icon_and_text(style_data)
+                self._paint_icon_and_text()
             elif self._icon and not self._text:
                 super().paintEvent(arg__1)
             else:
@@ -404,19 +463,15 @@ class AYLabel(QtWidgets.QLabel):
         Returns:
             The recommended widget size.
         """
-        self._ensure_font_setup()
+        # self._configure_font()
+        assert isinstance(self._style_font_metrics, QFontMetrics)
 
-        style_data: dict = self._style.model.get_style(
-            "QLabel", self._variant_str
-        )
-
-        fm = self._font_metrics
+        fm = self._style_font_metrics
 
         # --- text size --------------------------------------------------
-        text = self._text or ""
-        if text:
-            t_rect = fm.boundingRect(text)
-            text_w = t_rect.width()
+        if self._text:
+            t_rect = fm.boundingRect(self._text)
+            text_w = t_rect.width() + 1  # +1 pixel for antialiasing
             text_h = t_rect.height()
         else:
             text_w = 0
@@ -429,10 +484,10 @@ class AYLabel(QtWidgets.QLabel):
             icon_h = self._icon_size
 
         # --- variant-specific sizing ------------------------------------
-        if style_data.get("auto-size"):
+        if self._style_data.get("auto-size"):
             # badge / pill: padding is expressed as a fraction of the
             # character metrics (x-factor of avgCharWidth, y-factor of height)
-            padding = style_data.get("auto-size-padding", [0.0, 0.0])
+            padding = self._style_data.get("auto-size-padding", [0.0, 0.0])
             pad_x = int(fm.averageCharWidth() * padding[0])
             pad_y = int(fm.height() * padding[1])
 
@@ -441,17 +496,19 @@ class AYLabel(QtWidgets.QLabel):
 
             return QSize(content_w + pad_x, content_h + pad_y)
 
-        explicit_padding = style_data.get("padding", [0, 0])
-        # [vertical, horizontal] convention (same as CSS padding shorthand)
-        pad_v = int(explicit_padding[0])
-        pad_h = int(explicit_padding[1])
+        explicit_padding = self._style_data.get("padding", [0, 0])
+        pad_h = int(explicit_padding[0])
+        pad_v = int(explicit_padding[1])
 
         if icon_w and text_w:
             spacing = int(
-                style_data.get("icon-text-spacing", self._icon_text_spacing)
+                self._style_data.get(
+                    "icon-text-spacing", self._icon_text_spacing
+                )
             )
             content_w = icon_w + spacing + text_w
             content_h = max(text_h, icon_h)
+            # print(f"{self._text!r}: {content_w + 2 * pad_h} x {content_h + 2 * pad_v}")
         elif icon_w:
             content_w = icon_w
             content_h = icon_h
@@ -464,15 +521,19 @@ class AYLabel(QtWidgets.QLabel):
             content_h + 2 * pad_v,
         )
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        """Recompute elided text when the widget is resized."""
-        super().resizeEvent(event)
-        self._update_elided_text()
-
     def setText(self, arg__1: str) -> None:
         super().setText(arg__1)
         self._text = self.text()
-        self._update_elided_text()
+
+    def palette(self) -> QPalette:
+        return self._style_palette
+
+    def font(self) -> QFont:
+        return self._style_font
+
+    def fontMetrics(self) -> QFontMetrics:
+        assert isinstance(self._style_font_metrics, QFontMetrics)
+        return self._style_font_metrics
 
 
 if __name__ == "__main__":
@@ -546,6 +607,22 @@ if __name__ == "__main__":
 
         l8 = AYLabel("colored text", text_color="#55aef7")
         w.add_widget(l8, stretch=0)
+
+        l10 = AYLabel(
+            "Modeling",
+            icon="3d",
+            icon_size=16,
+            variant=AYLabel.Variants.Entity_Label,
+        )
+        w.add_widget(l10, stretch=0)
+        l9 = AYLabel(
+            "PRG",
+            icon="play_circle",
+            icon_color="#f7a355",
+            icon_size=16,
+            variant=AYLabel.Variants.Entity_Label_Filled,
+        )
+        w.add_widget(l9, stretch=0)
 
         w.addStretch()
         return w

@@ -92,6 +92,7 @@ class AYLineEdit(QLineEdit):
             self._variant_styles[key] = model.get_style(
                 "QLineEdit", variant=self._variant_str, state=state
             )
+            self._variant_styles[key].set_context(self)
         return self._variant_styles[key]
 
     def _apply_style_palette(self) -> None:

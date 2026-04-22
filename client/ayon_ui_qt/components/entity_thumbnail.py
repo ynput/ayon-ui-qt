@@ -47,6 +47,8 @@ class AYEntityThumbnail(QPushButton):
         self._file_cacher = file_cacher
         self._size = size
         self._variant_str: str = variant.value
+        self._placeholder_icon_name = placeholder_icon
+        self._placeholder_scale = placeholder_scale
         icn_size = size[1] * placeholder_scale
         self._placeholder_icon = QIcon(
             get_icon(placeholder_icon, color="#10ffffff").pixmap(
@@ -79,6 +81,20 @@ class AYEntityThumbnail(QPushButton):
     def set_fade_duration(self, duration: int) -> None:
         """Set the duration of the fade animation when changing thumbnails."""
         self._anim.setDuration(duration)
+
+    def set_size(self, size: tuple[int, int]) -> None:
+        """Resize the thumbnail and update the icon size to match."""
+        self._size = size
+        icn_size = size[1] * self._placeholder_scale
+        self._placeholder_icon = QIcon(
+            get_icon(
+                self._placeholder_icon_name, color="#10ffffff"
+            ).pixmap(QSize(icn_size, icn_size))
+        )
+        self.setFixedSize(*self._size)
+        if self.icon() and not self.icon().isNull():
+            self.setIconSize(QSize(*self._size))
+        self.update()
 
     def _resolve_src(self, src: Path | str) -> Path | str:
         """Resolve a cache key or path to an existing file path."""
