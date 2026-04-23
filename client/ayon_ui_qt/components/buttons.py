@@ -150,7 +150,6 @@ class AYButton(QtWidgets.QPushButton):
                 contrast_ref,
                 self.palette().color(self.foregroundRole()),
             )
-            print(f"contrast_ref: {contrast_ref} -> txt_color: {txt_color}")
             self._style_palette.setColor(self.foregroundRole(), txt_color)
 
     def palette(self) -> QPalette:
