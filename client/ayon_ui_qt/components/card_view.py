@@ -64,6 +64,9 @@ class _GroupLayout:
     header_rect: QRect
     collapsed: bool
     items: list[_LayoutItem] = field(default_factory=list)
+    parent_index: QPersistentModelIndex = field(
+        default_factory=QPersistentModelIndex
+    )
 
 
 class _CardDelegate(QStyledItemDelegate):
@@ -471,6 +474,7 @@ class AYCardView(QAbstractItemView):
                     header_rect=header_rect,
                     collapsed=collapsed,
                     items=items,
+                    parent_index=QPersistentModelIndex(group_idx),
                 )
             )
 
@@ -923,6 +927,63 @@ class AYCardView(QAbstractItemView):
             self._active_editor_pmis.discard(QPersistentModelIndex(idx))
         self._schedule_editor_sync()
 
+    def _maybe_fetch_more(self) -> None:
+        """Trigger model pagination when the viewport nears content bottom.
+
+        Must be called **after** ``_calculate_layout()`` has already run so
+        that ``_total_content_height`` is up-to-date.  Uses the display model
+        (``self.model()``) for all ``canFetchMore`` / ``fetchMore`` calls so
+        that proxy mapping is preserved.
+        """
+        model = self.model()
+        if model is None:
+            return
+
+        vp_height = self.viewport().height()
+        offset = self.verticalOffset()
+        total_h = self._total_content_height
+
+        # Deduplicate parents so we never call fetchMore twice per pass.
+        fetched: set[QPersistentModelIndex] = set()
+
+        # --- flat-mode root fetch (also runs in tree mode for new top-level
+        #     groups) ---
+        root = QModelIndex()
+        near_bottom = (
+            total_h <= vp_height  # content shorter than viewport
+            or offset + 2 * vp_height >= total_h
+        )
+        root_pmi = QPersistentModelIndex(root)
+        if near_bottom and root_pmi not in fetched:
+            if model.canFetchMore(root):
+                model.fetchMore(root)
+            fetched.add(root_pmi)
+
+        # --- tree-mode: per-group child fetch ---
+        if not self._is_tree_mode:
+            return
+
+        for group in self._tree_layout:
+            if group.collapsed:
+                continue
+            if not group.parent_index.isValid():
+                continue
+
+            # Only fetch for groups whose content area is within the
+            # look-ahead window (2 × viewport height ahead of current pos).
+            group_top = group.header_rect.top()
+            if group_top - offset >= 2 * vp_height:
+                # Group is far below the fold — skip for now.
+                break
+
+            pmi = group.parent_index
+            if pmi in fetched:
+                continue
+            group_idx = QModelIndex(pmi)  # type: ignore
+            if model.canFetchMore(group_idx):
+                model.fetchMore(group_idx)
+            fetched.add(pmi)
+
     def _sync_viewport_editors(self) -> None:
         self._calculate_layout()
         offset = self.verticalOffset()
@@ -955,6 +1016,8 @@ class AYCardView(QAbstractItemView):
                 editor = self.indexWidget(idx)
                 if isinstance(editor, AYEntityCard):
                     editor.is_active = sel_model.isSelected(idx)
+
+        self._maybe_fetch_more()
 
     @property
     def card_width(self) -> int:
