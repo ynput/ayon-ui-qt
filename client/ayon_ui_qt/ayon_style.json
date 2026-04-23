@@ -736,20 +736,16 @@
                     "label-value-spacing": 8,
                     "row-spacing": 6,
                     "value-min-width": 40,
-
                     "track-height": 4,
                     "track-color": "--md-sys-color-surface-container-highest-dark",
                     "filled-color": "--md-sys-color-primary-dark",
                     "track-radius": 2,
-
                     "handle-size": 14,
                     "handle-color": "--md-sys-color-primary-dark",
                     "handle-border-color": "--md-sys-color-primary-dark",
                     "handle-border-width": 0,
-
                     "focus-outline-color": "--md-sys-color-primary-dark",
                     "focus-outline-width": 2,
-
                     "hover": {
                         "handle-color": "--md-ref-palette-primary70"
                     },
