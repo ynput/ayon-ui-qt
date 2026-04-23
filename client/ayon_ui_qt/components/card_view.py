@@ -481,7 +481,6 @@ class AYCardView(QAbstractItemView):
             result = []
             for g in self._tree_layout:
                 result.extend(g.items)
-            # print(f"Total layout items: {result}")
             return result
         return self._flat_layout
 
@@ -888,24 +887,18 @@ class AYCardView(QAbstractItemView):
                 editor.setGeometry(visible_rect)
 
     def _get_visible_indexes(self) -> list[QModelIndex]:
-        print("Calculating visible indexes...")
         offset = self.verticalOffset()
         vp_rect = self.viewport().rect()
-        print(f"Viewport rect: {vp_rect}, offset: {offset}")
         results = []
         for item in self._all_layout_items():
             if not item.index.isValid():
-                print(f" - Invalid index in layout: {item.index}")
                 continue
             visible_rect = item.rect.translated(0, -offset)
             if visible_rect.bottom() < 0:
-                print(f" - Skipping above viewport: {item.index}")
                 continue
             if visible_rect.top() > vp_rect.bottom():
-                print(f" - Skipping below viewport: {item.index}")
                 continue
             results.append(QModelIndex(item.index))  # type: ignore
-        print(f"Visible indexes: {results}")
         return results
 
     def get_visible_indexes(self) -> list[QModelIndex]:
@@ -915,6 +908,7 @@ class AYCardView(QAbstractItemView):
             List of valid ``QModelIndex`` objects whose card rects
             intersect the viewport.
         """
+        self._calculate_layout()
         return self._get_visible_indexes()
 
     def refresh_visible_editors(self) -> None:
