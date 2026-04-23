@@ -155,4 +155,4 @@ Apache-2.0
 
 ## Contributing
 
-Contributions are welcome! Please follow the coding standards defined in the project's `.kilocode/rules/coding_standards.md`.
+Contributions are welcome! Please follow the coding standards defined in the project's `~/.kilocode/rules/coding_standards.md`.
