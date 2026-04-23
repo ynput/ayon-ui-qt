@@ -47,7 +47,6 @@ class AYSliderBar(QSlider):
         self._style_data = _style.model.get_styles(
             "AYSlider",
             variant=variant_str,
-            states=["base", "hover", "disabled"],
         )
         self._style_data.set_context(self)
 
@@ -209,7 +208,6 @@ class AYSlider(AYContainer):
         self._style_data = get_ayon_style().model.get_styles(
             "AYSlider",
             variant=self._variant_str,
-            states=["base", "hover", "disabled"],
         )
         self._step = max(1, step)
 

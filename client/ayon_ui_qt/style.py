@@ -432,11 +432,15 @@ class StyleData:
         print(f"[StyleData] cached {len(self._cache)} styles.")
         print(f"[StyleData]   >> {list(self._cache.keys())}")
 
-    def widget_variants(self, widget):
-        return list(self.data["widgets"][widget]["variants"].keys())
+    def widget_variants(self, widget_cls: str) -> list[str]:
+        return list(self.data["widgets"][widget_cls]["variants"].keys())
 
-    def widget_data(self, widget):
-        return self.data["widgets"].get(widget, {})
+    def widget_states(self, widget_cls: str) -> list[str]:
+        states = list(self.data["widgets"][widget_cls].get("states", []))
+        return states if "base" in states else ["base"] + states
+
+    def widget_data(self, widget_cls: str) -> dict:
+        return self.data["widgets"].get(widget_cls, {})
 
     def widget_list(self) -> list[str]:
         return list(self.data["widgets"].keys())
@@ -519,13 +523,13 @@ class StyleData:
             widget_cls: The widget class name (e.g., "QStyledItemDelegate").
             variant: The variant name (e.g., "default"). Defaults to None.
             states: List of states to retrieve (e.g., ["base", "hover",
-                "checked"]). Defaults to ["base"].
+                "checked"]). Defaults to all defined states.
 
         Returns:
             A dictionary mapping state names to their style dictionaries.
         """
         if states is None:
-            states = ["base"]
+            states = self.widget_states(widget_cls)
 
         cache_key = f"all-{widget_cls}-{variant}-{'|'.join(states)}"
         try:
