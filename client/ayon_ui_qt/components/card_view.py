@@ -24,7 +24,17 @@ from qtpy.QtCore import (
     Qt,
     Signal,  # type: ignore
 )
-from qtpy.QtGui import QColor, QFont, QPainter, QPaintEvent, QPalette, QRegion
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontInfo,
+    QIcon,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QRegion,
+)
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QStyledItemDelegate,
@@ -63,6 +73,8 @@ class _GroupLayout:
     child_count: int
     header_rect: QRect
     collapsed: bool
+    label_color: QBrush | None = None
+    label_icon: QIcon | None = None
     items: list[_LayoutItem] = field(default_factory=list)
     parent_index: QPersistentModelIndex = field(
         default_factory=QPersistentModelIndex
@@ -444,6 +456,23 @@ class AYCardView(QAbstractItemView):
 
             node_id = node.node_id if node is not None else str(g)
             label = group_idx.data(Qt.ItemDataRole.DisplayRole) or ""
+
+            # DecorationRole / ForegroundRole data lives on the tree-position
+            # column (e.g. "product/version"), NOT on column 0 ("thumb").
+            # Resolve the right column from the source model when possible.
+            src_model = self._source_model()
+            tree_col = (
+                src_model.tree_position
+                if isinstance(src_model, PaginatedTableModel)
+                else 0
+            )
+            meta_idx = (
+                model.index(g, tree_col, QModelIndex())
+                if tree_col != 0
+                else group_idx
+            )
+            label_color = meta_idx.data(Qt.ItemDataRole.ForegroundRole)
+            label_icon = meta_idx.data(Qt.ItemDataRole.DecorationRole)
             child_count = model.rowCount(group_idx)
 
             header_rect = QRect(0, y, vp_width, gh)
@@ -473,6 +502,8 @@ class AYCardView(QAbstractItemView):
                     child_count=child_count,
                     header_rect=header_rect,
                     collapsed=collapsed,
+                    label_color=label_color,
+                    label_icon=label_icon,
                     items=items,
                     parent_index=QPersistentModelIndex(group_idx),
                 )
@@ -735,6 +766,18 @@ class AYCardView(QAbstractItemView):
         header_bg = QColor(tbl_style.get("header-background-color", "#272d35"))
         header_fg = QColor(tbl_style.get("header-color", "#c1c7ce"))
 
+        expand_icon_size = 16
+        expand_icon_padding = 16
+        icon_text_padding = 8
+
+
+        # Set header font based on view font, but larger and bold.
+        font = painter.font()
+        header_font = QFont(font)
+        header_font.setPixelSize(QFontInfo(font).pixelSize() + 3)
+        header_font.setBold(True)
+        painter.setFont(header_font)
+
         for group in self._tree_layout:
             visible_rect = group.header_rect.translated(0, -offset)
             if visible_rect.bottom() < 0:
@@ -744,34 +787,60 @@ class AYCardView(QAbstractItemView):
 
             painter.fillRect(visible_rect, header_bg)
 
-            icon_size = 16
-            margin = 8
+            # Draw expand/collapse icon
             icon_name = (
                 "expand_more" if not group.collapsed else "chevron_right"
             )
             try:
-                icon = get_icon(icon_name, color=header_fg.name())
-                pixmap = icon.pixmap(icon_size, icon_size)
-                icon_x = margin
+                expand_icon = get_icon(icon_name, color=header_fg.name())
+                pixmap = expand_icon.pixmap(expand_icon_size, expand_icon_size)
+                icon_x = expand_icon_padding
                 icon_y = (
                     visible_rect.top()
-                    + (visible_rect.height() - icon_size) // 2
+                    + (visible_rect.height() - expand_icon_size) // 2
                 )
                 painter.drawPixmap(icon_x, icon_y, pixmap)
             except Exception:
                 pass
 
-            text_x = margin + icon_size + 4
+            # Resolve label color — ForegroundRole returns QBrush, not QColor
+            raw_color = group.label_color
+            if isinstance(raw_color, QBrush):
+                label_color: QColor | None = raw_color.color()
+            elif isinstance(raw_color, QColor):
+                label_color = raw_color
+            else:
+                label_color = None
+
+            # Draw label icon if present
+            text_x = expand_icon_padding + expand_icon_size + icon_text_padding
+            label_icon_size = 16
+            if isinstance(group.label_icon, QIcon):
+                try:
+                    licon_pixmap = group.label_icon.pixmap(
+                        label_icon_size, label_icon_size
+                    )
+                    if not licon_pixmap.isNull():
+                        licon_x = text_x
+                        licon_y = (
+                            visible_rect.top()
+                            + (visible_rect.height() - label_icon_size) // 2
+                        )
+                        painter.drawPixmap(licon_x, licon_y, licon_pixmap)
+                        text_x += label_icon_size + icon_text_padding
+                except Exception as err:
+                    log.debug(
+                        "Failed to draw label icon: %s", err, exc_info=True
+                    )
+
+            # Draw group label
             text_rect = QRect(
                 text_x,
                 visible_rect.top(),
-                visible_rect.width() - text_x - margin,
+                visible_rect.width() - text_x - expand_icon_padding,
                 visible_rect.height(),
             )
-            font = painter.font()
-            font.setWeight(QFont.Weight.DemiBold)
-            painter.setFont(font)
-            painter.setPen(header_fg)
+            painter.setPen(label_color or header_fg)
 
             label = group.label
             count_str = f"  ({group.child_count})"
@@ -780,6 +849,7 @@ class AYCardView(QAbstractItemView):
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                 label + count_str,
             )
+        painter.setFont(font)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         pos = event.pos()
