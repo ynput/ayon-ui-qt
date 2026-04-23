@@ -114,6 +114,10 @@ class AsyncTaskQueueMonitorVariants(Enum):
     Default = "default"
 
 
+class AYSliderVariants(Enum):
+    Default = "default"
+
+
 # END OF VARIANTs DEFINITIONS -------------------------------------------------
 
 
