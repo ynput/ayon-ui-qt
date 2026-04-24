@@ -123,14 +123,6 @@ class AYProgressBar(QWidget):
         if not self.is_indeterminate() and self._current >= self._total:
             self.completed.emit()
 
-    def update_progress(self, value: int) -> None:
-        """Update the current progress value.
-
-        Args:
-            value (int): The current progress value.
-        """
-        self.set_progress(value)
-
     def reset(self) -> None:
         """Reset the progress bar to its initial state."""
         self._current = 0
