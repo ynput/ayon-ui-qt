@@ -202,7 +202,7 @@ class AYSlider(AYContainer):
             parent,
             layout=AYContainer.Layout.VBox,
             variant=AYContainer.Variants(variant.value),
-            layout_spacing=0,
+            layout_spacing=5,
             layout_margin=0,
         )
 
