@@ -78,7 +78,7 @@ class AYLabel(QtWidgets.QLabel):
 
         super().__init__(*args, **kwargs)
         self._style = get_ayon_style()
-        self._style_data = self._style.model.get_style(
+        self._style_data = self._style.model.get_styles(
             "QLabel", variant=self._variant_str
         )
         self._style_data.set_context(self)
@@ -89,7 +89,7 @@ class AYLabel(QtWidgets.QLabel):
         self.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
 
         # set alignment from style data if specified.
-        alignment = self._style_data.get("alignment")
+        alignment = self._style_data["base"].get("alignment")
         if alignment is not None:
             if alignment == "center":
                 self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -134,14 +134,14 @@ class AYLabel(QtWidgets.QLabel):
         if self._icon:
             same_as_bg = (
                 self._icon_color
-                and self._style_data.get("background-color", raw=True)
+                and self._style_data["base"].get("background-color", raw=True)
                 == "@_icon_color"
             )
             icon_color = self._icon_color
             if not icon_color:
                 icon_color = self.palette().color(self.foregroundRole()).name()
             elif same_as_bg:
-                icon_color = self._style_data.get("color")
+                icon_color = self._style_data["base"].get("color")
 
             icn: QIcon = get_icon(
                 self._icon,
@@ -238,9 +238,9 @@ class AYLabel(QtWidgets.QLabel):
                 self.foregroundRole(), QColor(self._text_color)
             )
 
-        if self._style_data.get("fill-from-foreground", False):
+        if self._style_data["base"].get("fill-from-foreground", False):
             # background-color is resolved from @_icon_color via style refs
-            bg_val = self._style_data.get("background-color", "")
+            bg_val = self._style_data["base"].get("background-color", "")
             bg_color = (
                 QColor(bg_val)
                 if bg_val and bg_val != "transparent"
@@ -250,7 +250,7 @@ class AYLabel(QtWidgets.QLabel):
             if not self._contrast_color:
                 self._contrast_color = bg_color
 
-        if self._style_data.get("contrast-text", False):
+        if self._style_data["base"].get("contrast-text", False):
             contrast_ref = self._contrast_color or self._icon_color
             txt_color = self._compute_contrast_text_color(
                 contrast_ref,
@@ -258,13 +258,25 @@ class AYLabel(QtWidgets.QLabel):
             )
             self._style_palette.setColor(self.foregroundRole(), txt_color)
 
-    def _paint_filled(self) -> None:
+        if "disabled" in self._style_data:
+            opacity = self._style_data["disabled"].get("opacity", 1.0)
+            if opacity < 1.0:
+                for role in QPalette.ColorRole:
+                    color = self._style_palette.color(role)
+                    if color == Qt.GlobalColor.transparent:
+                        continue
+                    color.setAlphaF(opacity)
+                    self._style_palette.setColor(
+                        QPalette.ColorGroup.Disabled, role, color
+                    )
+
+    def _paint_filled(self, state: str) -> None:
         """Render a filled-background label driven by style data."""
         assert isinstance(self._style_font_metrics, QFontMetrics)
 
         # Auto-size from text metrics
-        if self._style_data.get("auto-size"):
-            padding = self._style_data.get("auto-size-padding", [0, 0])
+        if self._style_data[state].get("auto-size"):
+            padding = self._style_data[state].get("auto-size-padding", [0, 0])
             t_rect = self._style_font_metrics.boundingRect(self.text())
             padx = int(
                 self._style_font_metrics.averageCharWidth() * padding[0]
@@ -285,17 +297,20 @@ class AYLabel(QtWidgets.QLabel):
         p.setBrush(QBrush(fill_color))
         p.setPen(Qt.PenStyle.NoPen)
 
+        # handle disabled opacity for both fill and text
+        p.setOpacity(self._style_data[state].get("opacity", 1.0))
+
         # Border radius: fraction of height or fixed
-        radius_frac = self._style_data.get("border-radius-fraction")
+        radius_frac = self._style_data[state].get("border-radius-fraction")
         if radius_frac is not None:
             radius = self.rect().height() * radius_frac
         else:
-            radius = self._style_data.get("border-radius", 0)
+            radius = self._style_data[state].get("border-radius", 0)
 
         p.drawRoundedRect(self.rect(), radius, radius)
 
         # Text color with contrast computation
-        if self._style_data.get("contrast-text"):
+        if self._style_data[state].get("contrast-text"):
             contrast_ref = self._contrast_color or self._icon_color
             txt_color = self._compute_contrast_text_color(
                 contrast_ref,
@@ -314,7 +329,7 @@ class AYLabel(QtWidgets.QLabel):
         )
         p.end()
 
-    def _paint_icon_and_text(self) -> None:
+    def _paint_icon_and_text(self, state: str) -> None:
         """Render label with both icon and text.
 
         The icon and text are treated as a single group and positioned
@@ -340,7 +355,9 @@ class AYLabel(QtWidgets.QLabel):
         icon_w = self._icon_size
         icon_h = self._icon_size
         spacing = int(
-            self._style_data.get("icon-text-spacing", self._icon_text_spacing)
+            self._style_data[state].get(
+                "icon-text-spacing", self._icon_text_spacing
+            )
         )
         group_w = icon_w + spacing + text_rect.width()
         group_h = max(icon_h, text_rect.height())
@@ -362,6 +379,10 @@ class AYLabel(QtWidgets.QLabel):
             group_y = widget_rect.bottom() - group_h
         else:  # VCenter (default)
             group_y = widget_rect.top() + (widget_rect.height() - group_h) // 2
+
+        # handle disabled opacity for both icon and text
+        p.save()
+        p.setOpacity(self._style_data[state].get("opacity", 1.0))
 
         # Draw icon at the left of the group
         icon_y = group_y + (group_h - icon_h) // 2
@@ -390,38 +411,51 @@ class AYLabel(QtWidgets.QLabel):
             self._display_text(),
             textRole=self.foregroundRole(),
         )
+        p.restore()
 
-    def _paint_text_only(self) -> None:
+    def _paint_text_only(self, state: str) -> None:
         """Render text-only label."""
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = self.palette()
         if self._text_color:
-            # p.setPen(QPen(QColor(self._text_color)))
-            pal = self.palette()
             pal.setColor(self.foregroundRole(), QColor(self._text_color))
-            self.setPalette(pal)
-
+            if "disabled" in self._style_data:
+                t_color = QColor(self._text_color)
+                t_color.setAlphaF(self._style_data[state].get("opacity", 1.0))
+                pal.setColor(
+                    QPalette.ColorGroup.Disabled,
+                    self.foregroundRole(),
+                    t_color,
+                )
+        p.save()
+        p.setOpacity(self._style_data[state].get("opacity", 1.0))
         self._style.drawItemText(
             p,
             self.contentsRect().normalized(),
             self.alignment(),
-            self.palette(),
+            pal,
             self.isEnabled(),
             self._display_text(),
             textRole=self.foregroundRole(),
         )
+        p.restore()
 
-    def _paint_background(self) -> None:
+    def _paint_background(self, state: str) -> None:
         """Draw background if specified by style."""
-        bg_color = self._style_data.get("background-color")
+        bg_color = self._style_data[state].get("background-color")
         if bg_color and bg_color != "transparent":
             p = QPainter(self)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            border_radius = self._style_data.get("border-radius", 0)
-            border_width = self._style_data.get("border-width", 0)
-            border_color = self._style_data.get("border-color", "#00000000")
-            p.setBrush(QBrush(QColor(bg_color)))
+            border_radius = self._style_data[state].get("border-radius", 0)
+            border_width = self._style_data[state].get("border-width", 0)
+            border_color = self._style_data[state].get(
+                "border-color", "#00000000"
+            )
+            qbg_color = QColor(bg_color)
+            qbg_color.setAlphaF(self._style_data[state].get("opacity", 1.0))
+            p.setBrush(QBrush(QColor(qbg_color)))
             p.setPen(
                 QPen(QColor(border_color), border_width)
                 if border_width > 0
@@ -432,23 +466,20 @@ class AYLabel(QtWidgets.QLabel):
     # QLabel overrides ----------------------------------------------------
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
-        if not self._style_palette:
-            self._style_palette = self.palette()
-
-        # self._configure_font()
-        # self._configure_palette()
+        """Override to support icon + text rendering."""
+        state = "disabled" if not self.isEnabled() else "base"
 
         # Filled-background rendering (driven by JSON properties)
-        if self._style_data.get("fill-from-foreground"):
-            self._paint_filled()
+        if self._style_data["base"].get("fill-from-foreground"):
+            self._paint_filled(state)
         else:
-            self._paint_background()
+            self._paint_background(state)
             if self._text and self._icon:
-                self._paint_icon_and_text()
+                self._paint_icon_and_text(state)
             elif self._icon and not self._text:
                 super().paintEvent(arg__1)
             else:
-                self._paint_text_only()
+                self._paint_text_only(state)
 
     def sizeHint(self) -> QSize:
         """Compute a size hint driven by QLabel style data from the style JSON.
@@ -484,10 +515,12 @@ class AYLabel(QtWidgets.QLabel):
             icon_h = self._icon_size
 
         # --- variant-specific sizing ------------------------------------
-        if self._style_data.get("auto-size"):
+        if self._style_data["base"].get("auto-size"):
             # badge / pill: padding is expressed as a fraction of the
             # character metrics (x-factor of avgCharWidth, y-factor of height)
-            padding = self._style_data.get("auto-size-padding", [0.0, 0.0])
+            padding = self._style_data["base"].get(
+                "auto-size-padding", [0.0, 0.0]
+            )
             pad_x = int(fm.averageCharWidth() * padding[0])
             pad_y = int(fm.height() * padding[1])
 
@@ -496,13 +529,13 @@ class AYLabel(QtWidgets.QLabel):
 
             return QSize(content_w + pad_x, content_h + pad_y)
 
-        explicit_padding = self._style_data.get("padding", [0, 0])
+        explicit_padding = self._style_data["base"].get("padding", [0, 0])
         pad_h = int(explicit_padding[0])
         pad_v = int(explicit_padding[1])
 
         if icon_w and text_w:
             spacing = int(
-                self._style_data.get(
+                self._style_data["base"].get(
                     "icon-text-spacing", self._icon_text_spacing
                 )
             )
@@ -526,7 +559,7 @@ class AYLabel(QtWidgets.QLabel):
         self._text = self.text()
 
     def palette(self) -> QPalette:
-        return self._style_palette
+        return QPalette(self._style_palette)
 
     def font(self) -> QFont:
         return self._style_font
@@ -537,94 +570,113 @@ class AYLabel(QtWidgets.QLabel):
 
 
 if __name__ == "__main__":
+    import json
     from ayon_ui_qt.tester import Style, test
 
     from .container import AYContainer
 
     def _build() -> QtWidgets.QWidget:
         w = AYContainer(
-            layout=AYContainer.Layout.HBox,
+            layout=AYContainer.Layout.VBox,
             variant=AYContainer.Variants.High,
             margin=16,
             layout_margin=16,
             layout_spacing=16,
         )
-        l1 = AYLabel("Text Only", tool_tip="Text only")
-        l2 = AYLabel(icon="indeterminate_question_box", tool_tip="Icon only")
-        l3 = AYLabel(
-            "Approved",
-            icon="check_circle",
-            icon_color="#88ff88",
-            tool_tip="Text & icon with custom color",
-        )
-        l4 = AYLabel(
-            "Text & Icon",
-            icon="favorite",
-            tool_tip="Text & icon with default color and 6px margin",
-            rel_text_size=4,
-        )
-        l4.setMargin(6)
-        l5 = AYLabel(
-            "Badge",
-            icon_color="#cd8de2",
-            variant=AYLabel.Variants.Badge,
-            tool_tip="badge variant",
-        )
-        l6 = AYLabel(
-            "Badge",
-            icon_color="#cd8de2",
-            variant=AYLabel.Variants.Badge,
-            tool_tip="badge variant with smaller text",
-            rel_text_size=-2,
-        )
-        l7 = AYLabel(
-            "bad badge",
-            icon_color="",
-            variant=AYLabel.Variants.Badge,
-            tool_tip="Badly configured badge",
-        )
-        w.add_widget(l1, stretch=0)
-        w.add_widget(l2, stretch=0)
-        w.add_widget(l3, stretch=0)
-        w.add_widget(l4, stretch=0)
-        w.add_widget(l5, stretch=0)
-        w.add_widget(l6, stretch=0)
-        w.add_widget(l7, stretch=0)
-
-        for i in range(0, 6):
-            v = i * 51
-            c = QColor(v, v, v, 255)
-            pc = i * 20
-            badge = AYLabel(
-                f"{pc}% grey",
-                icon_color=c.name(),
-                variant=AYLabel.Variants.Badge,
-                tool_tip=f"{pc}% grey badge with text color adaptation",
-                contrast_color=c,
-                rel_text_size=-3,
+        for enabled in (True, False):
+            row = AYContainer(
+                layout=AYContainer.Layout.HBox,
+                variant=AYContainer.Variants.High,
+                layout_spacing=16,
             )
-            w.add_widget(badge, stretch=0)
+            row.add_widget(
+                QtWidgets.QLabel("Enabled:" if enabled else "Disabled:"),
+                stretch=0,
+            )
+            l1 = AYLabel("Text Only", tool_tip="Text only")
+            l2 = AYLabel(
+                icon="indeterminate_question_box", tool_tip="Icon only"
+            )
+            l3 = AYLabel(
+                "Approved",
+                icon="check_circle",
+                icon_color="#88ff88",
+                tool_tip="Text & icon with custom color",
+            )
+            # print(f"i+t default: {json.dumps(l3._style_data, indent=4)}")
+            l4 = AYLabel(
+                "Text & Icon",
+                icon="favorite",
+                tool_tip="Text & icon with default color and 6px margin",
+                rel_text_size=4,
+            )
+            l4.setMargin(6)
+            l5 = AYLabel(
+                "Badge",
+                icon_color="#cd8de2",
+                variant=AYLabel.Variants.Badge,
+                tool_tip="badge variant",
+            )
+            # print(f"badge: {json.dumps(l5._style_data, indent=4)}")
+            l6 = AYLabel(
+                "Badge",
+                icon_color="#cd8de2",
+                variant=AYLabel.Variants.Badge,
+                tool_tip="badge variant with smaller text",
+                rel_text_size=-2,
+            )
+            l7 = AYLabel(
+                "bad badge",
+                icon_color="",
+                variant=AYLabel.Variants.Badge,
+                tool_tip="Badly configured badge",
+            )
+            row.add_widget(l1, stretch=0)
+            row.add_widget(l2, stretch=0)
+            row.add_widget(l3, stretch=0)
+            row.add_widget(l4, stretch=0)
+            row.add_widget(l5, stretch=0)
+            row.add_widget(l6, stretch=0)
+            row.add_widget(l7, stretch=0)
 
-        l8 = AYLabel("colored text", text_color="#55aef7")
-        w.add_widget(l8, stretch=0)
+            for i in range(0, 6):
+                v = i * 51
+                c = QColor(v, v, v, 255)
+                pc = i * 20
+                badge = AYLabel(
+                    f"{pc}% grey",
+                    icon_color=c.name(),
+                    variant=AYLabel.Variants.Badge,
+                    tool_tip=f"{pc}% grey badge with text color adaptation",
+                    contrast_color=c,
+                    rel_text_size=-3,
+                )
+                row.add_widget(badge, stretch=0)
 
-        l10 = AYLabel(
-            "Modeling",
-            icon="3d",
-            icon_size=16,
-            variant=AYLabel.Variants.Entity_Label,
-        )
-        w.add_widget(l10, stretch=0)
-        l9 = AYLabel(
-            "PRG",
-            icon="play_circle",
-            icon_color="#f7a355",
-            icon_size=16,
-            variant=AYLabel.Variants.Entity_Label_Filled,
-        )
-        w.add_widget(l9, stretch=0)
+            l8 = AYLabel("colored text", text_color="#55aef7")
+            row.add_widget(l8, stretch=0)
 
-        w.addStretch()
+            l10 = AYLabel(
+                "Modeling",
+                icon="3d",
+                icon_size=16,
+                variant=AYLabel.Variants.Entity_Label,
+            )
+            # print(f"Entity_Label: {json.dumps(l10._style_data, indent=4)}")
+            row.add_widget(l10, stretch=0)
+            l9 = AYLabel(
+                "PRG",
+                icon="play_circle",
+                icon_color="#f7a355",
+                icon_size=16,
+                variant=AYLabel.Variants.Entity_Label_Filled,
+            )
+            # print(f"Entity_Label_Filled: {json.dumps(l9._style_data, indent=4)}")
+            row.add_widget(l9, stretch=0)
+            row.addStretch()
+
+            row.setEnabled(enabled)
+            w.add_widget(row)
         return w
 
     test(_build, style=Style.AyonStyleOverCSS)

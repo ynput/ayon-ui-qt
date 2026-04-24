@@ -414,6 +414,15 @@ class StyleData:
                 widget.foregroundRole(),
                 QColor(fg_color),
             )
+        opacity = style.get("disabled", {}).get("opacity")
+        if opacity:
+            disabled_fg_color = QColor(fg_color)
+            disabled_fg_color.setAlphaF(opacity)
+            p.setColor(
+                QPalette.ColorGroup.Disabled,
+                widget.foregroundRole(),
+                disabled_fg_color,
+            )
 
         bg_color = style.get("base", {}).get("background-color")
         if bg_color:

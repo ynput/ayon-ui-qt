@@ -509,7 +509,7 @@
             }
         },
         "QToolTip": {
-            "states": {},
+            "states": [],
             "default-variant": "default",
             "variants": {
                 "default": {
@@ -525,10 +525,14 @@
             }
         },
         "QLabel": {
+            "states": ["disabled"],
             "default-variant": "default",
             "variants": {
                 "default": {
-                    "background-color": "transparent"
+                    "background-color": "transparent",
+                    "disabled":{
+                        "opacity": 0.5
+                    }
                 },
                 "tag": {
                     "contrast-text": true
