@@ -113,6 +113,12 @@ class AYSliderVariants(Enum):
     Low = "low"
 
 
+class AYCardViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
+
+
 # END OF VARIANTs DEFINITIONS -------------------------------------------------
 
 

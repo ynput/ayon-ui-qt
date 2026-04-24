@@ -761,6 +761,14 @@
                     "background-color": "--md-sys-color-surface-container-low-dark"
                 }
             }
+        },
+        "AYCardView": {
+            "default-variant": "default",
+            "variants": {
+                "default": {},
+                "low": {},
+                "high": {}
+            }
         }
     },
     "layouts": {},
