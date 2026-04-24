@@ -155,7 +155,9 @@ class ActivityPanel(AYContainer):
 
 
     @Slot(object, list)
-    def on_ctlr_annotation_export_started(self, thread, export_jobs):
+    def on_ctlr_annotation_export_started(
+        self, thread: QObject, export_jobs: list[object]
+    ) -> None:
         if not export_jobs:
             return
 

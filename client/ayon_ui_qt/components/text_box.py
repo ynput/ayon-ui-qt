@@ -705,7 +705,6 @@ class AYTextBoxSignals(QObject):
     # Signal emitted when comment button is clicked, passes markdown content
     comment_submitted = Signal(str, str, list)  # type: ignore
     comment_progress_updated = Signal(int, int)  # (value, total)  # type: ignore
-    comment_progress_completed = Signal()  # type: ignore
 
 class AYTextBox(AYContainer):
     signals = AYTextBoxSignals()
@@ -854,7 +853,6 @@ class AYTextBox(AYContainer):
         self.comment_progress_bar = AYProgressBar(parent=self)
         self.comment_progress_bar.setFixedWidth(120)
         self.comment_progress_bar.setFixedHeight(20)
-        self.comment_progress_bar.progress_bar.setRange(0, 100)
         self.comment_progress_bar.hide()
         self.signals.comment_progress_updated.connect(
             self.comment_progress_bar.set_progress

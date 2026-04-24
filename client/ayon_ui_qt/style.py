@@ -2287,21 +2287,41 @@ class ProgressBarDrawer:
         painter.setBrush(QBrush(QColor("#2b2b2b")))
         painter.drawRoundedRect(rect, radius, radius)
 
-        # Fill — cap fill_width so it never exceeds groove width
         minimum = option.minimum
         maximum = option.maximum
         progress = option.progress
+        painter.setBrush(QBrush(QColor("#5cadd6")))
+
         if maximum > minimum:
+            # Determinate progress bar.
             ratio = (progress - minimum) / (maximum - minimum)
-            fill_width = min(rect.width() * ratio, rect.width())
+            ratio = max(0.0, min(ratio, 1.0))
+            fill_width = rect.width() * ratio
+
+            if fill_width > 0:
+                fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
+                painter.drawRoundedRect(fill_rect, radius, radius)
         else:
-            fill_width = rect.width()
+            # Indeterminate/busy progress bar (Qt commonly uses 0..0).
+            # Draw a moving chunk so busy mode remains visually distinct
+            # from a fully completed determinate bar.
+            chunk_width = min(rect.width(), max(rect.height() * 1.5, rect.width() * 0.3))
+            travel = rect.width() + chunk_width
 
-        if fill_width > 0:
-            fill_rect = QRectF(rect.x(), rect.y(), fill_width, rect.height())
-            painter.setBrush(QBrush(QColor("#5cadd6")))
-            painter.drawRoundedRect(fill_rect, radius, radius)
+            if travel > 0:
+                cycle_ms = 1200
+                offset = (
+                    QtCore.QDateTime.currentMSecsSinceEpoch() % cycle_ms
+                ) / cycle_ms
+                x = rect.x() - chunk_width + (travel * offset)
+                chunk_rect = QRectF(x, rect.y(), chunk_width, rect.height())
 
+                clip_path = QPainterPath()
+                clip_path.addRoundedRect(rect, radius, radius)
+                painter.save()
+                painter.setClipPath(clip_path)
+                painter.drawRoundedRect(chunk_rect, radius, radius)
+                painter.restore()
         painter.restore()
 
     def _draw_groove(self, option, painter: QPainter, w) -> None:
