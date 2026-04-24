@@ -74,7 +74,7 @@ class AYTreeView(QTreeView):
         self.setIndentation(int(tv_style.get("indent", 20)))
 
         # Selection behaviour.
-        self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QTreeView.SelectionMode.ExtendedSelection)
         self.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
 
         # No default frame — drawn manually in paintEvent.
@@ -172,10 +172,11 @@ if __name__ == "__main__":
             root_lyt.addWidget(tv)
 
             tv.selection_changed.connect(
-                lambda selected, deselected: print(
+                lambda selected, deselected, tv=tv: print(
                     "selection changed: "
-                    f"{[i.data() for i in selected.indexes()]} "
-                    f"(was {[i.data() for i in deselected.indexes()]})"
+                    f"Selected {[i.data() for i in selected.indexes()]} "
+                    f"and deselected {[i.data() for i in deselected.indexes()]}) "
+                    f"(full selection: {[i.data() for i in tv.selectedIndexes()]})"
                 )
             )
 
