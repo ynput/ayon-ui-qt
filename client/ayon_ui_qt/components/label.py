@@ -115,6 +115,8 @@ class AYLabel(QtWidgets.QLabel):
         """Set the widget palette and trigger a repaint."""
         self._style_palette = palette
         self._configure_palette()
+        if self._icon and not self._icon_color:
+            self.set_icon()  # update icon color from palette
         self.update()
 
     def set_font(self, font: QFont) -> None:
@@ -133,7 +135,7 @@ class AYLabel(QtWidgets.QLabel):
 
         if self._icon:
             same_as_bg = (
-                self._icon_color
+                self._icon_color not in (None, "")
                 and self._style_data["base"].get("background-color", raw=True)
                 == "@_icon_color"
             )
@@ -468,6 +470,8 @@ class AYLabel(QtWidgets.QLabel):
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         """Override to support icon + text rendering."""
         state = "disabled" if not self.isEnabled() else "base"
+        if "hover" in self._style_data and self.underMouse():
+            state = "hover"
 
         # Filled-background rendering (driven by JSON properties)
         if self._style_data["base"].get("fill-from-foreground"):

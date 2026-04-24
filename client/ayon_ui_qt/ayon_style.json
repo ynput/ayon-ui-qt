@@ -525,7 +525,7 @@
             }
         },
         "QLabel": {
-            "states": ["disabled"],
+            "states": ["disabled", "hover"],
             "default-variant": "default",
             "variants": {
                 "default": {
@@ -570,6 +570,21 @@
                     "icon-text-spacing": 4,
                     "padding": [4, 2],
                     "alignment": "center"
+                },
+                "order-option": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-radius": 4,
+                    "border-width": 0,
+                    "icon-text-spacing": 8,
+                    "padding": [8, 6],
+                    "alignment": "left",
+                    "disabled": {
+                        "opacity": 0.5
+                    },
+                    "hover": {
+                        "background-color": "--md-sys-color-background-dark"
+                    }
                 }
             }
         },

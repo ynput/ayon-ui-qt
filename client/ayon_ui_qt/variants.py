@@ -81,6 +81,7 @@ class QLabelVariants(Enum):
     Pill = "pill"
     Entity_Label = "entity-label"
     Entity_Label_Filled = "entity-label-filled"
+    Order_Option = "order-option"
 
 
 class QTreeViewVariants(Enum):
