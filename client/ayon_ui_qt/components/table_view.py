@@ -318,7 +318,7 @@ class AYTableView(QTreeView):
         self.setHeaderHidden(False)
 
         # Selection behaviour.
-        self.setSelectionMode(QTreeView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QTreeView.SelectionMode.ExtendedSelection)
         self.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
 
         # No default frame — drawn manually in paintEvent.
@@ -758,6 +758,21 @@ class AYTableView(QTreeView):
                 self.openPersistentEditor(pmi)  # type: ignore[arg-type]
                 self._active_editor_pmis.add(pmi)
 
+    def mousePressEvent(  # type: ignore[override]
+        self, event: "QtGui.QMouseEvent"
+    ) -> None:
+        """Deselect all items when clicking in an empty area.
+
+        Args:
+            event: Mouse press event.
+        """
+        index = self.indexAt(event.pos())
+        if not index.isValid():
+            self.clearSelection()
+            self.setCurrentIndex(self.rootIndex())
+            return
+        super().mousePressEvent(event)
+
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
         """Track the hovered row and force-repaint it when it changes.
 
@@ -905,6 +920,15 @@ if __name__ == "__main__":
         tree_view.setMinimumHeight(280)
         container.add_widget(tree_view)
         switch.toggled.connect(tree_model.set_tree_mode)
+
+        tree_view.selection_changed.connect(
+            lambda selected, deselected, tv=tree_view: print(
+                "selection changed: "
+                f"Selected {[i.data() for i in selected.indexes()]} "
+                f"and deselected {[i.data() for i in deselected.indexes()]}) "
+                f"(full selection: {[i.data() for i in tv.selectedIndexes()]})"
+            )
+        )
 
         container.setMinimumWidth(700)
         return container
