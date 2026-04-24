@@ -7,7 +7,7 @@ try:
 except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
-from .. import get_ayon_style
+from ..style import get_ayon_style
 from .buttons import AYButton
 from .frame import AYFrame
 from .label import AYLabel
@@ -52,9 +52,8 @@ class AYTag(AYFrame):
         self.lyt = QtWidgets.QHBoxLayout(self)
         self.lyt.setContentsMargins(2, 2, 2, 2)
         self.lyt.setSpacing(4)
-        self.lyt.setSizeConstraints(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize,
-            QtWidgets.QLayout.SizeConstraint.SetFixedSize,
+        self.lyt.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
 
         self.delete_button = AYButton(

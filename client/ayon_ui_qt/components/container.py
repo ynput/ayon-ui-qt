@@ -116,7 +116,7 @@ class AYContainer(AYFrame):
         return self._layout.itemAt(index)  # type: ignore
 
     def clear(self):
-        clear_layout(self._layout)
+        self._layout.clear()
 
 
 if __name__ == "__main__":

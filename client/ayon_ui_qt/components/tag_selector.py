@@ -19,7 +19,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from .. import get_ayon_style
+from ..style import get_ayon_style
 from .buttons import AYButton
 from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout
@@ -72,6 +72,7 @@ class TagItemWidget(AYButton):
         super().__init__(
             tag.name,
             variant=AYButton.Variants.Tag_Menu,
+            fixed_width=False,
             icon_color=tag.color,
             checkable=True,
             parent=parent,

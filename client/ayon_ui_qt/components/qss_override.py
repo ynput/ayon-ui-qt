@@ -4,8 +4,7 @@ from qtpy.QtCore import QEvent, QObject
 from qtpy.QtGui import QPainter
 from qtpy.QtWidgets import QStyle, QStyleOptionFrame, QWidget
 
-from .. import get_ayon_style
-from ..ayon_style import AYONStyle
+from ..style import get_ayon_style
 
 
 class AyonStyleEventFilter(QObject):

@@ -544,6 +544,35 @@ class ImageCache:
             tmp_path.unlink(missing_ok=True)
             raise IOError(f"Failed to cache file: {exc}") from exc
 
+    def set_path(self, key: str, file_path: str) -> Path:
+        """Manually set a cache entry for a given key and file path."""
+        with self._access_lock:
+            source_path = Path(file_path)
+            if not source_path.exists():
+                raise ValueError(
+                    f"Provided file does not exist: {source_path}"
+                )
+
+            cache_filename = self._generate_cache_filename(key, source_path)
+            cached_path = self.cache_path / cache_filename
+
+            try:
+                with open(source_path, "rb") as src:
+                    with open(cached_path, "wb") as dst:
+                        dst.write(src.read())
+            except IOError as e:
+                raise IOError(f"Failed to set cache file: {e}") from e
+
+            file_size = cached_path.stat().st_size
+            self._metadata[key] = {
+                "file_path": str(cached_path),
+                "size_bytes": file_size,
+                "access_count": 0,
+                "last_accessed": time.time(),
+            }
+            self._evict_if_needed()
+            return cached_path
+
     def _generate_cache_filename(self, key: str, source_path: Path) -> str:
         """Build a cache filename from a SHA-256 hash of *key*.
 
