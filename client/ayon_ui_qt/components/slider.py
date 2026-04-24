@@ -32,9 +32,9 @@ class AYSliderBar(QSlider):
     def __init__(
         self,
         parent: QWidget | None = None,
-        variant_str: str = "default",
+        variant: AYSliderVariants = AYSliderVariants.Default,
     ) -> None:
-        self._variant_str = variant_str
+        self._variant_str = variant.value
         self._style_data = StyleDict()
         super().__init__(Qt.Orientation.Horizontal, parent)
 
@@ -46,7 +46,7 @@ class AYSliderBar(QSlider):
         self.setStyle(_style)
         self._style_data = _style.model.get_styles(
             "AYSlider",
-            variant=variant_str,
+            variant=self._variant_str,
         )
         self._style_data.set_context(self)
 
@@ -185,6 +185,7 @@ class AYSlider(AYContainer):
         value_changed (int): Emitted whenever the slider value changes.
     """
 
+    Variants = AYSliderVariants
     value_changed = Signal(int)
 
     def __init__(
@@ -195,7 +196,7 @@ class AYSlider(AYContainer):
         minimum: int = 0,
         maximum: int = 100,
         step: int = 1,
-        variant: AYSliderVariants = AYSliderVariants.Default,
+        variant: Variants = Variants.Default,
     ) -> None:
         super().__init__(
             parent,
@@ -233,7 +234,7 @@ class AYSlider(AYContainer):
         )
 
         # Slider bar
-        self._bar = AYSliderBar(variant_str=self._variant_str)
+        self._bar = AYSliderBar(variant=AYSlider.Variants(self._variant_str))
         self._bar.setMinimum(minimum)
         self._bar.setMaximum(maximum)
         self._bar.setSingleStep(self._step)
