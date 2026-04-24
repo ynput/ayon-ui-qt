@@ -83,12 +83,6 @@ class QLabelVariants(Enum):
     Entity_Label_Filled = "entity-label-filled"
 
 
-class AYCardViewVariants(Enum):
-    Default = "default"
-    Low = "low"
-    High = "high"
-
-
 class QTreeViewVariants(Enum):
     Default = "default"
     Low = "low"
@@ -116,6 +110,7 @@ class AsyncTaskQueueMonitorVariants(Enum):
 
 class AYSliderVariants(Enum):
     Default = "default"
+    Low = "low"
 
 
 # END OF VARIANTs DEFINITIONS -------------------------------------------------

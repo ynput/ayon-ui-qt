@@ -530,7 +530,7 @@
             "variants": {
                 "default": {
                     "background-color": "transparent",
-                    "disabled":{
+                    "disabled": {
                         "opacity": 0.5
                     }
                 },
@@ -756,6 +756,9 @@
                     "disabled": {
                         "opacity": 0.5
                     }
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
                 }
             }
         }
