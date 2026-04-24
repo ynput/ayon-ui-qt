@@ -763,13 +763,12 @@ class AYCardView(QAbstractItemView):
     ) -> None:
         offset = self.verticalOffset()
         vp_rect = self.viewport().rect()
-        header_bg = QColor(tbl_style.get("header-background-color", "#272d35"))
+        header_bg = QColor("transparent")
         header_fg = QColor(tbl_style.get("header-color", "#c1c7ce"))
 
         expand_icon_size = 16
         expand_icon_padding = 16
         icon_text_padding = 8
-
 
         # Set header font based on view font, but larger and bold.
         font = painter.font()
@@ -1141,6 +1140,7 @@ if __name__ == "__main__":
         TableColumn,
         make_hierarchical_test_fetch,
     )
+    from .slider import AYSlider
 
     def _make_card_mapper(
         row_data: dict,
@@ -1172,16 +1172,21 @@ if __name__ == "__main__":
         top_bar = AYContainer(
             variant=AYContainer.Variants.High,
             layout=AYContainer.Layout.HBox,
+            layout_spacing=10,
         )
         label = QtWidgets.QLabel("AYCardView — card width slider + tree mode")
         switch = AYCheckBox(
             "Show Hierarchy", variant=AYCheckBox.Variants.Button
         )
 
-        width_slider = QtWidgets.QSlider(Qt.Orientation.Horizontal)
-        width_slider.setMinimum(120)
-        width_slider.setMaximum(400)
-        width_slider.setValue(200)
+        width_slider = AYSlider(
+            label="Card Width",
+            variant=AYSlider.Variants.Default,
+            value=200,
+            minimum=120,
+            maximum=300,
+            step=10,
+        )
         width_slider.setFixedWidth(160)
 
         top_bar.add_widget(label)
@@ -1253,7 +1258,7 @@ if __name__ == "__main__":
             model.set_tree_mode(enabled)
 
         switch.toggled.connect(_on_tree_mode_toggle)
-        width_slider.valueChanged.connect(
+        width_slider.value_changed.connect(
             lambda v: card_view.set_card_width(v)
         )
 
