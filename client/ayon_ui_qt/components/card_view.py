@@ -237,7 +237,7 @@ class AYCardView(QAbstractItemView):
 
         self._hovered_pmi: QPersistentModelIndex | None = None
 
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setFrameShape(QAbstractItemView.Shape.NoFrame)
 
     def set_card_width(self, width: int) -> None:
