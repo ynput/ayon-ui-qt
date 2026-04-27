@@ -383,7 +383,7 @@ class _FilterDropdown(AYDropdownPopup):
                 col.label,
                 icon=col.icon or "",
                 icon_color="#dedede",
-                variant=AYButton.Variants.Tag_Menu,
+                variant=AYButton.Variants.Text,
                 fixed_width=False,
                 label_alignment=Qt.AlignmentFlag.AlignLeft,
             )
@@ -462,7 +462,7 @@ class _FilterDropdown(AYDropdownPopup):
             for val in distinct:
                 btn = AYButton(
                     val,
-                    variant=AYButton.Variants.Tag_Menu,
+                    variant=AYButton.Variants.Text,
                     fixed_width=False,
                     checkable=True,
                     label_alignment=Qt.AlignmentFlag.AlignLeft,
