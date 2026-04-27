@@ -225,7 +225,7 @@ class AYButton(QtWidgets.QPushButton):
         self.setIcon(icn)
 
 
-class _ButtonMenuDropdown(AYDropdownPopup):
+class ButtonMenuDropdown(AYDropdownPopup):
     """Floating dropdown popup for AYButtonMenu.
 
     A frameless popup QFrame that is shown below (or above, if not
@@ -319,7 +319,7 @@ class AYButtonMenu(AYButton):
         self._populate_callback = populate_callback
         self._menu_open: bool = False
 
-        self._dropdown = _ButtonMenuDropdown(self)
+        self._dropdown = ButtonMenuDropdown(self)
         self._populate_callback(self._dropdown)
         self._dropdown.popup_closed.connect(self._on_popup_closed)
 
