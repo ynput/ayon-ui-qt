@@ -8,6 +8,7 @@ from qtpy.QtWidgets import QWidget
 from widget_test import WidgetTest
 from ayon_ui_qt.components.page_button import AYPageButton
 from ayon_ui_qt.components.container import AYContainer
+from ayon_ui_qt.style import get_ayon_style
 
 
 # =============================================================================
@@ -43,7 +44,7 @@ class PageButtonTest(WidgetTest):
     - ``02_unhover_first``: Hover released (back to base).
     """
 
-    size = (400, 350)
+    size = (400, 200)
     tolerance = 0.0
 
     def build(self) -> QWidget:
@@ -220,7 +221,12 @@ def test_size_hint_height_matches_style(qtbot) -> None:
     """
     btn = AYPageButton(label="Height check")
     qtbot.addWidget(btn)
-    assert btn.sizeHint().height() == 44, (
+    expected = (
+        get_ayon_style()
+        .model.get_style("AYPageButton")
+        .get("height", 44)
+    )
+    assert btn.sizeHint().height() == expected, (
         "sizeHint height must match the 'height' value in the style block"
     )
 

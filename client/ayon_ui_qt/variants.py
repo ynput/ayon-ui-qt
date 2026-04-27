@@ -114,6 +114,10 @@ class AYSliderVariants(Enum):
     Low = "low"
 
 
+class AYPageButtonVariants(Enum):
+    Default = "default"
+
+
 class AYCardViewVariants(Enum):
     Default = "default"
     Low = "low"

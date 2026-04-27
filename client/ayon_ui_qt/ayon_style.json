@@ -777,6 +777,34 @@
                 }
             }
         },
+        "AYPageButton": {
+            "states": ["hover", "pressed", "disabled"],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "height": 32,
+                    "border-radius": 4,
+                    "padding": [12, 10],
+                    "icon-gap": 8,
+                    "value-gap": 8,
+                    "background-color": "transparent",
+                    "icon-color": "--md-sys-color-on-surface-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "value-color": "--md-ref-palette-neutral60",
+                    "chevron-color": "--md-ref-palette-neutral60",
+                    "hover": {
+                        "background-color": "--md-ref-palette-neutral-variant35"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-neutral40"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    }
+                }
+            }
+        },
         "AYCardView": {
             "default-variant": "default",
             "variants": {
