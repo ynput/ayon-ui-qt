@@ -379,6 +379,7 @@ class AYEntityCard(AYContainer):
         is_hover: bool = False,
         is_dragging: bool = False,
         is_draggable: bool = False,
+        placeholder_icon: str = "image",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(
@@ -429,6 +430,7 @@ class AYEntityCard(AYContainer):
             parent=self,
             width=width - (border_width * 2),
         )
+        self._card_body.set_placeholder_icon(placeholder_icon)
         body_size = self._card_body.size()
         self._overlay = _CardOverlay(
             parent=self,
@@ -713,6 +715,15 @@ class AYEntityCard(AYContainer):
             self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
         else:
             self.unsetCursor()
+
+    @property
+    def placeholder_icon(self) -> str:
+        return self._card_body._placeholder_icon_name
+
+    @placeholder_icon.setter
+    def placeholder_icon(self, value: str) -> None:
+        self._card_body.set_placeholder_icon(value)
+        self._rebuild_thumbnail()
 
     # ------------------------------------------------------------------
     # Paint

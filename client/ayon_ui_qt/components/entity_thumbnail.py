@@ -36,8 +36,9 @@ class AYEntityThumbnail(QPushButton):
         src: Path | str = "",
         file_cacher: Callable | None = None,
         placeholder_icon: str = "image",
-        placeholder_scale: float = 0.333333,
-        size: tuple = (85, 48),
+        placeholder_scale: float = 0.5,
+        placeholder_icon_fill: bool = False,
+        size: tuple[int, int] = (85, 48),
         fade_duration: int = 0,
         variant: Variants = Variants.Thumbnail,
         **kwargs,
@@ -49,9 +50,14 @@ class AYEntityThumbnail(QPushButton):
         self._variant_str: str = variant.value
         self._placeholder_icon_name = placeholder_icon
         self._placeholder_scale = placeholder_scale
-        icn_size = size[1] * placeholder_scale
+        self._placeholder_icon_fill = placeholder_icon_fill
+        icn_size = int(size[1] * placeholder_scale)
         self._placeholder_icon = QIcon(
-            get_icon(placeholder_icon, color="#10ffffff").pixmap(
+            get_icon(
+                placeholder_icon,
+                color="#10ffffff",
+                fill=placeholder_icon_fill,
+            ).pixmap(
                 QSize(icn_size, icn_size),
             )
         )
@@ -85,16 +91,36 @@ class AYEntityThumbnail(QPushButton):
     def set_size(self, size: tuple[int, int]) -> None:
         """Resize the thumbnail and update the icon size to match."""
         self._size = size
-        icn_size = size[1] * self._placeholder_scale
+        icn_size = int(size[1] * self._placeholder_scale)
         self._placeholder_icon = QIcon(
             get_icon(
-                self._placeholder_icon_name, color="#10ffffff"
+                self._placeholder_icon_name,
+                color="#10ffffff",
+                fill=self._placeholder_icon_fill,
             ).pixmap(QSize(icn_size, icn_size))
         )
         self.setFixedSize(*self._size)
         if self.icon() and not self.icon().isNull():
             self.setIconSize(QSize(*self._size))
         self.update()
+
+    def set_placeholder_icon(self, icon_name: str) -> None:
+        """Set the placeholder icon to show when no thumbnail is available."""
+        if not icon_name:
+            return
+        self._placeholder_icon_name = icon_name
+        icn_size = int(self._size[1] * self._placeholder_scale)
+        self._placeholder_icon = QIcon(
+            get_icon(
+                icon_name,
+                color="#10ffffff",
+                fill=self._placeholder_icon_fill,
+            ).pixmap(QSize(icn_size, icn_size))
+        )
+        if not self.icon() or self.icon().isNull():
+            self.setIcon(self._placeholder_icon)
+            self.setIconSize(QSize(*self._size))
+            self.update()
 
     def _resolve_src(self, src: Path | str) -> Path | str:
         """Resolve a cache key or path to an existing file path."""
