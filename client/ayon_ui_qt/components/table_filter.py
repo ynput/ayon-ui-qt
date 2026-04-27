@@ -379,6 +379,8 @@ class _FilterDropdown(AYDropdownPopup):
         self._attr_buttons: dict[str, AYButton] = {}
 
         for col in self._model.columns:
+            if not col.filterable:
+                continue
             btn = AYButton(
                 col.label,
                 icon=col.icon or "",
