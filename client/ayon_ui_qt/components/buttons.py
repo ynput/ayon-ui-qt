@@ -251,7 +251,24 @@ class _ButtonMenuDropdown(AYDropdownPopup):
             variant=AYDropdownPopup.Variants.Low_Framed_Thin,
             translucent_bg=True,
         )
-        AYVBoxLayout(self, margin=10, spacing=5)
+        self._stack = QtWidgets.QStackedLayout(self)
+        container = AYContainer(
+            layout=AYContainer.Layout.VBox,
+            variant=AYContainer.Variants.Low,
+            margin=10,
+            layout_spacing=10,
+        )
+        self._stack.addWidget(container)
+
+    def set_current_page(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+
+    def add_page(self, container: AYContainer) -> None:
+        self._stack.addWidget(container)
+
+    def layout(self) -> QtWidgets.QLayout | None:
+        widget = self._stack.currentWidget()
+        return widget.layout()
 
 
 class AYButtonMenu(AYButton):
