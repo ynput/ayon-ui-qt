@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import weakref
 from enum import Enum
 from functools import partial
 from pathlib import Path
@@ -34,7 +35,10 @@ class AYEntityThumbnail(QPushButton):
     def __init__(
         self,
         src: Path | str = "",
-        file_cacher: Callable | None = None,
+        file_cacher: Callable[[str], Path | str] | None = None,
+        async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = None,
         placeholder_icon: str = "image",
         placeholder_scale: float = 0.5,
         placeholder_icon_fill: bool = False,
@@ -44,8 +48,40 @@ class AYEntityThumbnail(QPushButton):
         **kwargs,
     ):
         """A widget that displays a thumbnail image for an entity, with options
-        to customize the image source, caching behavior, and size."""
+        to customize the image source, caching behavior, and size.
+
+        Args:
+            src: Initial image source (path or cache key).
+            file_cacher: Synchronous callable ``(key) -> file_path`` used to
+                populate ``ImageCache`` on a cache miss.  Called on the
+                calling thread — **must not** block the Qt main thread.
+            async_file_cacher: Non-blocking callable
+                ``(key, on_loaded: Callable[[str], None]) -> None``.
+                When the thumbnail is not yet cached this is invoked
+                immediately and should schedule the download on a
+                background thread.  Once the file is ready it must call
+                ``on_loaded(file_path)`` on the main thread.  The widget
+                will then call :meth:`set_thumbnail` again with the same
+                key, which now resolves to the cached file.  Mutually
+                exclusive with *file_cacher*.
+            placeholder_icon: Icon name shown before the thumbnail loads.
+            placeholder_scale: Scale factor for the placeholder icon.
+            placeholder_icon_fill: Whether to fill the placeholder icon.
+            size: ``(width, height)`` in pixels.
+            fade_duration: Fade-in animation duration in milliseconds.
+            variant: Visual style variant.
+        """
         self._file_cacher = file_cacher
+        self._async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = async_file_cacher
+        # Keys for which an async fetch is already in flight (avoid duplicates)
+        self._pending_async_keys: set[str] = set()
+        if file_cacher and async_file_cacher:
+            raise ValueError(
+                "Only one of 'file_cacher' or 'async_file_cacher' may be "
+                "set, not both."
+            )
         self._size = size
         self._variant_str: str = variant.value
         self._placeholder_icon_name = placeholder_icon
@@ -123,7 +159,17 @@ class AYEntityThumbnail(QPushButton):
             self.update()
 
     def _resolve_src(self, src: Path | str) -> Path | str:
-        """Resolve a cache key or path to an existing file path."""
+        """Resolve a cache key or path to an existing file path.
+
+        Pure resolution — no side effects.
+
+        Resolution order:
+        1. If *src* is already a real path on disk, return it as-is.
+        2. If a synchronous *file_cacher* is configured, populate
+           ``ImageCache`` now (blocking) and return the cached path.
+        3. If the key is already in ``ImageCache``, return its path.
+        4. Fall through: return *src* unchanged (shows placeholder).
+        """
         if Path(src).exists():
             return src
         ic = ImageCache.get_instance()
@@ -131,6 +177,55 @@ class AYEntityThumbnail(QPushButton):
             return ic.get(str(src), partial(self._file_cacher, src))
         if ic.has(str(src)):
             return ic.get_path(str(src)) or ""
+        return src
+
+    def _maybe_schedule_async_fetch(self, src: Path | str) -> None:
+        """Schedule a non-blocking background fetch for *src* if needed.
+
+        Does nothing when *async_file_cacher* is not set or a fetch for
+        *src* is already in flight.  On completion, calls
+        :meth:`_load_pixmap_from_path` directly with the resolved path.
+        """
+        if not self._async_file_cacher:
+            return
+        key_str = str(src)
+        if not key_str or key_str in self._pending_async_keys:
+            return
+        self._pending_async_keys.add(key_str)
+        thumbnail_ref = weakref.ref(self)
+
+        def _on_loaded(fpath: str, _k: str = key_str) -> None:
+            thumbnail = thumbnail_ref()
+            if thumbnail is None:
+                return
+            thumbnail._pending_async_keys.discard(_k)
+            if fpath:
+                thumbnail._load_pixmap_from_path(fpath)
+
+        self._async_file_cacher(key_str, _on_loaded)
+        ic = ImageCache.get_instance()
+        if self._file_cacher:
+            return ic.get(str(src), partial(self._file_cacher, src))
+        if ic.has(str(src)):
+            return ic.get_path(str(src)) or ""
+        # Cache miss — schedule a non-blocking background fetch if available.
+        if self._async_file_cacher:
+            key_str = str(src)
+            if key_str and key_str not in self._pending_async_keys:
+                self._pending_async_keys.add(key_str)
+                thumbnail_ref = weakref.ref(self)
+
+                def _on_loaded(fpath: str, _k: str = key_str) -> None:
+                    thumbnail = thumbnail_ref()
+                    if thumbnail is None:
+                        return
+                    thumbnail._pending_async_keys.discard(_k)
+                    if fpath:
+                        # Re-call set_thumbnail; cache is now populated so
+                        # _resolve_src will find a hit on this second pass.
+                        thumbnail.set_thumbnail(_k)
+
+                self._async_file_cacher(key_str, _on_loaded)
         return src
 
     def _on_fade_tick(self, value: float) -> None:
@@ -150,20 +245,34 @@ class AYEntityThumbnail(QPushButton):
         self._opacity = 1.0
         self.update()
 
+    def _load_pixmap_from_path(self, fpath: str) -> None:
+        """Load and display a pixmap directly from a resolved file path.
+
+        Updates ``_src``, stops any running animation, scales the image,
+        and starts the fade-in.  Avoids a second :meth:`_resolve_src`
+        pass when the caller already holds the concrete path (e.g. the
+        async fetch callback).
+        """
+        self._src = fpath
+        self._anim.stop()
+        raw = QPixmap(fpath)
+        self._incoming_pixmap = raw.scaled(
+            QSize(*self._size),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._opacity = 0.0
+        self._anim.start()
+
     def set_thumbnail(self, name: Path | str) -> None:
         """Set the thumbnail image for the button."""
-        self._src = self._resolve_src(name)
-        self._anim.stop()
-        if self._src and Path(self._src).exists():
-            raw = QPixmap(str(self._src))
-            self._incoming_pixmap = raw.scaled(
-                QSize(*self._size),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self._opacity = 0.0
-            self._anim.start()
+        resolved = self._resolve_src(name)
+        if resolved and Path(resolved).exists():
+            self._load_pixmap_from_path(str(resolved))
         else:
+            self._src = name
+            self._anim.stop()
+            self._maybe_schedule_async_fetch(name)
             self._incoming_pixmap = None
             self._opacity = 1.0
             self.setIcon(self._placeholder_icon)

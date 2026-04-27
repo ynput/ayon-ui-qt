@@ -22,7 +22,7 @@ Layout
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from qtpy import QtCore, QtGui
 from qtpy.QtCore import QMimeData, QPoint, QRectF, QSize, Qt, Signal  # type: ignore
@@ -50,6 +50,7 @@ from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
 
 
+from ..image_cache import ImageCache
 from ..style import get_ayon_style, get_ayon_style_data
 from ..variants import QFrameVariants
 from .container import AYContainer
@@ -73,13 +74,21 @@ class _CardBody(AYEntityThumbnail):
     is_loading is True.
     """
 
-    def __init__(self, width=200, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        width: int = 200,
+        async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(
             variant=AYEntityThumbnail.Variants.Entity_Card,
             size=(width, width / IMG_RATIO),
             fade_duration=250,
             placeholder_icon="image",
             placeholder_scale=0.20,
+            async_file_cacher=async_file_cacher,
             parent=parent,
         )
 
@@ -380,6 +389,9 @@ class AYEntityCard(AYContainer):
         is_dragging: bool = False,
         is_draggable: bool = False,
         placeholder_icon: str = "image",
+        async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(
@@ -417,6 +429,9 @@ class AYEntityCard(AYContainer):
         self._is_hover = is_hover
         self._is_dragging = is_dragging
         self._is_draggable = is_draggable
+        self._async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = async_file_cacher
         self._drag_start_pos: QPoint | None = None
 
         # ---- build UI ----
@@ -429,6 +444,7 @@ class AYEntityCard(AYContainer):
         self._card_body = _CardBody(
             parent=self,
             width=width - (border_width * 2),
+            async_file_cacher=async_file_cacher,
         )
         self._card_body.set_placeholder_icon(placeholder_icon)
         body_size = self._card_body.size()
@@ -724,6 +740,40 @@ class AYEntityCard(AYContainer):
     def placeholder_icon(self, value: str) -> None:
         self._card_body.set_placeholder_icon(value)
         self._rebuild_thumbnail()
+
+    @property
+    def async_file_cacher(
+        self,
+    ) -> Callable[[str, Callable[[str], None]], None] | None:
+        """Non-blocking thumbnail fetcher used by the card body.
+
+        When set, the card body's :class:`AYEntityThumbnail` will call
+        this callable with ``(key, on_loaded)`` whenever a thumbnail
+        cache miss is detected.  The callable should schedule the
+        download on a background thread and call ``on_loaded(file_path)``
+        on the Qt main thread when complete.
+
+        Setting this property also updates the underlying
+        :class:`_CardBody` so that any subsequent :meth:`set_thumbnail`
+        calls benefit from the new fetcher immediately.
+        """
+        return self._async_file_cacher
+
+    @async_file_cacher.setter
+    def async_file_cacher(
+        self,
+        value: Callable[[str, Callable[[str], None]], None] | None,
+    ) -> None:
+        self._async_file_cacher = value
+        # Forward to the card body so it can self-fetch on cache miss.
+        self._card_body._async_file_cacher = value
+        # Trigger a fetch only when the current image is not yet available.
+        if value and self._image_src:
+            ic = ImageCache.get_instance()
+            already_cached = ic.has(str(self._image_src))
+            on_disk = Path(self._image_src).exists()
+            if not already_cached and not on_disk:
+                self._card_body.set_thumbnail(self._image_src)
 
     # ------------------------------------------------------------------
     # Paint
