@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from qtpy import QtWidgets
-from qtpy.QtCore import QRect, QSize, Qt
+from qtpy.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer
 from qtpy.QtGui import (
     QBrush,
     QColor,
@@ -9,10 +9,12 @@ from qtpy.QtGui import (
     QFontInfo,
     QFontMetrics,
     QIcon,
+    QMouseEvent,
     QPainter,
     QPaintEvent,
     QPalette,
     QPen,
+    QPixmap,
 )
 
 try:
@@ -44,6 +46,7 @@ class AYLabel(QtWidgets.QLabel):
         variant: Variants = Variants.Default,
         contrast_color: QColor | None = None,
         elide_mode: Qt.TextElideMode = Qt.TextElideMode.ElideNone,
+        copy_text: bool = False,
         **kwargs,
     ):
         # style params
@@ -76,6 +79,17 @@ class AYLabel(QtWidgets.QLabel):
         )
         self._contrast_adapted = None
 
+        # copy-text feature
+        self._copy_text = copy_text
+        self._copy_icon_hovered = False
+        self._copy_confirmed = False
+        self._copy_done_opacity: float = 1.0
+        self._copy_pix_normal: QPixmap | None = None
+        self._copy_pix_hover: QPixmap | None = None
+        self._copy_pix_done: QPixmap | None = None
+        self._copy_confirm_timer: QTimer | None = None
+        self._copy_fade_timer: QTimer | None = None
+
         super().__init__(*args, **kwargs)
         self._style = get_ayon_style()
         self._style_data = self._style.model.get_styles(
@@ -105,6 +119,17 @@ class AYLabel(QtWidgets.QLabel):
         self._text = self.text()  # call before setting icon to preserve text
         self.setToolTip(tool_tip)
 
+        if self._copy_text:
+            self.setMouseTracking(True)
+            self._copy_confirm_timer = QTimer(self)
+            self._copy_confirm_timer.setSingleShot(True)
+            self._copy_confirm_timer.timeout.connect(
+                self._on_copy_confirm_timeout
+            )
+            self._copy_fade_timer = QTimer(self)
+            self._copy_fade_timer.setInterval(16)
+            self._copy_fade_timer.timeout.connect(self._on_copy_fade_tick)
+
         self.set_icon()
 
     @property
@@ -117,6 +142,9 @@ class AYLabel(QtWidgets.QLabel):
         self._configure_palette()
         if self._icon and not self._icon_color:
             self.set_icon()  # update icon color from palette
+        self._copy_pix_normal = self._copy_pix_hover = self._copy_pix_done = (
+            None
+        )
         self.update()
 
     def set_font(self, font: QFont) -> None:
@@ -447,6 +475,116 @@ class AYLabel(QtWidgets.QLabel):
         )
         p.restore()
 
+    _COPY_ICON_SIZE = 16
+    _COPY_ICON_PADDING = 0
+
+    def _get_copy_icon_rect(self) -> QRect:
+        """Return the bounding rect for the copy icon overlay.
+
+        Returns:
+            Rect positioned at the right edge of the content area,
+            vertically centered.
+        """
+        sz = self._COPY_ICON_SIZE
+        rect = self.contentsRect()
+        x = rect.right() - sz - self._COPY_ICON_PADDING
+        y = rect.top() + (rect.height() - sz) // 2
+        return QRect(x, y, sz, sz)
+
+    def _make_copy_pixmap(self, icon_name: str, color_str: str) -> QPixmap:
+        """Render a single copy-feature icon onto a transparent pixmap.
+
+        Args:
+            icon_name: Material symbol name.
+            color_str: CSS colour string passed to ``get_icon``.
+
+        Returns:
+            A ``QPixmap`` of size ``_COPY_ICON_SIZE × _COPY_ICON_SIZE``.
+        """
+        sz = self._COPY_ICON_SIZE
+        pxm = QPixmap(sz, sz)
+        pxm.fill(QColor(0, 0, 0, 200))
+        icon_pxm: QPixmap = get_icon(icon_name, color=color_str).pixmap(
+            QSize(sz, sz)
+        )
+        p = QPainter(pxm)
+        p.drawPixmap(QPoint(0, 0), icon_pxm)
+        p.end()
+        return pxm
+
+    def _build_copy_pixmaps(self) -> None:
+        """(Re-)build cached copy-icon pixmaps for normal, hover and done
+        states."""
+        fg = self.palette().color(self.foregroundRole())
+        normal_color = QColor(fg)
+        normal_color.setAlphaF(0.75)
+        self._copy_pix_normal = self._make_copy_pixmap(
+            "content_copy",
+            normal_color.name(QColor.NameFormat.HexArgb),
+        )
+        self._copy_pix_hover = self._make_copy_pixmap(
+            "content_copy", fg.name()
+        )
+        self._copy_pix_done = self._make_copy_pixmap("check", fg.name())
+
+    _COPY_FADE_DURATION_MS: int = 500
+
+    def _on_copy_confirm_timeout(self) -> None:
+        """Begin fading out the checkmark icon over _COPY_FADE_DURATION_MS."""
+        self._copy_done_opacity = 1.0
+        assert self._copy_fade_timer is not None
+        self._copy_fade_timer.start()
+
+    def _on_copy_fade_tick(self) -> None:
+        """Decrement the done-icon opacity and repaint each frame."""
+        step = 16.0 / self._COPY_FADE_DURATION_MS
+        self._copy_done_opacity = max(0.0, self._copy_done_opacity - step)
+        self.update()
+        if self._copy_done_opacity <= 0.0:
+            assert self._copy_fade_timer is not None
+            self._copy_fade_timer.stop()
+            self._copy_confirmed = False
+
+    def _trigger_copy_confirmed(self) -> None:
+        """Copy the label text to clipboard and start the confirmation
+        animation."""
+        QtWidgets.QApplication.clipboard().setText(self._text)
+        assert self._copy_fade_timer is not None
+        assert self._copy_confirm_timer is not None
+        # Reset any in-progress fade and restart the hold + fade sequence.
+        self._copy_fade_timer.stop()
+        self._copy_done_opacity = 1.0
+        self._copy_confirmed = True
+        self._copy_confirm_timer.start(500)
+        self.update()
+
+    def _paint_copy_icon(self) -> None:
+        """Draw the copy-to-clipboard icon on the right side of the label.
+
+        Only called when the mouse is over the widget and ``copy_text``
+        is True. Shows a fading checkmark briefly after the user clicks.
+        """
+        if self._copy_pix_normal is None:
+            self._build_copy_pixmaps()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self._copy_confirmed:
+            p.setOpacity(self._copy_done_opacity)
+            pix = self._copy_pix_done
+        else:
+            pix = (
+                self._copy_pix_hover
+                if self._copy_icon_hovered
+                else self._copy_pix_normal
+            )
+        self._style.drawItemPixmap(
+            p,
+            self._get_copy_icon_rect(),
+            Qt.AlignmentFlag.AlignCenter,
+            pix,  # type: ignore[arg-type]
+        )
+        p.end()
+
     def _paint_background(self, state: str) -> None:
         """Draw background if specified by style."""
         bg_color = self._style_data[state].get("background-color")
@@ -470,6 +608,36 @@ class AYLabel(QtWidgets.QLabel):
 
     # QLabel overrides ----------------------------------------------------
 
+    def enterEvent(self, event: QEvent) -> None:
+        super().enterEvent(event)
+        if self._copy_text:
+            self.update()
+
+    def leaveEvent(self, event: QEvent) -> None:
+        super().leaveEvent(event)
+        if self._copy_text:
+            self._copy_icon_hovered = False
+            self.update()
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        super().mouseMoveEvent(event)
+        if not self._copy_text:
+            return
+        rect = self._get_copy_icon_rect()
+        hovered = rect.contains(event.pos())
+        if hovered != self._copy_icon_hovered:
+            self._copy_icon_hovered = hovered
+            self.update()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if (
+            self._copy_text
+            and event.button() == Qt.MouseButton.LeftButton
+            and self._get_copy_icon_rect().contains(event.pos())
+        ):
+            self._trigger_copy_confirmed()
+        super().mousePressEvent(event)
+
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         """Override to support icon + text rendering."""
         state = "disabled" if not self.isEnabled() else "base"
@@ -491,6 +659,13 @@ class AYLabel(QtWidgets.QLabel):
                 super().paintEvent(arg__1)
             else:
                 self._paint_text_only(state)
+
+        if (
+            self._copy_text
+            and self.isEnabled()
+            and (self.underMouse() or self._copy_confirmed)
+        ):
+            self._paint_copy_icon()
 
     def sizeHint(self) -> QSize:
         """Compute a size hint driven by QLabel style data from the style JSON.
@@ -645,7 +820,6 @@ class AYLabel(QtWidgets.QLabel):
 
 
 if __name__ == "__main__":
-    import json
     from ayon_ui_qt.tester import Style, test
 
     from .container import AYContainer
@@ -668,7 +842,7 @@ if __name__ == "__main__":
                 QtWidgets.QLabel("Enabled:" if enabled else "Disabled:"),
                 stretch=0,
             )
-            l1 = AYLabel("Text Only", tool_tip="Text only")
+            l1 = AYLabel("Text Only", tool_tip="Text only", copy_text=True)
             l2 = AYLabel(
                 icon="indeterminate_question_box", tool_tip="Icon only"
             )
@@ -684,6 +858,7 @@ if __name__ == "__main__":
                 icon="favorite",
                 tool_tip="Text & icon with default color and 6px margin",
                 rel_text_size=4,
+                copy_text=True,
             )
             l4.setMargin(6)
             l5 = AYLabel(
