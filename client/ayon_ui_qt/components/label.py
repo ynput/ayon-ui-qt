@@ -473,7 +473,11 @@ class AYLabel(QtWidgets.QLabel):
     def paintEvent(self, arg__1: QPaintEvent) -> None:
         """Override to support icon + text rendering."""
         state = "disabled" if not self.isEnabled() else "base"
-        if "hover" in self._style_data and self.underMouse():
+        if (
+            state != "disabled"
+            and "hover" in self._style_data
+            and self.underMouse()
+        ):
             state = "hover"
 
         # Filled-background rendering (driven by JSON properties)
@@ -568,9 +572,7 @@ class AYLabel(QtWidgets.QLabel):
         if self.wordWrap() and self._text and not self._icon:
             available_w = self.width() - 2 * pad_h
             if available_w > 0:
-                flags = (
-                    int(Qt.TextFlag.TextWordWrap) | int(self.alignment())
-                )
+                flags = int(Qt.TextFlag.TextWordWrap) | int(self.alignment())
                 wrap_rect = fm.boundingRect(
                     QRect(0, 0, available_w, 0),
                     flags,
