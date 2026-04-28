@@ -8,7 +8,13 @@ from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 from ..utils import clear_layout
 from ..variants import QFrameVariants
 from .frame import AYFrame
-from .layouts import AYFlowLayout, AYGridLayout, AYHBoxLayout, AYVBoxLayout
+from .layouts import (
+    AYFlowLayout,
+    AYGridLayout,
+    AYHBoxLayout,
+    AYVBoxLayout,
+    AYFormLayout,
+)
 
 
 class AYContainer(AYFrame):
@@ -17,6 +23,7 @@ class AYContainer(AYFrame):
         VBox = 1
         Grid = 2
         Flow = 3
+        Form = 4
 
     Variants = QFrameVariants
 
@@ -25,10 +32,10 @@ class AYContainer(AYFrame):
         *args,
         layout: Layout = Layout.HBox,
         variant: Variants = Variants.Default,
-        margin=0,
-        layout_spacing=0,
-        layout_margin=0,
-        bg_tint="",
+        margin: int = 0,
+        layout_spacing: int | tuple[int, int] = 0,
+        layout_margin: int = 0,
+        bg_tint: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -40,19 +47,30 @@ class AYContainer(AYFrame):
         )
         self._variant_str: str = variant.value
         if layout == AYContainer.Layout.HBox:
+            assert isinstance(layout_spacing, int)
             self._layout = AYHBoxLayout(
                 self, spacing=layout_spacing, margin=layout_margin
             )
         elif layout == AYContainer.Layout.VBox:
+            assert isinstance(layout_spacing, int)
             self._layout = AYVBoxLayout(
                 self, spacing=layout_spacing, margin=layout_margin
             )
         elif layout == AYContainer.Layout.Grid:
+            assert isinstance(layout_spacing, int)
             self._layout = AYGridLayout(
                 self, spacing=layout_spacing, margin=layout_margin
             )
         elif layout == AYContainer.Layout.Flow:
+            assert isinstance(layout_spacing, int)
             self._layout = AYFlowLayout(
+                self, spacing=layout_spacing, margin=layout_margin
+            )
+        elif layout == AYContainer.Layout.Form:
+            assert (
+                isinstance(layout_spacing, tuple) and len(layout_spacing) == 2
+            )
+            self._layout = AYFormLayout(
                 self, spacing=layout_spacing, margin=layout_margin
             )
         else:
@@ -99,6 +117,24 @@ class AYContainer(AYFrame):
         elif isinstance(self._layout, (AYGridLayout, AYFlowLayout)):
             raise ValueError(f"Not supported by this layout : {self._layout}")
 
+    def add_row(self, *args, **kwargs):
+        if isinstance(self._layout, AYFormLayout):
+            self._layout.addRow(*args, **kwargs)
+        else:
+            raise ValueError(f"Not supported by this layout : {self._layout}")
+
+    def insert_row(self, index: int, *args, **kwargs):
+        if isinstance(self._layout, AYFormLayout):
+            self._layout.insertRow(index, *args, **kwargs)
+        else:
+            raise ValueError(f"Not supported by this layout : {self._layout}")
+
+    def set_label_alignment(self, alignment: Qt.AlignmentFlag):
+        if isinstance(self._layout, AYFormLayout):
+            self._layout.setLabelAlignment(alignment)
+        else:
+            raise ValueError(f"Not supported by this layout : {self._layout}")
+
     def count(self) -> int:
         return self._layout.count()
 
@@ -121,6 +157,7 @@ class AYContainer(AYFrame):
 
 if __name__ == "__main__":
     from ayon_ui_qt.tester import Style, test
+    from ayon_ui_qt.components.label import AYLabel
 
     def build():
         w = AYContainer(
@@ -145,11 +182,17 @@ if __name__ == "__main__":
         )
         w.add_widget(
             AYContainer(
-                layout=AYContainer.Layout.VBox,
+                layout=AYContainer.Layout.Form,
                 variant=AYContainer.Variants.High,
                 layout_margin=10,
+                layout_spacing=(32, 10),
             )
         )
+        last_widget = w._layout.itemAt(2).widget()  # type: ignore
+        assert isinstance(last_widget, AYContainer)
+        last_widget.set_label_alignment(Qt.AlignRight)
+        last_widget.add_row(AYLabel("Label:", dim=True), AYLabel("Value"))
+        last_widget.add_row(AYLabel("Another Label:", dim=True), AYLabel("Another Value"))
         w.setMinimumWidth(200)
         w.setMinimumHeight(400)
         return w
