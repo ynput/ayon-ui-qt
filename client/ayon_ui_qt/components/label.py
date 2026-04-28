@@ -431,12 +431,15 @@ class AYLabel(QtWidgets.QLabel):
                     self.foregroundRole(),
                     t_color,
                 )
+        flags = int(self.alignment())
+        if self.wordWrap():
+            flags |= int(Qt.TextFlag.TextWordWrap)
         p.save()
         p.setOpacity(self._style_data[state].get("opacity", 1.0))
         self._style.drawItemText(
             p,
             self.contentsRect().normalized(),
-            self.alignment(),
+            flags,
             pal,
             self.isEnabled(),
             self._display_text(),
@@ -493,6 +496,10 @@ class AYLabel(QtWidgets.QLabel):
         For variants with an explicit ``padding`` list (e.g. entity-label),
         the size is padded accordingly.
         When an icon is present the icon dimensions are added.
+        When ``wordWrap`` is True and the widget already has a non-zero width,
+        the height is recomputed from the wrapped text bounds at that width;
+        otherwise the natural single-line size is returned and the layout
+        refines the height via :meth:`heightForWidth`.
         In all other cases the base ``QLabel.sizeHint()`` is returned.
 
         Returns:
@@ -553,10 +560,72 @@ class AYLabel(QtWidgets.QLabel):
             content_w = text_w
             content_h = text_h
 
+        # --- word-wrap sizing -------------------------------------------
+        # When word-wrap is on and the widget already occupies a real width,
+        # recompute the height for that width so the hint stays accurate after
+        # the first layout pass.  Layouts will also call heightForWidth() for
+        # further refinement.
+        if self.wordWrap() and self._text and not self._icon:
+            available_w = self.width() - 2 * pad_h
+            if available_w > 0:
+                flags = (
+                    int(Qt.TextFlag.TextWordWrap) | int(self.alignment())
+                )
+                wrap_rect = fm.boundingRect(
+                    QRect(0, 0, available_w, 0),
+                    flags,
+                    self._text,
+                )
+                return QSize(
+                    content_w + 2 * pad_h,
+                    wrap_rect.height() + 2 * pad_v,
+                )
+
         return QSize(
             content_w + 2 * pad_h,
             content_h + 2 * pad_v,
         )
+
+    def hasHeightForWidth(self) -> bool:
+        """Return True when word-wrap is active so layouts call heightForWidth.
+
+        Returns:
+            True if the label uses word-wrap and has text without an icon.
+        """
+        if self.wordWrap() and self._text and not self._icon:
+            return True
+        return super().hasHeightForWidth()
+
+    def heightForWidth(self, width: int) -> int:
+        """Compute the height required to render the text wrapped to *width*.
+
+        Only meaningful when ``wordWrap`` is True and there is no icon;
+        delegates to the base class otherwise.
+
+        Args:
+            width: Available width in pixels.
+
+        Returns:
+            Required height in pixels.
+        """
+        if not self.wordWrap() or not self._text or self._icon:
+            return super().heightForWidth(width)
+
+        assert isinstance(self._style_font_metrics, QFontMetrics)
+        fm = self._style_font_metrics
+
+        explicit_padding = self._style_data["base"].get("padding", [0, 0])
+        pad_h = int(explicit_padding[0])
+        pad_v = int(explicit_padding[1])
+
+        available_w = max(1, width - 2 * pad_h)
+        flags = int(Qt.TextFlag.TextWordWrap) | int(self.alignment())
+        wrap_rect = fm.boundingRect(
+            QRect(0, 0, available_w, 0),
+            flags,
+            self._text,
+        )
+        return wrap_rect.height() + 2 * pad_v
 
     def setText(self, arg__1: str) -> None:
         super().setText(arg__1)
