@@ -2,6 +2,8 @@ name: Deploy MkDocs
 
 on:
   push:
+    branches:
+      - "29-add-mk-docs"
     tags:
       - "*"
   workflow_dispatch:
