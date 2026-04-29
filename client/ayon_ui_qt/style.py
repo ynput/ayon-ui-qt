@@ -848,7 +848,6 @@ class ButtonDrawer:
 
         # Draw icon if present
         if option.icon:  # type: ignore
-            # icon_color = QColor(getattr(widget, "_icon_color", text_color))
             if option.text and not style.get("ignore-text", False):  # type: ignore
                 icon_size = option.iconSize  # type: ignore
                 icon_w = icon_size.width()
@@ -931,7 +930,7 @@ class ButtonDrawer:
                         Qt.AlignmentFlag.AlignCenter,
                         option.text,  # type: ignore
                     )
-            elif variant != "thumbnail":
+            elif variant not in ("thumbnail", "entity-card"):
                 # Icon only
                 mode = QtGui.QIcon.Mode.Normal
                 if not (
