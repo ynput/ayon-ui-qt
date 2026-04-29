@@ -297,6 +297,14 @@ class AYCardView(QAbstractItemView):
         if conn_dc is not None:
             self._model_connections.append((model, conn_dc))
 
+        conn_layout = model.layoutChanged.connect(self._on_layout_changed)
+        if conn_layout is not None:
+            self._model_connections.append((model, conn_layout))
+
+        conn_removed = model.rowsRemoved.connect(self._on_rows_removed)
+        if conn_removed is not None:
+            self._model_connections.append((model, conn_removed))
+
         source: Any = model
         if isinstance(model, QSortFilterProxyModel):
             source = model.sourceModel()
@@ -330,6 +338,42 @@ class AYCardView(QAbstractItemView):
         roles: list[int],
     ) -> None:
         self.viewport().update()
+
+    def _on_layout_changed(self) -> None:
+        """Handle layoutChanged emitted by the proxy on filter/sort changes.
+
+        Closes all currently-open persistent editors whose
+        ``QPersistentModelIndex`` is still valid (i.e. rows that survived
+        the filter but may have been renumbered), then hides any orphaned
+        ``AYEntityCard`` widgets whose PMIs became invalid (rows that were
+        filtered out — ``closePersistentEditor`` is a no-op for invalid
+        indices, so the widgets must be hidden manually).  Finally clears
+        the tracking set and schedules a full layout rebuild so that only
+        the rows that pass the new filter get fresh editors.
+        """
+        for pmi in self._active_editor_pmis:
+            if pmi.isValid():
+                self.closePersistentEditor(QModelIndex(pmi))  # type: ignore
+        for child in self.viewport().children():
+            if isinstance(child, AYEntityCard):
+                child.hide()
+        self._active_editor_pmis.clear()
+        self._schedule_layout_update()
+
+    def _on_rows_removed(
+        self,
+        parent: QModelIndex,
+        first: int,
+        last: int,
+    ) -> None:
+        """Schedule a layout update when rows are removed from the model.
+
+        Args:
+            parent: Parent index of the removed rows.
+            first: First removed row index.
+            last: Last removed row index (inclusive).
+        """
+        self._schedule_layout_update()
 
     def _on_scroll(self) -> None:
         self._reposition_visible_editors()
