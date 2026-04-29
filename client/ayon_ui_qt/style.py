@@ -1143,16 +1143,18 @@ class FrameDrawer:
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
         variant = getattr(w, "_variant_str", "")
-        is_view_frame = next(
-            (
-                True
-                for child in w.children()
-                if isinstance(child, QAbstractItemView)
-            ),
-            False,
-        )
-        if is_view_frame or isinstance(w, QListView):
-            variant = "item-view"
+        # plp: I can't remember why I did this, but it overrides incorrectly
+        # some UI, so I am disabling it until I remember why it was here !
+        # is_view_frame = next(
+        #     (
+        #         True
+        #         for child in w.children()
+        #         if isinstance(child, QAbstractItemView)
+        #     ),
+        #     False,
+        # )
+        # if is_view_frame or isinstance(w, QListView):
+        #     variant = "item-view"
         style = self.model.get_style("QFrame", variant)
         style.set_context(w)
 
