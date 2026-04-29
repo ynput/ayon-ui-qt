@@ -231,7 +231,8 @@ Variants are defined in 2 files:
   - This file contains enums reflecting all available variants from `ayon_style.json`.
   - The enums can be automatically updated by running `variants.py`. The code
   in `__main__` will read `ayon_style.json` and update the enums if need be. It will also print a summary of the changes.
-> [!IMPORTANT]  ALWAYS run `variants.py` after modifying `ayon_style.json` to ensure the enums are up to date.
+> [!IMPORTANT]
+> Always run `variants.py` after modifying `ayon_style.json` to ensure the enums are up to date.
 
 ## License
 
