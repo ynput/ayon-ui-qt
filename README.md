@@ -1,7 +1,12 @@
 # AYON UI Qt
 
-Qt widget library addon for AYON. It provides AYON-styled widgets,
-data models, and utility components for building consistent desktop tools.
+`ayon-ui-qt` is Qt widget library addon for AYON, designed to override Qt stylesheets of host
+applications and preserve our UIs appearance.
+
+It provides AYON-styled widgets, data models, and utility components for
+building consistent desktop tools.
+
+Most widgets use variants that can be defined and tweaked in `ayon_style.json`.
 
 ## Overview
 
