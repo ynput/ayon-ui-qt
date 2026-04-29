@@ -136,30 +136,58 @@ def show_images(*images: tuple[str, str, str]) -> None:
 
     from ayon_ui_qt.style import get_ayon_style
     from ayon_ui_qt.components.container import AYContainer
+    from ayon_ui_qt.components.line_edit import AYLineEdit
     from ayon_ui_qt.components.scroll_area import AYScrollArea
 
     app = QApplication.instance() or QApplication([])
     app.setStyle(get_ayon_style())
 
-    window = AYScrollArea()
+    window = AYContainer(
+        layout=AYContainer.Layout.VBox,
+        variant=AYContainer.Variants.Low,
+        layout_margin=10,
+        layout_spacing=10,
+    )
     window.setWindowTitle("Image Comparison")
-    window.setWidgetResizable(True)
+    window_lyt = window._layout
+
+    search_field = AYLineEdit(
+        placeholder="Search images…",
+        variant=AYLineEdit.Variants.Search_Field,
+    )
+    search_field.setFixedHeight(search_field.sizeHint().height())
+    window_lyt.addWidget(search_field)
+
+    scroll = AYScrollArea()
+    scroll.setWidgetResizable(True)
+    window_lyt.addWidget(scroll)
 
     root = AYContainer(
         variant=AYContainer.Variants.Low,
         layout=AYContainer.Layout.VBox,
-        layout_margin=10,
+        layout_margin=0,
         layout_spacing=10,
     )
 
-    for args in images:
-        root.add_widget(_make_image_card(*args))
+    cards: list[tuple[str, QWidget]] = []
+    for name, *rest in images:
+        card = _make_image_card(name, *rest)
+        root.add_widget(card)
+        cards.append((name, card))
 
     root._layout.addStretch(1)
 
-    window.setWidget(root)
+    scroll.setWidget(root)
+
+    def _filter_cards(text: str) -> None:
+        query = text.strip().lower()
+        for card_name, card in cards:
+            card.setVisible(not query or query in card_name.lower())
+
+    search_field.textChanged.connect(_filter_cards)
+
     window.show()
-    window.resize(root.sizeHint() + QSize(20, 0))
+    window.resize(root.sizeHint() + QSize(20, 40))
     app.exec()
 
 
