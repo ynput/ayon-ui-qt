@@ -215,6 +215,24 @@ ayon-ui-qt/
 
 Detailed visual testing workflow is documented in `TESTING.md`.
 
+## Variants management
+
+The concept of variants is borrowed from AYON's REACT library. A variant is a
+version of a component with a different appearance. They act like preset
+stylesheets.
+
+Variants are defined in 2 files:
+
+- `ayon_style.json` - defines the styles for each variant
+  - This file contains:
+    - global settings like the base font or the style's palette.
+    - Per base class variants to modify the appearance of the component.
+- `variants.py` - defines the variants and their properties
+  - This file contains enums reflecting all available variants from `ayon_style.json`.
+  - The enums can be automatically updated by running `variants.py`. The code
+  in `__main__` will read `ayon_style.json` and update the enums if need be. It will also print a summary of the changes.
+> [!IMPORTANT]  ALWAYS run `variants.py` after modifying `ayon_style.json` to ensure the enums are up to date.
+
 ## License
 
 Apache-2.0
