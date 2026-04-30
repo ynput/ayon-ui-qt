@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QStyleOptionFrame
-from qtpy.QtCore import Qt, QRectF, QSize
-from qtpy.QtGui import QPainter, QPaintEvent, QColor, QPalette, QPen, QBrush
+from qtpy.QtCore import QRectF, QSize, Qt
+from qtpy.QtGui import QBrush, QColor, QPainter, QPaintEvent, QPalette, QPen
 from qtpy.QtWidgets import (
     QLineEdit,
+    QStyleOptionFrame,
     QWidget,
 )
 
@@ -233,8 +233,8 @@ class AYLineEdit(QLineEdit):
 
 
 if __name__ == "__main__":
+    from ..tester import Style, test
     from .container import AYContainer
-    from ..tester import test, Style
 
     def _build() -> QWidget:
         container = AYContainer(

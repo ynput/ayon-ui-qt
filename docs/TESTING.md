@@ -36,9 +36,9 @@ When tests fail due to pixel differences, open the visual comparison viewer to i
 
 ```bash
 pytest --show-images
-```
+``` 
 
-![Visual comparison viewer](docs/imgs/show-images-ui.png)
+![Visual comparison viewer](./img/show-images-ui.png)
 
 pytest is configured in `pyproject.toml`:
 

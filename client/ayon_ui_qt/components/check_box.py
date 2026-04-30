@@ -100,7 +100,7 @@ class AYCheckBox(QCheckBox):
 
 
 if __name__ == "__main__":
-    from ..tester import test, Style
+    from ..tester import Style, test
     from .container import AYContainer
 
     def _build():
