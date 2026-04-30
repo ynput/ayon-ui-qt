@@ -9,7 +9,7 @@ from ..utils import clear_layout
 
 
 class AYHBoxLayout(QtWidgets.QHBoxLayout):
-    def __init__(self, *args, margin=4, spacing=4):
+    def __init__(self, *args, margin: int = 4, spacing: int = 4):
         super().__init__(*args)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
@@ -19,7 +19,7 @@ class AYHBoxLayout(QtWidgets.QHBoxLayout):
 
 
 class AYVBoxLayout(QtWidgets.QVBoxLayout):
-    def __init__(self, *args, margin=4, spacing=4):
+    def __init__(self, *args, margin: int = 4, spacing: int = 4):
         super().__init__(*args)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
@@ -29,7 +29,7 @@ class AYVBoxLayout(QtWidgets.QVBoxLayout):
 
 
 class AYGridLayout(QtWidgets.QGridLayout):
-    def __init__(self, *args, margin=4, spacing=4):
+    def __init__(self, *args, margin: int = 4, spacing: int = 4):
         super().__init__(*args)
         self.setContentsMargins(margin, margin, margin, margin)
         self.setSpacing(spacing)
@@ -46,7 +46,7 @@ class AYFlowLayout(QtWidgets.QLayout):
     paragraph.
     """
 
-    def __init__(self, parent=None, margin=4, spacing=4):
+    def __init__(self, parent=None, margin: int = 4, spacing: int = 4):
         super().__init__(parent)
         self._item_list = []
         self._h_spacing = spacing
@@ -189,6 +189,22 @@ class AYFlowLayout(QtWidgets.QLayout):
         if parent.isWidgetType():
             return parent.style().pixelMetric(pm, None, parent)
         return parent.spacing()
+
+    def clear(self):
+        clear_layout(self)
+
+
+class AYFormLayout(QtWidgets.QFormLayout):
+    def __init__(
+        self,
+        *args,
+        margin: int = 4,
+        spacing: tuple[int, int] = (4, 4),
+    ):
+        super().__init__(*args)
+        self.setContentsMargins(margin, margin, margin, margin)
+        self.setHorizontalSpacing(spacing[0])
+        self.setVerticalSpacing(spacing[1])
 
     def clear(self):
         clear_layout(self)

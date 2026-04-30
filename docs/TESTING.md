@@ -175,3 +175,17 @@ The viewer is launched in a subprocess without `QT_QPA_PLATFORM=offscreen` so it
 - An **Accept test** button — copies the obtained image over the reference in `tests/test_visual/`, effectively accepting the new appearance as the new baseline. The button is disabled after clicking to prevent accidental double-acceptance.
 
 `--show-images` has no effect when all tests pass.
+
+## Looking at all reference images (`--show-refs`)
+
+You can also view all reference images without running tests:
+
+```bash
+uv run tests/visual_utils.py --show-refs
+```
+
+![show-refs viewer](docs/imgs/show-refs-ui.png)
+
+This is useful for verifying that the reference images are correct.
+
+The viewer is the same as the one used with `--show-images`.

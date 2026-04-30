@@ -218,6 +218,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-AGENTS.md
 # AYON addon build
 dist/

@@ -5,27 +5,27 @@ Mirrors the EntityCard component from https://components.ayon.dev.
 
 Layout
 ------
-  ┌─── header row ───────────────────────────────────────────┐
-  │  [project]  [path/breadcrumb]          [entity name bold] │
-  └───────────────────────────────────────────────────────────┘
-  ┌─── card body (thumbnail + overlay) ──────────────────────┐
+  ┌─── header row ─────────────────────────────────────────────┐
+  │  [project]  [path/breadcrumb]          [entity name bold]  │
+  └────────────────────────────────────────────────────────────┘
+  ┌─── card body (thumbnail + overlay) ────────────────────────┐
   │  [background image or icon placeholder]                    │
   │                                                            │
-  │  ┄ overlay top row ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
+  │  ┄ overlay top row ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄    │
   │  [title chip (icon + text)]              [play chip]       │
   │                                                            │
-  │  ┄ overlay bottom row ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄  │
-  │  [users] [priority] [versions]     [status icon + name]   │
-  └───────────────────────────────────────────────────────────┘
+  │  ┄ overlay bottom row ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄    │
+  │  [users] [priority] [versions]            [status icon]    │
+  └────────────────────────────────────────────────────────────┘
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from qtpy import QtCore, QtGui
-from qtpy.QtCore import QMimeData, QPoint, Qt, Signal  # type: ignore
+from qtpy.QtCore import QMimeData, QPoint, QRectF, QSize, Qt, Signal  # type: ignore
 from qtpy.QtGui import (
     QBrush,
     QColor,
@@ -33,6 +33,7 @@ from qtpy.QtGui import (
     QDrag,
     QPainter,
     QPaintEvent,
+    QPen,
     QPixmap,
 )
 from qtpy.QtWidgets import (
@@ -49,6 +50,7 @@ from ayon_ui_qt.components.entity_thumbnail import AYEntityThumbnail
 from ayon_ui_qt.components.label import AYLabel
 
 
+from ..image_cache import ImageCache
 from ..style import get_ayon_style, get_ayon_style_data
 from ..variants import QFrameVariants
 from .container import AYContainer
@@ -72,13 +74,21 @@ class _CardBody(AYEntityThumbnail):
     is_loading is True.
     """
 
-    def __init__(self, width=200, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        width: int = 200,
+        async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(
             variant=AYEntityThumbnail.Variants.Entity_Card,
             size=(width, width / IMG_RATIO),
             fade_duration=250,
             placeholder_icon="image",
             placeholder_scale=0.20,
+            async_file_cacher=async_file_cacher,
             parent=parent,
         )
 
@@ -128,12 +138,15 @@ class _CardBody(AYEntityThumbnail):
 class _CardOverlay(QWidget):
     """Transparent overlay carrying the top-row and bottom-row chip strips."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, parent: QWidget | None = None, size: QSize | None = None
+    ) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
         )
+        self.set_width(size)
         self.setMouseTracking(True)
 
         outer = QVBoxLayout(self)
@@ -194,7 +207,9 @@ class _CardOverlay(QWidget):
         )
         self._version_chip.hide()
         self._status_chip = AYLabel(
-            self, icon_size=16, variant=AYLabel.Variants.Entity_Label
+            self,
+            icon_size=16,
+            variant=AYLabel.Variants.Entity_Label_Filled,
         )
         self._status_chip.hide()
 
@@ -209,6 +224,10 @@ class _CardOverlay(QWidget):
     # ------------------------------------------------------------------
     # Public update methods
     # ------------------------------------------------------------------
+
+    def set_width(self, size: QSize | None) -> None:
+        if size:
+            self.setFixedSize(size)
 
     def set_title(
         self,
@@ -369,6 +388,10 @@ class AYEntityCard(AYContainer):
         is_hover: bool = False,
         is_dragging: bool = False,
         is_draggable: bool = False,
+        placeholder_icon: str = "image",
+        async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(
@@ -406,33 +429,48 @@ class AYEntityCard(AYContainer):
         self._is_hover = is_hover
         self._is_dragging = is_dragging
         self._is_draggable = is_draggable
+        self._async_file_cacher: (
+            Callable[[str, Callable[[str], None]], None] | None
+        ) = async_file_cacher
         self._drag_start_pos: QPoint | None = None
 
         # ---- build UI ----
         self._header_widget = _CardHeader(self)
         self.add_widget(self._header_widget)
 
-        # The card body container holds body + overlay stacked
-        self._body_container = QWidget(self)
-        self._body_container.setAttribute(
-            Qt.WidgetAttribute.WA_TranslucentBackground
+        _body_sd = get_ayon_style_data("QFrame", self._variant_str)
+        _body_sd.set_context(self)
+        border_width = _body_sd["border-width"]
+        self._card_body = _CardBody(
+            parent=self,
+            width=width - (border_width * 2),
+            async_file_cacher=async_file_cacher,
         )
-        self._body_container.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        self._card_body.set_placeholder_icon(placeholder_icon)
+        body_size = self._card_body.size()
+        self._overlay = _CardOverlay(
+            parent=self,
+            size=body_size,
         )
-        self.add_widget(self._body_container, 1)
-
-        self._card_body = _CardBody(parent=self._body_container, width=width)
-        self._overlay = _CardOverlay(parent=self._body_container)
 
         # Lay body & overlay in a stacked layout so overlay is on top
-        stacked = QStackedLayout(self._body_container)
+        stacked = QStackedLayout()
         stacked.setStackingMode(QStackedLayout.StackingMode.StackAll)
         stacked.addWidget(self._card_body)
         stacked.addWidget(self._overlay)
         stacked.setCurrentWidget(self._overlay)
 
-        _body_sd = get_ayon_style_data("QFrame", "entity-card")
+        # Wrap the stacked layout in a widget to keep it centered.
+        self._body_wrapper = QWidget(self)
+        self._body_wrapper.setAttribute(
+            Qt.WidgetAttribute.WA_TranslucentBackground
+        )
+        self._body_wrapper.setFixedSize(body_size)
+        self._body_wrapper.setLayout(stacked)
+        self.add_widget(self._body_wrapper)
+        self._layout.setAlignment(
+            self._body_wrapper, Qt.AlignmentFlag.AlignHCenter
+        )
 
         # ---- init content ----
         self._rebuild_header()
@@ -448,6 +486,20 @@ class AYEntityCard(AYContainer):
         """Set the card width and adjust height to maintain a 1.52:1 aspect
         ratio (default thumbnail ratio from front-end)."""
         self.setFixedSize(w, int(w / CARD_RATIO))
+
+    def resize_to_width(self, w: int) -> None:
+        """Resize the card and all internal sub-widgets to a new width."""
+        _body_sd = get_ayon_style_data("QFrame", self._variant_str)
+        _body_sd.set_context(self)
+        border_width = _body_sd["border-width"]
+        body_w = w - (border_width * 2)
+        body_h = int(body_w / IMG_RATIO)
+        body_size = QSize(body_w, body_h)
+
+        self._card_body.set_size((body_w, body_h))
+        self._overlay.set_width(body_size)
+        self._body_wrapper.setFixedSize(body_size)
+        self.set_width(w)
 
     # ------------------------------------------------------------------
     # Rebuild helpers
@@ -679,6 +731,73 @@ class AYEntityCard(AYContainer):
             self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
         else:
             self.unsetCursor()
+
+    @property
+    def placeholder_icon(self) -> str:
+        return self._card_body._placeholder_icon_name
+
+    @placeholder_icon.setter
+    def placeholder_icon(self, value: str) -> None:
+        self._card_body.set_placeholder_icon(value)
+        self._rebuild_thumbnail()
+
+    @property
+    def async_file_cacher(
+        self,
+    ) -> Callable[[str, Callable[[str], None]], None] | None:
+        """Non-blocking thumbnail fetcher used by the card body.
+
+        When set, the card body's :class:`AYEntityThumbnail` will call
+        this callable with ``(key, on_loaded)`` whenever a thumbnail
+        cache miss is detected.  The callable should schedule the
+        download on a background thread and call ``on_loaded(file_path)``
+        on the Qt main thread when complete.
+
+        Setting this property also updates the underlying
+        :class:`_CardBody` so that any subsequent :meth:`set_thumbnail`
+        calls benefit from the new fetcher immediately.
+        """
+        return self._async_file_cacher
+
+    @async_file_cacher.setter
+    def async_file_cacher(
+        self,
+        value: Callable[[str, Callable[[str], None]], None] | None,
+    ) -> None:
+        self._async_file_cacher = value
+        # Forward to the card body so it can self-fetch on cache miss.
+        self._card_body._async_file_cacher = value
+        # Trigger a fetch only when the current image is not yet available.
+        if value and self._image_src:
+            ic = ImageCache.get_instance()
+            already_cached = ic.has(str(self._image_src))
+            on_disk = Path(self._image_src).exists()
+            if not already_cached and not on_disk:
+                self._card_body.set_thumbnail(self._image_src)
+
+    # ------------------------------------------------------------------
+    # Paint
+    # ------------------------------------------------------------------
+
+    def paintEvent(self, arg__1: QPaintEvent) -> None:
+        super().paintEvent(arg__1)
+        if not self._is_active:
+            return
+        style_all = get_ayon_style_data("QFrame", self._variant_str)
+        style_all.set_context(self)
+        border_width = int(style_all.get("border-width", 2))
+        border_radius = float(style_all.get("border-radius", 10))
+        border_color = QColor(
+            style_all.get("active", {}).get("border-color", "#8fceff")
+        )
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(border_color, border_width)
+        p.setPen(pen)
+        p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        half = border_width / 2.0
+        draw_rect = QRectF(self.rect()).adjusted(half, half, -half, -half)
+        p.drawRoundedRect(draw_rect, border_radius, border_radius)
 
     # ------------------------------------------------------------------
     # Mouse / drag events

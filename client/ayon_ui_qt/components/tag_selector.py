@@ -9,12 +9,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from qtpy.QtCore import QPoint, Qt, Signal
+from qtpy.QtCore import Signal  # type: ignore
 from qtpy.QtGui import QColor, QFocusEvent, QShowEvent
 from qtpy.QtWidgets import (
     QApplication,
-    QFrame,
-    QScrollArea,
     QSizePolicy,
     QWidget,
 )
@@ -25,7 +23,8 @@ from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout
 from .frame import AYFrame
 from .container import AYContainer
-from .line_edit import AYLineEdit
+from .dropdown import AYDropdownPopup
+from .filterable_list import FilterableList
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,7 @@ class TagItemWidget(AYButton):
             selected: Whether the tag is currently selected.
             parent: Optional parent widget.
         """
+        self._tag = tag
         super().__init__(
             tag.name,
             variant=AYButton.Variants.Tag_Menu,
@@ -77,7 +77,6 @@ class TagItemWidget(AYButton):
             checkable=True,
             parent=parent,
         )
-        self._tag = tag
 
         self.setChecked(selected)
         self.setSizePolicy(
@@ -112,7 +111,7 @@ class TagItemWidget(AYButton):
         return self._tag.color
 
 
-class TagDropdown(AYContainer):
+class TagDropdown(AYDropdownPopup):
     """A floating dropdown window for tag selection.
 
     Features a search field and a scrollable list of tags. New tags can be
@@ -143,70 +142,34 @@ class TagDropdown(AYContainer):
             parent: Optional parent widget.
         """
         super().__init__(
-            parent,
-            layout=AYContainer.Layout.VBox,
-            variant=AYContainer.Variants.Low_Framed,
-            layout_margin=1,
+            parent=parent,
+            variant=AYFrame.Variants.Low_Framed,
+            translucent_bg=False,
         )
+        # Internal container to hold the actual widgets and layout
+        self._content = AYVBoxLayout(self, margin=1)
         self._tags = tags
         self._selected_tags = set(selected_tags)
         self._tag_widgets: dict[str, TagItemWidget] = {}
 
-        self.setWindowFlags(
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setMinimumWidth(min_width)
         self.setMaximumHeight(400)
+
+        # Propagate popup closed signal to a local closed signal
+        self.popup_closed.connect(self.closed.emit)
 
         self._build()
 
     def _build(self) -> None:
         """Build the dropdown UI layout."""
-
-        # Search field with icon
-        search_container = AYContainer(
-            layout=AYContainer.Layout.HBox,
-            variant=AYFrame.Variants.Low_Square,
-            layout_margin=6,
-            layout_spacing=6,
+        self._filterable_list = FilterableList(
+            placeholder="Search tags...",
+            parent=self,
         )
-
-        self.search_icon = AYLabel(
-            icon="search",
-            icon_size=18,
-            icon_color="#ffffff",
-            variant=AYLabel.Variants.Default,
-        )
-        search_container.add_widget(self.search_icon)
-
-        self._search_field = AYLineEdit()
-        self._search_field.setPlaceholderText("Search tags...")
-        self._search_field.textChanged.connect(self._on_search_changed)
-        self._search_field.returnPressed.connect(self._on_enter_pressed)
-        search_container.add_widget(self._search_field)
-
-        self.add_widget(search_container)
-
-        # Scrollable tag list
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        scroll_area.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-
-        self._tags_container = AYFrame(variant=AYFrame.Variants.Low)
-        self._tags_layout = AYVBoxLayout(margin=0, spacing=0)
-        self._tags_container.setLayout(self._tags_layout)
-        scroll_area.setWidget(self._tags_container)
-
-        self.add_widget(scroll_area)
+        search = self._filterable_list.search_field()
+        search.textChanged.connect(self._on_search_changed)
+        search.returnPressed.connect(self._on_enter_pressed)
+        self._content.addWidget(self._filterable_list)
 
         # Populate tags
         self._populate_tags()
@@ -218,7 +181,7 @@ class TagDropdown(AYContainer):
             tag_widget = TagItemWidget(tag)
             tag_widget.setEnabled(False)
             self._tag_widgets[tag.name] = tag_widget
-            self._tags_layout.addWidget(tag_widget)
+            self._filterable_list.add_item(tag_widget)
             return
 
         for tag in self._tags:
@@ -226,9 +189,16 @@ class TagDropdown(AYContainer):
             tag_widget = TagItemWidget(tag, selected=selected)
             tag_widget.tag_clicked.connect(self._on_tag_clicked)
             self._tag_widgets[tag.name] = tag_widget
-            self._tags_layout.addWidget(tag_widget)
+            tag_name = tag.name
+            self._filterable_list.add_item(
+                tag_widget,
+                match_fn=lambda text, n=tag_name: (
+                    not text.lower().strip()
+                    or text.lower().strip() in n.lower()
+                ),
+            )
 
-        self._tags_layout.addStretch()
+        self._filterable_list.add_stretch()
 
     def _on_search_changed(self, text: str) -> None:
         """Filter tags based on search input.
@@ -236,18 +206,11 @@ class TagDropdown(AYContainer):
         Args:
             text: The current search text.
         """
-        search_lower = text.lower().strip()
-
-        # Show/hide tags based on search
-        for tag_name, widget in self._tag_widgets.items():
-            visible = not search_lower or search_lower in tag_name.lower()
-            widget.setVisible(visible)
-
         self._adjust_height()
 
     def _on_enter_pressed(self) -> None:
         """Handle Enter key press to create new tag if it doesn't exist."""
-        text = self._search_field.text().strip()
+        text = self._filterable_list.search_field().text().strip()
         if not text:
             return
 
@@ -273,7 +236,7 @@ class TagDropdown(AYContainer):
             # Create new tag
             self.add_new_tag.emit(text)
 
-        self._search_field.clear()
+        self._filterable_list.search_field().clear()
 
     def _on_tag_clicked(self, tag_name: str) -> None:
         """Handle tag item click to toggle selection.
@@ -312,10 +275,10 @@ class TagDropdown(AYContainer):
         """Calculate the ideal height based on visible content."""
         search_height = 40  # search field + margins
 
-        tags_height = 0
-        for widget in self._tag_widgets.values():
-            if widget.isVisible():
-                tags_height += widget.sizeHint().height()
+        tags_height = sum(
+            w.sizeHint().height()
+            for w in self._filterable_list.visible_items()
+        )
 
         margin = 2  # layout_margin from __init__
         return search_height + tags_height + (margin * 2)
@@ -328,8 +291,8 @@ class TagDropdown(AYContainer):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        self._search_field.setFocus()
-        self._adjust_height()  # Add this
+        self._filterable_list.search_field().setFocus()
+        self._adjust_height()
 
 
 class AYTagSelector(QWidget):
@@ -473,10 +436,8 @@ class AYTagSelector(QWidget):
         self._dropdown.add_new_tag.connect(self._on_add_new_tag)
         self._dropdown.closed.connect(self._on_dropdown_closed)
 
-        # Position dropdown below the button
-        button_pos = self._button.mapToGlobal(QPoint(0, self._button.height()))
-        self._dropdown.move(button_pos)
-        self._dropdown.show()
+        # Position dropdown below the button using helper from AYDropdownPopup
+        self._dropdown.show_below(self._button)
 
     def _on_tag_toggled(self, tag_name: str, selected: bool) -> None:
         """Handle tag toggle from dropdown.

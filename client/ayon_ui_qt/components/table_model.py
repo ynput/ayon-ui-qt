@@ -146,6 +146,7 @@ class TableColumn:
     label: str
     width: int = 0
     sortable: bool = True
+    filterable: bool = True
     icon: str | None = None
     tree_position: bool = False
     widget_factory: "Callable[[Any, Any], Any] | None" = None

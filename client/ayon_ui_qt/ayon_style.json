@@ -3,7 +3,7 @@
     "version": "1.0.0-a.1",
     "global": {
         "font-family": "Nunito Sans",
-        "font-size": 14,
+        "font-size": 12,
         "font-weight": 500
     },
     "widgets": {
@@ -200,7 +200,7 @@
                     "border-radius": 10
                 },
                 "tag": {
-                    "adjust-color-for-background": true,
+                    "contrast-text": true,
                     "color": "--md-ref-palette-neutral10",
                     "background-color": "transparent",
                     "border-radius": 8,
@@ -494,6 +494,9 @@
                     "padding-h": 5,
                     "padding-v": 3
                 },
+                "surface": {
+                    "background-color": "--md-sys-color-surface-container-highest-dark"
+                },
                 "debug-r": {
                     "background-color": "#664444"
                 },
@@ -506,7 +509,7 @@
             }
         },
         "QToolTip": {
-            "states": {},
+            "states": [],
             "default-variant": "default",
             "variants": {
                 "default": {
@@ -522,18 +525,23 @@
             }
         },
         "QLabel": {
+            "states": ["disabled", "hover"],
             "default-variant": "default",
             "variants": {
                 "default": {
-                    "background-color": "transparent"
+                    "background-color": "transparent",
+                    "disabled": {
+                        "opacity": 0.5
+                    }
                 },
                 "tag": {
-                    "adjust-color-for-background": true
+                    "contrast-text": true
                 },
                 "badge": {
                     "auto-size": true,
                     "auto-size-padding": [1.5, 0.25],
                     "border-radius-fraction": 0.2,
+                    "background-color": "@_icon_color",
                     "fill-from-foreground": true,
                     "contrast-text": true
                 },
@@ -541,6 +549,7 @@
                     "auto-size": true,
                     "auto-size-padding": [1.5, 0.25],
                     "border-radius-fraction": 0.5,
+                    "background-color": "@_icon_color",
                     "fill-from-foreground": true,
                     "contrast-text": true
                 },
@@ -549,12 +558,33 @@
                     "color": "--md-sys-color-on-surface-dark",
                     "border-radius": 6,
                     "border-width": 0,
-                    "border-color": "#ffaaaa",
                     "icon-text-spacing": 4,
-                    "padding": [
-                        2,
-                        2
-                    ]
+                    "padding": [4, 2],
+                    "alignment": "center"
+                },
+                "entity-label-filled": {
+                    "background-color": "@_icon_color",
+                    "color": "--md-sys-color-inverse-on-surface-dark",
+                    "border-radius": 6,
+                    "border-width": 0,
+                    "icon-text-spacing": 4,
+                    "padding": [4, 2],
+                    "alignment": "center"
+                },
+                "order-option": {
+                    "background-color": "transparent",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "border-radius": 4,
+                    "border-width": 0,
+                    "icon-text-spacing": 8,
+                    "padding": [8, 6],
+                    "alignment": "left",
+                    "disabled": {
+                        "opacity": 0.5
+                    },
+                    "hover": {
+                        "background-color": "--md-sys-color-background-dark"
+                    }
                 }
             }
         },
@@ -712,6 +742,75 @@
                     "segment-gap": 2,
                     "bar-radius": 3
                 }
+            }
+        },
+        "AYSlider": {
+            "states": ["hover", "disabled"],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "label-color": "--md-sys-color-on-surface-dark",
+                    "value-color": "--md-sys-color-on-surface-dark",
+                    "label-font-weight": 500,
+                    "label-value-spacing": 8,
+                    "row-spacing": 6,
+                    "value-min-width": 40,
+                    "track-height": 4,
+                    "track-color": "--md-sys-color-surface-container-highest-dark",
+                    "filled-color": "--md-sys-color-primary-dark",
+                    "track-radius": 2,
+                    "handle-size": 14,
+                    "handle-color": "--md-sys-color-primary-dark",
+                    "handle-border-color": "--md-sys-color-primary-dark",
+                    "handle-border-width": 0,
+                    "focus-outline-color": "--md-sys-color-primary-dark",
+                    "focus-outline-width": 2,
+                    "hover": {
+                        "handle-color": "--md-ref-palette-primary70"
+                    },
+                    "disabled": {
+                        "opacity": 0.5
+                    }
+                },
+                "low": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                }
+            }
+        },
+        "AYPageButton": {
+            "states": ["hover", "pressed", "disabled"],
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "height": 32,
+                    "border-radius": 4,
+                    "padding": [12, 10],
+                    "icon-gap": 8,
+                    "value-gap": 8,
+                    "background-color": "transparent",
+                    "icon-color": "--md-sys-color-on-surface-dark",
+                    "color": "--md-sys-color-on-surface-dark",
+                    "value-color": "--md-ref-palette-neutral60",
+                    "chevron-color": "--md-ref-palette-neutral60",
+                    "hover": {
+                        "background-color": "--md-ref-palette-neutral-variant35"
+                    },
+                    "pressed": {
+                        "background-color": "--md-ref-palette-neutral40"
+                    },
+                    "disabled": {
+                        "background-color": "transparent",
+                        "opacity": 0.5
+                    }
+                }
+            }
+        },
+        "AYCardView": {
+            "default-variant": "default",
+            "variants": {
+                "default": {},
+                "low": {},
+                "high": {}
             }
         }
     },

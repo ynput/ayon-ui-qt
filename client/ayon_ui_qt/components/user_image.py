@@ -53,6 +53,7 @@ class AYUserImage(QtWidgets.QLabel):
         self._style = stl.model.get_style(
             "AYUserImage", variant=self._variant_str
         )
+        self._style.set_context(self)
 
         self.set_image()
 
