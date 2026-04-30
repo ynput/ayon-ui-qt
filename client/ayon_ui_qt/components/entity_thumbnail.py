@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+import threading
 import weakref
 from enum import Enum
 from functools import partial
@@ -8,17 +10,26 @@ from typing import Callable
 
 from qtpy.QtCore import (
     QEasingCurve,
+    QPointF,
     QRect,
     QSize,
     Qt,
     QTimer,
     QVariantAnimation,
 )
-from qtpy.QtGui import QColor, QIcon, QPainter, QPaintEvent, QPixmap
+from qtpy.QtGui import (
+    QColor,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPixmap,
+    QPolygonF,
+)
 from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 
-from ..style import get_ayon_style
 from ..image_cache import ImageCache
+from ..style import get_ayon_style
 from ..variants import QPushButtonVariants
 
 try:
@@ -27,10 +38,40 @@ except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
 
+@dataclasses.dataclass
+class _PendingCompositeState:
+    """Tracks async resolution state for a multi-image composite.
+
+    Attributes:
+        resolved: Maps slot index to resolved path, or ``None`` if
+            still loading.
+        pending_count: Number of slots not yet resolved.
+        total: Total number of requested slots.
+    """
+
+    resolved: dict[int, str | None]
+    pending_count: int
+    total: int
+
+
 class AYEntityThumbnail(QPushButton):
+    """A push button widget that displays a thumbnail image for an entity.
+
+    Supports single images or comma-separated composites with automatic
+    caching (sync and async), fade-in animations, and customizable
+    placeholder icons.
+    """
+
     class Variants(Enum):
+        """Visual style variants for the thumbnail button."""
+
         Thumbnail = QPushButtonVariants.Thumbnail.value
         Entity_Card = QPushButtonVariants.Entity_Card.value
+
+    # Minimum readable width (px) for each composite image slice.
+    _MIN_SLICE_WIDTH: int = 10
+    # 1-px inset applied to clip polygons to avoid overlapping the border.
+    _CLIP_INSET: int = 1
 
     def __init__(
         self,
@@ -70,6 +111,9 @@ class AYEntityThumbnail(QPushButton):
             size: ``(width, height)`` in pixels.
             fade_duration: Fade-in animation duration in milliseconds.
             variant: Visual style variant.
+
+        Raises:
+            ValueError: If both *file_cacher* and *async_file_cacher* are set.
         """
         self._file_cacher = file_cacher
         self._async_file_cacher: (
@@ -77,6 +121,10 @@ class AYEntityThumbnail(QPushButton):
         ) = async_file_cacher
         # Keys for which an async fetch is already in flight (avoid duplicates)
         self._pending_async_keys: set[str] = set()
+        self._pending_lock = threading.Lock()
+        # In-memory cache of assembled composite pixmaps keyed by the
+        # original comma-separated src string.  Cleared on size changes.
+        self._composite_cache: dict[str, QPixmap] = {}
         if file_cacher and async_file_cacher:
             raise ValueError(
                 "Only one of 'file_cacher' or 'async_file_cacher' may be "
@@ -120,13 +168,45 @@ class AYEntityThumbnail(QPushButton):
         self.set_thumbnail(src)
         self.setFixedSize(*self._size)
 
+    @property
+    def slant_px(self) -> int:
+        """Return the horizontal slant offset in pixels for composite slices.
+
+        This value determines how much each slice edge is skewed to create
+        a diagonal separation effect between composite images. We default to
+        10% of the widget's width.
+        """
+        return int(self._size[0] * 0.1)
+
+    @property
+    def max_slices(self) -> int:
+        """Return the maximum number of slices that fit within the widget width.
+
+        Calculated based on :attr:`_MIN_SLICE_WIDTH` to ensure each slice
+        is at least the minimum readable width.
+        """
+        return int(self._size[0] / self._MIN_SLICE_WIDTH)
+
     def set_fade_duration(self, duration: int) -> None:
-        """Set the duration of the fade animation when changing thumbnails."""
+        """Set the duration of the fade animation when changing thumbnails.
+
+        Args:
+            duration: Animation duration in milliseconds.
+        """
         self._anim.setDuration(duration)
 
     def set_size(self, size: tuple[int, int]) -> None:
-        """Resize the thumbnail and update the icon size to match."""
+        """Resize the thumbnail and update the icon size to match.
+
+        Clears the in-memory composite cache since cached composites
+        are size-specific.
+
+        Args:
+            size: New ``(width, height)`` in pixels.
+        """
         self._size = size
+        # Cached composites are size-specific; they must be rebuilt.
+        self._composite_cache.clear()
         icn_size = int(size[1] * self._placeholder_scale)
         self._placeholder_icon = QIcon(
             get_icon(
@@ -141,7 +221,11 @@ class AYEntityThumbnail(QPushButton):
         self.update()
 
     def set_placeholder_icon(self, icon_name: str) -> None:
-        """Set the placeholder icon to show when no thumbnail is available."""
+        """Set the placeholder icon to show when no thumbnail is available.
+
+        Args:
+            icon_name: Material symbol icon name (e.g., ``"image"``).
+        """
         if not icon_name:
             return
         self._placeholder_icon_name = icon_name
@@ -169,6 +253,12 @@ class AYEntityThumbnail(QPushButton):
            ``ImageCache`` now (blocking) and return the cached path.
         3. If the key is already in ``ImageCache``, return its path.
         4. Fall through: return *src* unchanged (shows placeholder).
+
+        Args:
+            src: A file path, cache key, or empty string.
+
+        Returns:
+            Resolved file path if available, otherwise the original *src*.
         """
         if Path(src).exists():
             return src
@@ -185,6 +275,9 @@ class AYEntityThumbnail(QPushButton):
         Does nothing when *async_file_cacher* is not set or a fetch for
         *src* is already in flight.  On completion, calls
         :meth:`_load_pixmap_from_path` directly with the resolved path.
+
+        Args:
+            src: The cache key or path to fetch asynchronously.
         """
         if not self._async_file_cacher:
             return
@@ -203,36 +296,139 @@ class AYEntityThumbnail(QPushButton):
                 thumbnail._load_pixmap_from_path(fpath)
 
         self._async_file_cacher(key_str, _on_loaded)
-        ic = ImageCache.get_instance()
-        if self._file_cacher:
-            return ic.get(str(src), partial(self._file_cacher, src))
-        if ic.has(str(src)):
-            return ic.get_path(str(src)) or ""
-        # Cache miss — schedule a non-blocking background fetch if available.
-        if self._async_file_cacher:
-            key_str = str(src)
-            if key_str and key_str not in self._pending_async_keys:
-                self._pending_async_keys.add(key_str)
-                thumbnail_ref = weakref.ref(self)
 
-                def _on_loaded(fpath: str, _k: str = key_str) -> None:
-                    thumbnail = thumbnail_ref()
-                    if thumbnail is None:
-                        return
-                    thumbnail._pending_async_keys.discard(_k)
-                    if fpath:
-                        # Re-call set_thumbnail; cache is now populated so
-                        # _resolve_src will find a hit on this second pass.
-                        thumbnail.set_thumbnail(_k)
+    def _center_crop_pixmap(
+        self,
+        pixmap: QPixmap,
+        slot_w: int,
+        slot_h: int,
+    ) -> QPixmap:
+        """Scale to widget height then center-crop to slot width.
 
-                self._async_file_cacher(key_str, _on_loaded)
-        return src
+        The image is first scaled so its height equals *slot_h* (preserving
+        aspect ratio).  If the resulting width exceeds *slot_w* the centre
+        strip is extracted.  If it is narrower the image is centred over the
+        widget background colour.
+
+        Args:
+            pixmap: Source pixmap.
+            slot_w: Target width in pixels.
+            slot_h: Target height in pixels.
+
+        Returns:
+            A new QPixmap of exactly (slot_w, slot_h).
+        """
+        scaled = pixmap.scaledToHeight(
+            slot_h,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        if scaled.width() >= slot_w:
+            x = (scaled.width() - slot_w) // 2
+            return scaled.copy(QRect(x, 0, slot_w, slot_h))
+        # Image narrower than slot — centre on background fill.
+        result = QPixmap(slot_w, slot_h)
+        result.fill(self._bg_color)
+        if not scaled.isNull():
+            painter = QPainter(result)
+            x = (slot_w - scaled.width()) // 2
+            painter.drawPixmap(x, 0, scaled)
+            painter.end()
+        return result
+
+    def _build_composite_pixmap(self, paths: list[str]) -> QPixmap:
+        """Assemble a horizontal composite pixmap from multiple image paths.
+
+        Each image occupies an equal-width slot and is center-cropped to
+        fill it entirely.  Slots whose path is empty or unreadable are left
+        as the widget background color.  When the number of images exceeds
+        :attr:`max_slices`, a ``more_horiz`` icon is overlaid on the last
+        slot to indicate hidden items.
+
+        Args:
+            paths: Ordered list of resolved file paths, one per slot.
+
+        Returns:
+            A composite QPixmap of ``self._size``.
+        """
+        w, h = self._size
+        num_paths = len(paths)
+        slot_w = max(w // num_paths, self._MIN_SLICE_WIDTH)
+        ci = self._CLIP_INSET
+
+        result = QPixmap(w, h)
+        result.fill(self._bg_color)
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        hslpx = self.slant_px // 2
+        max_slices = self.max_slices
+        last_i = min(num_paths, max_slices) - 1
+        num_drawn = 0
+
+        for i, path in enumerate(paths):
+            if not path:
+                continue
+            raw = QPixmap(path)
+            if raw.isNull():
+                continue
+
+            cropped = self._center_crop_pixmap(raw, slot_w + hslpx * 2, h)
+            # Parallelogram clip: left edge slants right, right edge slants
+            # left, creating a diagonal separation between adjacent slices.
+            left_slant = hslpx if i > 0 else 0
+            right_slant = hslpx if i < last_i else 0
+            polygon = QPolygonF(
+                [
+                    QPointF(i * slot_w + left_slant + ci, ci),
+                    QPointF((i + 1) * slot_w + hslpx - ci, ci),
+                    QPointF(
+                        (i + 1) * slot_w - right_slant - ci,
+                        h - ci,
+                    ),
+                    QPointF(i * slot_w - hslpx + ci, h - ci),
+                ]
+            )
+            clip_path = QPainterPath()
+            clip_path.addPolygon(polygon)
+            painter.setClipPath(clip_path)
+            painter.drawPixmap(i * slot_w - hslpx, 0, cropped)
+
+            num_drawn += 1
+            if num_drawn >= max_slices:
+                icon_size = 16
+                icon_pad = 2
+                overflow_icon = get_icon(
+                    "more_horiz",
+                    color="#f2f2f3",
+                    fill=False,
+                ).pixmap(QSize(icon_size, icon_size))
+                painter.drawPixmap(
+                    (i + 1) * slot_w - icon_size - icon_pad,
+                    h - icon_size - icon_pad,
+                    overflow_icon,
+                )
+                break
+
+        painter.end()
+        return result
 
     def _on_fade_tick(self, value: float) -> None:
+        """Handle each step of the fade-in animation.
+
+        Updates the current opacity value and triggers a repaint.
+
+        Args:
+            value: Current animation value between 0.0 and 1.0.
+        """
         self._opacity = value
         self.update()
 
     def _on_fade_done(self) -> None:
+        """Handle the completion of the fade-in animation.
+
+        Promotes the incoming pixmap to the button's icon and resets
+        the opacity state.
+        """
         pixmap = self._incoming_pixmap
         if pixmap and not pixmap.isNull():
             icon = QIcon()
@@ -252,6 +448,9 @@ class AYEntityThumbnail(QPushButton):
         and starts the fade-in.  Avoids a second :meth:`_resolve_src`
         pass when the caller already holds the concrete path (e.g. the
         async fetch callback).
+
+        Args:
+            fpath: Absolute path to the image file.
         """
         self._src = fpath
         self._anim.stop()
@@ -265,19 +464,134 @@ class AYEntityThumbnail(QPushButton):
         self._anim.start()
 
     def set_thumbnail(self, name: Path | str) -> None:
-        """Set the thumbnail image for the button."""
-        resolved = self._resolve_src(name)
-        if resolved and Path(resolved).exists():
-            self._load_pixmap_from_path(str(resolved))
-        else:
-            self._src = name
+        """Set the thumbnail image for the button.
+
+        *name* may be a single path/cache-key **or** a comma-separated
+        list of paths/cache-keys.  When multiple items are given the images
+        are loaded, center-cropped into equal-width slots and assembled into
+        a single composite pixmap that is cached in memory.
+
+        Args:
+            name: Image source — a file path, cache key, or comma-separated
+                combination of the two.
+        """
+        src_str = str(name).strip()
+        parts = [p.strip() for p in src_str.split(",") if p.strip()]
+
+        if len(parts) <= 1:
+            resolved = self._resolve_src(name)
+            if resolved and Path(resolved).exists():
+                self._load_pixmap_from_path(str(resolved))
+            else:
+                self._src = name
+                self._anim.stop()
+                self._maybe_schedule_async_fetch(name)
+                self._incoming_pixmap = None
+                self._opacity = 1.0
+                self.setIcon(self._placeholder_icon)
+            return
+
+        # --- Multi-source composite path ---
+        self._src = src_str
+
+        # Check the in-memory composite cache before resolving.
+        if src_str in self._composite_cache:
             self._anim.stop()
-            self._maybe_schedule_async_fetch(name)
-            self._incoming_pixmap = None
-            self._opacity = 1.0
-            self.setIcon(self._placeholder_icon)
+            self._incoming_pixmap = self._composite_cache[src_str]
+            self._opacity = 0.0
+            self._anim.start()
+            return
+
+        # Resolve each source synchronously where possible.
+        resolved_paths: dict[int, str | None] = {}
+        missing_indices: list[int] = []
+        for i, part in enumerate(parts):
+            r = self._resolve_src(part)
+            if r and Path(str(r)).exists():
+                resolved_paths[i] = str(r)
+            else:
+                resolved_paths[i] = None
+                missing_indices.append(i)
+
+        non_empty_paths = [p for p in resolved_paths.values() if p]
+        sparse_key = ",".join(non_empty_paths[: self.max_slices])
+        if sparse_key in self._composite_cache:
+            self._anim.stop()
+            self._incoming_pixmap = self._composite_cache[sparse_key]
+            self._opacity = 0.0
+            self._anim.start()
+            return
+
+        if not missing_indices:
+            # All slots ready — build and cache immediately.
+            composite = self._build_composite_pixmap(non_empty_paths)
+            self._composite_cache[sparse_key] = composite
+            self._anim.stop()
+            self._incoming_pixmap = composite
+            self._opacity = 0.0
+            self._anim.start()
+            return
+
+        # Some slots still need async fetching — show placeholder meanwhile.
+        self._anim.stop()
+        self._incoming_pixmap = None
+        self._opacity = 1.0
+        self.setIcon(self._placeholder_icon)
+
+        if not self._async_file_cacher:
+            return
+
+        pending = _PendingCompositeState(
+            resolved=resolved_paths,
+            pending_count=len(missing_indices),
+            total=len(parts),
+        )
+        thumbnail_ref = weakref.ref(self)
+
+        def _make_slot_callback(
+            slot_idx: int,
+        ) -> Callable[[str], None]:
+            def _on_slot_loaded(fpath: str) -> None:
+                widget = thumbnail_ref()
+                if widget is None:
+                    return
+                # Discard if a newer set_thumbnail replaced this src.
+                if str(widget._src) != src_str:
+                    return
+                with widget._pending_lock:
+                    pending.resolved[slot_idx] = fpath or None
+                    pending.pending_count -= 1
+                    if pending.pending_count > 0:
+                        return
+                all_paths = [
+                    pending.resolved.get(j)
+                    for j in range(pending.total)
+                    if pending.resolved.get(j)
+                ]
+                composite = widget._build_composite_pixmap(all_paths)
+                resolved_key = ",".join(all_paths[: widget.max_slices])
+                widget._composite_cache[resolved_key] = composite
+                widget._anim.stop()
+                widget._incoming_pixmap = composite
+                widget._opacity = 0.0
+                widget._anim.start()
+
+            return _on_slot_loaded
+
+        for idx in missing_indices:
+            self._async_file_cacher(parts[idx], _make_slot_callback(idx))
 
     def paintEvent(self, arg__1: QPaintEvent) -> None:
+        """Override the default paint event to render the thumbnail with effects.
+
+        Draws the styled button base using the AYON style model, then
+        overlays the incoming pixmap with the current fade opacity for
+        smooth transition animations.  Maintains a 1-pixel inset clip
+        to prevent the image from overlapping the button border.
+
+        Args:
+            arg__1: The paint event containing the update region.
+        """
         p = QPainter(self)
         option = QStyleOptionButton()
         self.initStyleOption(option)
@@ -316,15 +630,31 @@ if __name__ == "__main__":
 
     def build():
         w = AYContainer(
-            layout=AYContainer.Layout.HBox,
+            layout=AYContainer.Layout.VBox,
             variant=AYContainer.Variants.Low,
-            layout_margin=24,
-            layout_spacing=4,
+            layout_margin=16,
+            layout_spacing=24,
         )
-        w.add_widget(
+        w1 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.Low_Framed,
+            layout_margin=24,
+            layout_spacing=24,
+        )
+        w.add_widget(w1)
+        w1.add_widget(
             AYEntityThumbnail(src="avatar1", file_cacher=resource_loader)
         )
-        w.add_widget(
+        w1.add_widget(
+            AYEntityThumbnail(src="avatar2", file_cacher=resource_loader)
+        )
+        w1.add_widget(
+            AYEntityThumbnail(src="avatar3", file_cacher=resource_loader)
+        )
+        w1.add_widget(
+            AYEntityThumbnail(src="avatar4", file_cacher=resource_loader)
+        )
+        w1.add_widget(
             AYEntityThumbnail(
                 src="SMPTE_Color_Bars", file_cacher=resource_loader
             )
@@ -332,8 +662,62 @@ if __name__ == "__main__":
         delayed = AYEntityThumbnail(
             src="avatar2", file_cacher=resource_loader, fade_duration=0
         )
-        w.add_widget(delayed)
-        w.add_widget(AYEntityThumbnail(file_cacher=resource_loader))
+        w1.add_widget(delayed)
+        w1.add_widget(AYEntityThumbnail(file_cacher=resource_loader))
+
+        w2 = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.Low_Framed,
+            layout_margin=24,
+            layout_spacing=24,
+        )
+        w.add_widget(w2)
+
+        # Two-image composite
+        w2.add_widget(
+            AYEntityThumbnail(
+                src="avatar1,avatar2",
+                file_cacher=resource_loader,
+                size=(85 * 2, 48 * 2),
+            )
+        )
+        # Three-image composite
+        w2.add_widget(
+            AYEntityThumbnail(
+                src="avatar1,avatar2,avatar3",
+                file_cacher=resource_loader,
+                size=(85 * 2, 48 * 2),
+            )
+        )
+        # Four-image composite
+        w2.add_widget(
+            AYEntityThumbnail(
+                src="avatar1,avatar2,avatar3,avatar4",
+                file_cacher=resource_loader,
+                size=(85 * 2, 48 * 2),
+            )
+        )
+        #  too many composite
+        paths = [
+            "avatar1",
+            "avatar2",
+            "avatar3",
+            "avatar4",
+            "SMPTE_Color_Bars",
+        ] * 10
+        w2.add_widget(
+            AYEntityThumbnail(
+                src=",".join(paths),
+                file_cacher=resource_loader,
+                size=(85 * 2, 48 * 2),
+            )
+        )
+        w2.add_widget(
+            AYEntityThumbnail(
+                src=",".join(paths),
+                file_cacher=resource_loader,
+            )
+        )
 
         # simulate thumbnail update after some time
         delayed.set_fade_duration(1000)
