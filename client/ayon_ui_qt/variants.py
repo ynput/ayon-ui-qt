@@ -64,6 +64,7 @@ class QFrameVariants(Enum):
     Criterion = "criterion"
     Entity_Card = "entity-card"
     Entity_Card_Tag = "entity-card-tag"
+    Surface = "surface"
     Debug_R = "debug-r"
     Debug_G = "debug-g"
     Debug_B = "debug-b"
@@ -79,6 +80,8 @@ class QLabelVariants(Enum):
     Badge = "badge"
     Pill = "pill"
     Entity_Label = "entity-label"
+    Entity_Label_Filled = "entity-label-filled"
+    Order_Option = "order-option"
 
 
 class QTreeViewVariants(Enum):
@@ -100,6 +103,25 @@ class AYTableViewVariants(Enum):
 class AYUserImageVariants(Enum):
     Default = "default"
     Entity_Card = "entity-card"
+
+
+class AsyncTaskQueueMonitorVariants(Enum):
+    Default = "default"
+
+
+class AYSliderVariants(Enum):
+    Default = "default"
+    Low = "low"
+
+
+class AYPageButtonVariants(Enum):
+    Default = "default"
+
+
+class AYCardViewVariants(Enum):
+    Default = "default"
+    Low = "low"
+    High = "high"
 
 
 # END OF VARIANTs DEFINITIONS -------------------------------------------------

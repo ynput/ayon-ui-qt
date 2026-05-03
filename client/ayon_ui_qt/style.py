@@ -5,6 +5,7 @@ import json
 import logging
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -76,8 +77,8 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
 def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
     font = QtGui.QFont()
     font.setFamily(style["font-family"])
-    pt_size = w.font().pointSizeF() if w else style["font-size"]
-    font.setPointSizeF(pt_size)
+    px_size = style["font-size"]
+    font.setPixelSize(px_size)
     font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
     # log.debug(
     #     "FONT: %s, %g pts, w=%d",
@@ -190,7 +191,9 @@ def get_ayon_style() -> AYONStyle:
     return _ayon_style_instance
 
 
-def get_ayon_style_data(widget_cls: str, variant: str | None = None) -> dict:
+def get_ayon_style_data(
+    widget_cls: str, variant: str | None = None
+) -> StyleDict:
     """Get the AYON style data.
 
     Returns:
@@ -263,6 +266,70 @@ def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:
     if fix_app and qss and isinstance(app, QApplication):
         app.setStyleSheet(qss)
 
+
+class StyleDict(dict):
+    """A dict where string values starting with '@' are resolved
+    via getattr() on a bound context object.
+
+    Example:
+        ctx = SomeWidget(...)
+        d = StyleDict({"color": "@fg_color"}, _context=ctx)
+        d["color"]  # -> ctx.fg_color
+    """
+
+    _SENTINEL = object()
+
+    def __init__(
+        self,
+        *args: Any,
+        _context: Any = None,
+        deepcopy: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        if deepcopy:
+            args = copy.deepcopy(args)
+            kwargs = copy.deepcopy(kwargs)
+        super().__init__(*args, **kwargs)
+        # store as attribute on the instance — not as a dict key
+        object.__setattr__(self, "_context", _context)
+        # convert nested dicts to StyleDicts with the same context
+        for k, v in self.items():
+            super().__setitem__(
+                k,
+                StyleDict(v, _context=_context) if isinstance(v, dict) else v,
+            )
+
+    def set_context(self, _context: Any) -> None:
+        object.__setattr__(self, "_context", _context)
+        for v in self.values():
+            if isinstance(v, StyleDict):
+                v.set_context(_context)
+
+    def __getitem__(self, key: str) -> Any:
+        value = super().__getitem__(key)
+        return self._resolve(value)
+
+    def get(self, key: str, default: Any = None, raw: bool = False) -> Any:
+        value = super().get(key, self._SENTINEL)
+        if value is self._SENTINEL:
+            return default
+        if raw:
+            return value
+        return self._resolve(value)
+
+    def _resolve(self, value: Any) -> Any:
+        if (
+            isinstance(value, str)
+            and value.startswith("@")
+            and self._context is not None
+        ):
+            return getattr(self._context, value[1:], value)
+        return value
+
+    def __repr__(self) -> str:
+        return f"StyleDict({super().__repr__()}, context={self._context!r})"
+
+
 class StyleData:
     def __init__(self) -> None:
         fpath = Path(__file__).parent / "ayon_style.json"
@@ -321,15 +388,68 @@ class StyleData:
             )
         return p
 
+    def get_style_palette(self, widget: QWidget, widget_key: str) -> QPalette:
+        """Get a QPalette for the widget based on the current style data.
+
+        Resolves any @ references in the style data to widget attributes.
+        Caches results for efficiency, if there are no @ references.
+        """
+        variant = getattr(widget, "_variant_str", "default")
+        # check if cached
+        cache_key = f"{widget_key}-{variant}-palette"
+        if cache_key in self._cache:
+            return QPalette(self._cache[cache_key])
+
+        style: StyleDict = self.get_styles(
+            widget_key,
+            variant=variant,
+        )
+        style.set_context(widget)
+
+        p = QPalette(self.base_palette)
+
+        fg_color = style.get("base", {}).get("color")
+        if fg_color:
+            p.setColor(
+                widget.foregroundRole(),
+                QColor(fg_color),
+            )
+        opacity = style.get("disabled", {}).get("opacity")
+        if opacity:
+            disabled_fg_color = QColor(fg_color)
+            disabled_fg_color.setAlphaF(opacity)
+            p.setColor(
+                QPalette.ColorGroup.Disabled,
+                widget.foregroundRole(),
+                disabled_fg_color,
+            )
+
+        bg_color = style.get("base", {}).get("background-color")
+        if bg_color:
+            p.setColor(
+                widget.backgroundRole(),
+                QColor(bg_color),
+            )
+
+        # cache result
+        style.set_context(None)
+        self._cache[cache_key] = p
+
+        return QPalette(p)
+
     def dump_cache_stats(self):
         print(f"[StyleData] cached {len(self._cache)} styles.")
         print(f"[StyleData]   >> {list(self._cache.keys())}")
 
-    def widget_variants(self, widget):
-        return list(self.data["widgets"][widget]["variants"].keys())
+    def widget_variants(self, widget_cls: str) -> list[str]:
+        return list(self.data["widgets"][widget_cls]["variants"].keys())
 
-    def widget_data(self, widget):
-        return self.data["widgets"].get(widget, {})
+    def widget_states(self, widget_cls: str) -> list[str]:
+        states = list(self.data["widgets"][widget_cls].get("states", []))
+        return states if "base" in states else ["base"] + states
+
+    def widget_data(self, widget_cls: str) -> dict:
+        return self.data["widgets"].get(widget_cls, {})
 
     def widget_list(self) -> list[str]:
         return list(self.data["widgets"].keys())
@@ -352,10 +472,10 @@ class StyleData:
         widget_cls: str,
         variant=None,
         state="base",
-    ):
+    ) -> StyleDict:
         """Returns a style for a widget, variant and state."""
         try:
-            return self._cache[f"{widget_cls}-{variant}-{state}"]
+            return StyleDict(self._cache[f"{widget_cls}-{variant}-{state}"])
         except KeyError:
             pass
 
@@ -392,16 +512,17 @@ class StyleData:
             d.update(state_dict)
 
         # cache result
+        d = StyleDict(d)
         self.last_key = f"{widget_cls}-{variant}-{state}"
         self._cache[self.last_key] = d
-        return d
+        return StyleDict(d)
 
     def get_styles(
         self,
         widget_cls: str,
         variant: str | None = None,
         states: list[str] | None = None,
-    ) -> dict[str, dict]:
+    ) -> StyleDict:
         """Returns styles for a widget, variant and multiple states at once.
 
         This is more efficient than calling get_style() multiple times
@@ -411,17 +532,17 @@ class StyleData:
             widget_cls: The widget class name (e.g., "QStyledItemDelegate").
             variant: The variant name (e.g., "default"). Defaults to None.
             states: List of states to retrieve (e.g., ["base", "hover",
-                "checked"]). Defaults to ["base"].
+                "checked"]). Defaults to all defined states.
 
         Returns:
             A dictionary mapping state names to their style dictionaries.
         """
         if states is None:
-            states = ["base"]
+            states = self.widget_states(widget_cls)
 
-        cache_key = f"{widget_cls}-{variant}-{'|'.join(states)}"
+        cache_key = f"all-{widget_cls}-{variant}-{'|'.join(states)}"
         try:
-            return self._cache[cache_key]
+            return StyleDict(self._cache[cache_key])
         except KeyError:
             pass
 
@@ -429,13 +550,19 @@ class StyleData:
             state: self.get_style(widget_cls, variant, state)
             for state in states
         }
-        self._cache[cache_key] = d
-        return d
+        self._cache[cache_key] = StyleDict(d)
+        return StyleDict(d)
 
     def current_style(self):
         return self._cache[self.last_key]
 
-    def get_color(self, color_name: str, style: dict, w: QWidget) -> QColor:
+    def get_widget_color(
+        self,
+        color_name: str,
+        style: dict,
+        w: QWidget,
+        default: str | QColor,
+    ) -> QColor:
         """Process color definitions referencing a widget attribute/property
         using the @ syntax.
 
@@ -443,16 +570,13 @@ class StyleData:
             color_name: The color name to retrieve.
             style: The style dictionary.
             w: The widget to get the color from.
+            default: The default color to use if the attribute is not found.
         Returns:
             The color.
         """
         color = style[color_name]
         if isinstance(color, str) and color.startswith("@"):
-            color = getattr(
-                w,
-                color[1:],
-                w.palette().color(QPalette.ColorRole.ButtonText),
-            )
+            color = getattr(w, color[1:], default)
         return QColor(color)
 
 
@@ -604,6 +728,7 @@ class ButtonDrawer:
             wstate = "checked"
 
         style = self.model.get_style("QPushButton", variant, wstate)
+        style.set_context(widget)
 
         return style, wstate
 
@@ -696,7 +821,12 @@ class ButtonDrawer:
         variant = self.get_button_variant(widget)
 
         # Set up text color
-        text_color = self.model.get_color("color", style, widget)
+        text_color = self.model.get_widget_color(
+            "color",
+            style,
+            widget,
+            widget.palette().color(QPalette.ColorRole.ButtonText),
+        )
         if not (option.state & QStyle.StateFlag.State_Enabled):  # type: ignore
             # Apply some opacity to disabled text
             text_color.setAlpha(int(255 * 0.5))
@@ -718,7 +848,6 @@ class ButtonDrawer:
 
         # Draw icon if present
         if option.icon:  # type: ignore
-            # icon_color = QColor(getattr(widget, "_icon_color", text_color))
             if option.text and not style.get("ignore-text", False):  # type: ignore
                 icon_size = option.iconSize  # type: ignore
                 icon_w = icon_size.width()
@@ -801,7 +930,7 @@ class ButtonDrawer:
                         Qt.AlignmentFlag.AlignCenter,
                         option.text,  # type: ignore
                     )
-            elif variant != "thumbnail":
+            elif variant not in ("thumbnail", "entity-card"):
                 # Icon only
                 mode = QtGui.QIcon.Mode.Normal
                 if not (
@@ -964,6 +1093,7 @@ class ButtonDrawer:
             style = self.model.get_style(
                 "QPushButton", self.get_button_variant(widget)
             )
+            style.set_context(widget)
             if option.icon:
                 padding = (
                     style["icon-padding"]
@@ -1012,17 +1142,20 @@ class FrameDrawer:
     def draw_frame(self, option: QStyleOption, painter: QPainter, w: QWidget):
         # get style
         variant = getattr(w, "_variant_str", "")
-        is_view_frame = next(
-            (
-                True
-                for child in w.children()
-                if isinstance(child, QAbstractItemView)
-            ),
-            False,
-        )
-        if is_view_frame or isinstance(w, QListView):
-            variant = "item-view"
+        # plp: I can't remember why I did this, but it overrides incorrectly
+        # some UI, so I am disabling it until I remember why it was here !
+        # is_view_frame = next(
+        #     (
+        #         True
+        #         for child in w.children()
+        #         if isinstance(child, QAbstractItemView)
+        #     ),
+        #     False,
+        # )
+        # if is_view_frame or isinstance(w, QListView):
+        #     variant = "item-view"
         style = self.model.get_style("QFrame", variant)
+        style.set_context(w)
 
         # widget override for comment types
         border_width = style.get("border-width", 0)
@@ -1133,6 +1266,7 @@ class CheckboxDrawer:
             "QCheckBox",
             variant=variant,
         )
+        style.set_context(widget)
         metrics_h = widget.fontMetrics().height() if widget else 18
         metrics_w = metrics_h * 2 if widget else 32
 
@@ -1161,6 +1295,7 @@ class CheckboxDrawer:
             variant=variant,
             state=state,
         )
+        style.set_context(widget)
 
         if style.get("background-color"):
             painter.save()
@@ -1247,6 +1382,7 @@ class CheckboxDrawer:
             variant=variant,
             state="checked" if checked else "base",
         )
+        style.set_context(w)
 
         # draw toggle background
         painter.setBrush(QColor(style["indicator-background-color"]))
@@ -1365,6 +1501,7 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
         # Menu background from the AYON style JSON
         if self._style_model:
             cb_style = self._style_model.get_style("QComboBox")
+            cb_style.set_context(cb)
             menu_bg = QColor(cb_style.get("menu-background-color", "#1c2026"))
         else:
             menu_bg = opt.palette.color(
@@ -1542,6 +1679,7 @@ class ComboBoxDrawer:
         _style = self.model.get_style(
             "QComboBox", variant=getattr(w, "_variant_str", None)
         )
+        _style.set_context(w)
         style_bg_color = _style.get("background-color", None)
         opt.palette.setBrush(
             QPalette.ColorRole.Base,
@@ -1578,6 +1716,7 @@ class ComboBoxDrawer:
         _style = self.model.get_style(
             "QComboBox", variant=getattr(w, "_variant_str", None)
         )
+        _style.set_context(w)
         icon_padding = _style.get("icon-padding", [4, 4])
         text_padding = _style.get("text-padding", [1, 1])
 
@@ -1653,6 +1792,7 @@ class ComboBoxDrawer:
                 option.backgroundBrush.setColor(fgc)
         else:
             stl = self.model.get_style("QComboBox")
+            stl.set_context(w)
             option.backgroundBrush.setColor(
                 QColor(stl["menu-background-color"])
             )
@@ -1671,6 +1811,7 @@ class ComboBoxDrawer:
             return QSize()
 
         style = self.model.get_style("QComboBox")
+        style.set_context(widget)
 
         text_width = cb_height = 0
         if isinstance(widget, QComboBox):
@@ -1825,6 +1966,7 @@ class ScrollBarDrawer:
         opt: QStyleOption | None = None,
         widget: QWidget | None = None,
     ) -> int:
+        self._style.set_context(widget)
         if metric == QStyle.PixelMetric.PM_ScrollBarExtent:
             # Width of a vertical scroll bar and the height of a horizontal
             # scroll bar.
@@ -1843,6 +1985,7 @@ class ScrollBarDrawer:
     ) -> None:
         """Draw the scrollbar slider/thumb."""
         style = self.model.get_style("QScrollBar")
+        style.set_context(widget)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -1864,6 +2007,7 @@ class ScrollBarDrawer:
     ) -> None:
         """Draw scrollbar page buttons."""
         style = self.model.get_style("QScrollBar")
+        style.set_context(widget)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -2008,6 +2152,7 @@ class TooltipDrawer:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             style = self.model.get_style("QToolTip")
+            style.set_context(w)
             pen = QPen(style["border-color"])
             pen.setWidth(style["border-width"])
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -2024,6 +2169,7 @@ class TooltipDrawer:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             style = self.model.get_style("QToolTip")
+            style.set_context(w)
             brush = QBrush(style["background-color"])
             painter.setBrush(brush)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -2042,6 +2188,7 @@ class TooltipDrawer:
         widget: QWidget,
     ) -> QRect:
         tt_style = self.model.get_style("QToolTip")
+        tt_style.set_context(widget)
         tt_pad_x, tt_pad_y = tt_style["padding"]
 
         if element == QStyle.SubElement.SE_ShapedFrameContents:
@@ -2125,6 +2272,7 @@ class ItemViewItemDrawer:
             wstate = "hover"
 
         style = self.model.get_style("QStyledItemDelegate", variant, wstate)
+        style.set_context(widget)
 
         return style, wstate
 
@@ -3211,13 +3359,31 @@ class AYONStyle(QCommonStyle):
                     return name
         return ""
 
-    def polish(self, widget) -> None:
-        """Polish widgets to enable hover tracking and custom palette."""
+    def style_widget(self, widget: QWidget) -> None:
+        """Apply AYON style to a widget (palette, font, hover tracking)."""
         if isinstance(widget, QWidget):
-            super().polish(widget)
-            # TODO(plp): move to QStyle:polishPalette(QPalette)
-            widget.setPalette(self.model.base_palette)
-            widget.setFont(self.model.base_font)
+            variant = getattr(widget, "_variant_str", "default")
+            if hasattr(widget, "_style_data"):
+                if not widget._style_data:
+                    widget._style_data = self.model.get_style(
+                        self.widget_key(widget),
+                        variant,
+                    )
+                    widget._style_data.set_context(widget)
+
+            if hasattr(widget, "set_palette"):
+                widget.set_palette(
+                    self.model.get_style_palette(
+                        widget, self.widget_key(widget)
+                    )
+                )
+            else:
+                widget.setPalette(QtGui.QPalette(self.model.base_palette))
+
+            if hasattr(widget, "set_font"):
+                widget.set_font(QtGui.QFont(self.model.base_font))
+            else:
+                widget.setFont(QtGui.QFont(self.model.base_font))
 
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
@@ -3236,6 +3402,12 @@ class AYONStyle(QCommonStyle):
                 widget.setAttribute(
                     Qt.WidgetAttribute.WA_TranslucentBackground, True
                 )
+
+    def polish(self, widget) -> None:
+        """Polish widgets to enable hover tracking and custom palette."""
+        if isinstance(widget, QWidget):
+            super().polish(widget)
+            self.style_widget(widget)
 
         # elif isinstance(widget, QPalette):
         #     print("YES: QPalette")

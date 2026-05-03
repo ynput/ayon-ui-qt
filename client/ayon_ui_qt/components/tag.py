@@ -12,6 +12,7 @@ from .buttons import AYButton
 from .frame import AYFrame
 from .label import AYLabel
 from ..variants import QFrameVariants
+from ..color_utils import compute_color_for_contrast
 
 
 class AYTag(AYFrame):
@@ -32,34 +33,34 @@ class AYTag(AYFrame):
         self._tag_name = name
         self._tag_label = label
         self._bg_color = color
-        self._fg_color = (
-            QtGui.QColor("#ffffff")
-            if color.lightness() < 128
-            else QtGui.QColor("#000000")
-        )
-        self._fg_hover_color = (
-            QtGui.QColor("#000000")
-            if color.lightness() < 128
-            else QtGui.QColor("#ffffff")
-        )
+        self._fg_color = None
+        self.setStyle(get_ayon_style())
         self.init_ui()
 
     @property
     def background_color(self) -> QtGui.QColor:
         return self._bg_color
 
+    @property
+    def foreground_color(self) -> QtGui.QColor:
+        if self._fg_color is None:
+            self._fg_color = compute_color_for_contrast(
+                self._bg_color.toTuple(),
+                (0, 0, 0, 255),
+            )
+        return self._fg_color
+
     def init_ui(self):
         self.lyt = QtWidgets.QHBoxLayout(self)
         self.lyt.setContentsMargins(2, 2, 2, 2)
         self.lyt.setSpacing(4)
-        self.lyt.setSizeConstraints(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize,
-            QtWidgets.QLayout.SizeConstraint.SetFixedSize,
+        self.lyt.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
 
         self.delete_button = AYButton(
             icon="close",
-            icon_color=self._fg_color.name(),
+            icon_color=self.foreground_color.name(),
             icon_size=16,
             variant=AYButton.Variants.Tag,
             contrast_color=self.background_color,
@@ -69,6 +70,7 @@ class AYTag(AYFrame):
         self.label = AYLabel(
             self._tag_label or self._tag_name,
             variant=AYLabel.Variants.Tag,
+            text_color=self.foreground_color.name(),
             contrast_color=self.background_color,
         )
         self.label.setSizePolicy(
@@ -78,7 +80,7 @@ class AYTag(AYFrame):
 
         self.expand_button = AYButton(
             icon="arrow_drop_down",
-            icon_color=self._fg_color.name(),
+            icon_color=self.foreground_color.name(),
             icon_size=16,
             variant=AYButton.Variants.Tag,
             contrast_color=self.background_color,

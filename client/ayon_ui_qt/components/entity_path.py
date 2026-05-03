@@ -3,7 +3,7 @@ from __future__ import annotations
 from os.path import normpath
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QWidget
 
 from ..style import get_ayon_style
@@ -20,13 +20,13 @@ class AYEntityPathSegment(AYLabel):
         variant: AYLabel.Variants = AYLabel.Variants.Default,
     ):
         super().__init__(text, dim=True, rel_text_size=-2, parent=parent)
+        get_ayon_style().style_widget(self)
         self.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         self._variant_str: str = variant.value
-        self._ensure_font_setup()
         self.setFixedSize(
-            self._font_metrics.size(self.alignment(), self.text()),
+            self._style_font_metrics.size(self.alignment(), self.text()),
         )
 
 
