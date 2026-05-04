@@ -236,9 +236,11 @@ class AYComboBox(QtWidgets.QComboBox):
         inverted: bool = False,
         icon_size: int = 20,
         variant: Variants = Variants.Default,
+        plain: bool = False,
         **kwargs,
     ) -> None:
         self._uses_incompatible_model = False
+        self._plain = plain
         super().__init__(parent, **kwargs)
         self._variant_str = variant.value
         from ..style import get_ayon_style
@@ -259,11 +261,12 @@ class AYComboBox(QtWidgets.QComboBox):
         if placeholder:
             self.setPlaceholderText(placeholder)
 
-        # setup model
-        model = AYComboBoxModel(self)
-        self.setModel(model)
+        if not plain:
+            # setup model
+            model = AYComboBoxModel(self)
+            self.setModel(model)
 
-        self.update_items(items)
+            self.update_items(items)
 
     def _assert_compatible_model(self) -> None:
         """Raise :exc:`RuntimeError` when an incompatible model is active.
@@ -538,6 +541,12 @@ class AYComboBox(QtWidgets.QComboBox):
         Args:
             arg__1: The paint event delivered by Qt.
         """
+        # In plain mode fall back to native Qt rendering which shows the
+        # standard dropdown arrow — no AYON pill/status styling applied.
+        if self._plain:
+            super().paintEvent(arg__1)
+            return
+
         from ..style import get_ayon_style
 
         p = QPainter(self)

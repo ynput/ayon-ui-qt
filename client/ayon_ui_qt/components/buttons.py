@@ -101,7 +101,7 @@ class AYButton(QtWidgets.QPushButton):
             self._name_id = name_id
 
         use_fixed_width = (
-            self._style_data.get("fixed-width", True)
+            (not bool(self.text()))  # only fixed when icon-only
             if fixed_width is None
             else fixed_width
         )
