@@ -1701,6 +1701,22 @@ class ComboBoxDrawer:
             p.drawRoundedRect(rect, _radius, _radius)
             p.restore()
 
+            # Draw dropdown arrow using Material Symbol so the widget
+            # is visually recognisable as a dropdown (not a status pill).
+            arrow_rect = super(AYONStyle, self.style_inst).subControlRect(
+                QStyle.ComplexControl.CC_ComboBox,
+                opt,
+                QStyle.SubControl.SC_ComboBoxArrow,
+                w,
+            )
+            arrow_icon = get_icon("arrow_drop_down", color=fg_color)
+            if arrow_icon and not arrow_rect.isEmpty():
+                arrow_size = min(arrow_rect.width(), arrow_rect.height())
+                pixmap = arrow_icon.pixmap(arrow_size, arrow_size)
+                px = arrow_rect.x() + (arrow_rect.width() - arrow_size) // 2
+                py = arrow_rect.y() + (arrow_rect.height() - arrow_size) // 2
+                p.drawPixmap(px, py, pixmap)
+
             # set pen for text drawing
             p.setPen(fg_color)
         else:
