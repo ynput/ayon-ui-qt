@@ -1725,10 +1725,7 @@ class ComboBoxDrawer:
                 pixmap = arrow_icon.pixmap(arrow_size, arrow_size)
                 px = arrow_rect.x() + (arrow_rect.width() - arrow_size) // 2
                 py = arrow_rect.y() + (arrow_rect.height() - arrow_size) // 2
-                popup_open = (
-                    hasattr(w, "view") and w.view() is not None
-                    and w.view().isVisible()
-                )
+                popup_open = bool(opt.state & QStyle.StateFlag.State_On)
                 if popup_open:
                     cx = px + arrow_size / 2
                     cy = py + arrow_size / 2
