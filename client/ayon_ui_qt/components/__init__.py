@@ -20,9 +20,10 @@ from .label import AYLabel
 from .layouts import AYHBoxLayout, AYVBoxLayout, AYGridLayout
 from .line_edit import AYLineEdit
 from .text_edit import AYTextEdit
+from .tree_view import AYTreeView
 
 __all__ = [
     "AYButton", "AYCheckBox", "AYComboBox", "AYContainer",
     "AYLabel", "AYHBoxLayout", "AYVBoxLayout", "AYGridLayout",
-    "AYLineEdit", "AYTextEdit",
+    "AYLineEdit", "AYTextEdit", "AYTreeView",
 ]
