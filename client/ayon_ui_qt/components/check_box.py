@@ -33,12 +33,6 @@ class AYCheckBox(QCheckBox):
         self._style_dict = None
         self.setStyle(get_ayon_style())
 
-        # Default to expanding so label text is never clipped
-        self.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding,
-            QSizePolicy.Policy.Fixed,
-        )
-
         if variant == AYCheckBox.Variants.Button:
             self.setFixedSize(self.sizeHint())
 
