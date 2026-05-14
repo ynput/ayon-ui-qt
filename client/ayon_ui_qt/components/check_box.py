@@ -95,6 +95,20 @@ class AYCheckBox(QCheckBox):
             h_pad, v_pad = self.style_dict.get("padding", [6, 6])
             size.setWidth(size.width() + h_pad * 2)
             size.setHeight(size.height() + v_pad * 2)
+        else:
+            # Recalculate width using the custom style's actual metrics
+            option = QStyleOptionButton()
+            self.initStyleOption(option)
+            _style = get_ayon_style()
+            ind_w = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, self
+            )
+            spacing = _style.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, self
+            )
+            fm = self.fontMetrics()
+            text_w = fm.horizontalAdvance(self.text())
+            size.setWidth(ind_w + spacing + text_w)
 
         return size
 
