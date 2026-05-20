@@ -335,6 +335,13 @@ class AYTableView(QTreeView):
         self._hovered_row: int = -1
         self._hovered_row_rect: QRect = QRect()
 
+        # Track the currently hovered index so we may pass hover state to
+        # editors.
+        self._hovered_index: QModelIndex = QModelIndex()
+
+        # Column indices that have widget_factory set (cached from model).
+        self._widget_col_indices: list[int] = []
+
         # Track model connections for cleanup.  Each entry is (source_object,
         # connection) so we can call the right object's .disconnect().
         self._model_connections: list[
@@ -398,7 +405,21 @@ class AYTableView(QTreeView):
         super().setModel(model)
 
         if model is None:
+            self._widget_col_indices = []
             return
+
+        # Cache widget-factory column indices for hover state updates.
+        source_mdl: Any = model
+        if isinstance(model, QSortFilterProxyModel):
+            source_mdl = model.sourceModel()
+        if isinstance(source_mdl, PaginatedTableModel):
+            self._widget_col_indices = [
+                i
+                for i, col in enumerate(source_mdl.columns)
+                if col.widget_factory is not None
+            ]
+        else:
+            self._widget_col_indices = []
 
         # Configure header from column width hints.
         self._configure_header(model)
@@ -773,6 +794,25 @@ class AYTableView(QTreeView):
             return
         super().mousePressEvent(event)
 
+    def _set_row_hover_state(
+        self, row_idx: QModelIndex, hovered: bool
+    ) -> None:
+        """Set ``row_hovered`` property on all editor widgets in a row.
+
+        Iterates the cached widget-factory column indices and updates
+        each persistent editor's dynamic property so the style system
+        can react to hover state.
+
+        Args:
+            row_idx: Any valid index in the target row.
+            hovered: Whether the row is being hovered.
+        """
+        for col in self._widget_col_indices:
+            editor = self.indexWidget(row_idx.siblingAtColumn(col))
+            if editor:
+                editor.setProperty("row_hovered", hovered)
+                editor.update()
+
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
         """Track the hovered row and force-repaint it when it changes.
 
@@ -785,6 +825,14 @@ class AYTableView(QTreeView):
         new_idx = self.indexAt(event.pos())
         new_row = new_idx.row() if new_idx.isValid() else -1
         if new_row != self._hovered_row:
+            # Clear hover state on the previous row's editors.
+            if self._hovered_index.isValid():
+                self._set_row_hover_state(self._hovered_index, False)
+            # Set hover state on the new row's editors.
+            if new_idx.isValid():
+                self._set_row_hover_state(new_idx, True)
+            self._hovered_index = new_idx
+
             # Repaint the old row so its indicator clears.
             self._repaint_row(self._hovered_row_rect)
             self._hovered_row = new_row

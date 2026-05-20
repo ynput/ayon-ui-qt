@@ -1154,7 +1154,15 @@ class FrameDrawer:
         # )
         # if is_view_frame or isinstance(w, QListView):
         #     variant = "item-view"
-        style = self.model.get_style("QFrame", variant)
+        state = (
+            "hover"
+            if (
+                option.state & QStyle.StateFlag.State_MouseOver
+                or w.property("row_hovered")
+            )
+            else "base"
+        )
+        style = self.model.get_style("QFrame", variant, state)
         style.set_context(w)
 
         # widget override for comment types

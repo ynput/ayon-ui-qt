@@ -452,6 +452,15 @@
                     "border-width": 1,
                     "border-color": "--md-sys-color-outline-variant-dark"
                 },
+                "low-table-editor": {
+                    "background-color": "--color-table-row",
+                    "border-radius": 0,
+                    "border-width": 1,
+                    "border-color": "--md-sys-color-surface-container-dark",
+                    "hover": {
+                        "background-color": "--color-table-row-hover"
+                    }
+                },
                 "high": {
                     "background-color": "--md-sys-color-surface-container-dark"
                 },

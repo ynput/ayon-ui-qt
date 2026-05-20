@@ -47,9 +47,10 @@ class AYFrame(QtWidgets.QFrame):
 
     def get_bg_color(self, base_color: str):
         if not self._bg_color:
-            self._bg_color = base_color
             if self._bg_tint:
                 self._bg_color = color_blend(base_color, self._bg_tint, 0.1)
+            else:
+                return base_color
         return self._bg_color
 
 
