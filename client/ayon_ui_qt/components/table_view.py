@@ -13,7 +13,7 @@ from qtpy.QtCore import (
     QItemSelection,
     QModelIndex,
     QRect,
-    QSortFilterProxyModel,
+    QAbstractProxyModel,
     Qt,
     Signal,  # type: ignore
 )
@@ -410,7 +410,7 @@ class AYTableView(QTreeView):
 
         # Cache widget-factory column indices for hover state updates.
         source_mdl: Any = model
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             source_mdl = model.sourceModel()
         if isinstance(source_mdl, PaginatedTableModel):
             self._widget_col_indices = [
@@ -439,7 +439,7 @@ class AYTableView(QTreeView):
 
         # Connect to the source PaginatedTableModel for tree mode changes.
         source: Any = model
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             source = model.sourceModel()
         if isinstance(source, PaginatedTableModel):
             conn2 = source.tree_mode_changed.connect(self._apply_tree_mode)
@@ -484,7 +484,7 @@ class AYTableView(QTreeView):
             The source model, or ``None`` if no model is set.
         """
         model = self.model()
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             return model.sourceModel()
         return model
 
@@ -525,7 +525,7 @@ class AYTableView(QTreeView):
 
         # Unwrap proxy to access PaginatedTableModel column definitions.
         source: Any = model
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             source = model.sourceModel()
 
         # Check if model provides column width hints.
@@ -600,7 +600,7 @@ class AYTableView(QTreeView):
         display_model = self.model()
         if display_model is None:
             return
-        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+        is_proxy = isinstance(display_model, QAbstractProxyModel)
 
         def _collect(parent_view_idx: QModelIndex) -> None:
             for row in range(display_model.rowCount(parent_view_idx)):
@@ -643,14 +643,14 @@ class AYTableView(QTreeView):
             return
         source = (
             display_model.sourceModel()
-            if isinstance(display_model, QSortFilterProxyModel)
+            if isinstance(display_model, QAbstractProxyModel)
             else display_model
         )
         if not isinstance(source, PaginatedTableModel):
             return
         if not source._tree_mode:
             return
-        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+        is_proxy = isinstance(display_model, QAbstractProxyModel)
         for row in range(first, last + 1):
             child_view_idx = display_model.index(row, 0, parent)
             src_idx = (
