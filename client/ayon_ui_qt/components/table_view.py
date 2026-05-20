@@ -10,10 +10,10 @@ from typing import Any
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import (
+    QAbstractProxyModel,
     QItemSelection,
     QModelIndex,
     QRect,
-    QAbstractProxyModel,
     Qt,
     Signal,  # type: ignore
 )
@@ -26,7 +26,7 @@ from qtpy.QtGui import (
     QPalette,
     QPen,
 )
-from qtpy.QtWidgets import QHeaderView, QToolButton, QTreeView, QWidget
+from qtpy.QtWidgets import QHeaderView, QStyle, QToolButton, QTreeView, QWidget
 
 from ..style import StyleData, TableItemDelegate, get_ayon_style
 from ..variants import AYTableViewVariants
@@ -794,23 +794,29 @@ class AYTableView(QTreeView):
             return
         super().mousePressEvent(event)
 
-    def _set_row_hover_state(
-        self, row_idx: QModelIndex, hovered: bool
-    ) -> None:
-        """Set ``row_hovered`` property on all editor widgets in a row.
+    def _set_row_state(self, row_idx: QModelIndex, hovered: bool) -> None:
+        """Set ``row_state`` property on all editor widgets in a row.
 
         Iterates the cached widget-factory column indices and updates
         each persistent editor's dynamic property so the style system
-        can react to hover state.
+        can react to hover, selected, and enabled states.
 
         Args:
             row_idx: Any valid index in the target row.
             hovered: Whether the row is being hovered.
         """
+        state = QStyle.StateFlag.State_None
+        if hovered:
+            state |= QStyle.StateFlag.State_MouseOver
+        if self.selectionModel().isSelected(row_idx):
+            state |= QStyle.StateFlag.State_Selected
+        if not self.model().flags(row_idx) & Qt.ItemFlag.ItemIsEnabled:
+            state &= ~QStyle.StateFlag.State_Enabled
+
         for col in self._widget_col_indices:
             editor = self.indexWidget(row_idx.siblingAtColumn(col))
             if editor:
-                editor.setProperty("row_hovered", hovered)
+                editor.setProperty("row_state", state)
                 editor.update()
 
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
@@ -827,10 +833,10 @@ class AYTableView(QTreeView):
         if new_row != self._hovered_row:
             # Clear hover state on the previous row's editors.
             if self._hovered_index.isValid():
-                self._set_row_hover_state(self._hovered_index, False)
+                self._set_row_state(self._hovered_index, False)
             # Set hover state on the new row's editors.
             if new_idx.isValid():
-                self._set_row_hover_state(new_idx, True)
+                self._set_row_state(new_idx, True)
             self._hovered_index = new_idx
 
             # Repaint the old row so its indicator clears.
@@ -862,6 +868,15 @@ class AYTableView(QTreeView):
             deselected: Newly deselected items.
         """
         super().selectionChanged(selected, deselected)
+
+        # Update row_state for newly selected rows
+        for index in selected.indexes():
+            self._set_row_state(index, True)
+
+        # Update row_state for newly deselected rows
+        for index in deselected.indexes():
+            self._set_row_state(index, False)
+
         self.selection_changed.emit(selected, deselected)
 
 
@@ -874,10 +889,9 @@ if __name__ == "__main__":
 
     from qtpy import QtWidgets
 
-    from .container import AYContainer
-    from .check_box import AYCheckBox
-
     from ..tester import Style, test
+    from .check_box import AYCheckBox
+    from .container import AYContainer
     from .table_model import (
         HIERARCHICAL_TEST_DATA,
         PaginatedTableModel,

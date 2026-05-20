@@ -425,7 +425,8 @@
             "states": [
                 "hover",
                 "active",
-                "dragging"
+                "dragging",
+                "selected"
             ],
             "default-variant": "default",
             "variants": {
@@ -459,6 +460,9 @@
                     "border-color": "--md-sys-color-surface-container-dark",
                     "hover": {
                         "background-color": "--color-table-row-hover"
+                    },
+                    "selected": {
+                        "background-color": "--md-sys-color-primary-container-dark"
                     }
                 },
                 "high": {

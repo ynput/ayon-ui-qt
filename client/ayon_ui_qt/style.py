@@ -1154,14 +1154,16 @@ class FrameDrawer:
         # )
         # if is_view_frame or isinstance(w, QListView):
         #     variant = "item-view"
-        state = (
-            "hover"
-            if (
-                option.state & QStyle.StateFlag.State_MouseOver
-                or w.property("row_hovered")
+        state = "base"
+        row_state = w.property("row_state") if w is not None else None
+        if row_state:
+            state = (
+                "selected"
+                if row_state & QStyle.StateFlag.State_Selected
+                else "hover"
+                if row_state & QStyle.StateFlag.State_MouseOver
+                else "base"
             )
-            else "base"
-        )
         style = self.model.get_style("QFrame", variant, state)
         style.set_context(w)
 
