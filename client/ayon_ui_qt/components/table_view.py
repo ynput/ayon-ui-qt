@@ -703,6 +703,7 @@ class AYTableView(QTreeView):
         """
         self._hovered_index = QModelIndex()
         self._hovered_row = -1
+        self._hovered_row_rect = QRect()
         self._active_editor_pmis.clear()
         self._schedule_editor_sync()
 
