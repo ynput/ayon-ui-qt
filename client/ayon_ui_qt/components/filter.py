@@ -14,10 +14,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import List
 
-from PySide6.QtGui import QMouseEvent
 from qtpy import QtCore, QtWidgets
 from qtpy.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
-from qtpy.QtGui import QColor, QPainter
+from qtpy.QtGui import QColor, QPainter, QMouseEvent
 from qtpy.QtWidgets import QStyle, QStyleOptionViewItem
 
 from ..style import get_ayon_style
