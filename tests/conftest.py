@@ -77,7 +77,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         return
     # clean up labels
     for i, (test_name, _, _) in enumerate(_failed_image_tests):
-        l = re.search(r"\[([\w\d]+)\]", test_name)
+        l = re.search(r"\[([\w\d]+)\]", test_name)  # noqa: E741
         _failed_image_tests[i] = (
             l.group(1) if l else test_name,
             _failed_image_tests[i][1],

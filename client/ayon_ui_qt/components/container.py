@@ -5,7 +5,6 @@ from enum import Enum
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QLayout, QLayoutItem, QWidget
 
-from ..utils import clear_layout
 from ..variants import QFrameVariants
 from .frame import AYFrame
 from .layouts import (

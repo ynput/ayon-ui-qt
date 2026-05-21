@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Union
 from ..variants import QTextEditVariants
 
 from qtpy.QtCore import Qt
-from qtpy.QtGui import QPainter, QPaintEvent
-from qtpy.QtWidgets import QStyle, QStyleOptionFrame, QTextEdit
+from qtpy.QtWidgets import QTextEdit
 
 from ..style import get_ayon_style
 

@@ -13,7 +13,6 @@ from ..color_utils import compute_color_for_contrast
 from ..variants import QPushButtonVariants
 from .container import AYContainer
 from .dropdown import AYDropdownPopup
-from .layouts import AYVBoxLayout
 
 logger = logging.getLogger(__name__)
 

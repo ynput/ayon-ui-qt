@@ -425,7 +425,8 @@
             "states": [
                 "hover",
                 "active",
-                "dragging"
+                "dragging",
+                "selected"
             ],
             "default-variant": "default",
             "variants": {
@@ -451,6 +452,18 @@
                     "background-color": "--md-sys-color-surface-container-low-dark",
                     "border-width": 1,
                     "border-color": "--md-sys-color-outline-variant-dark"
+                },
+                "low-table-editor": {
+                    "background-color": "--color-table-row",
+                    "border-radius": 0,
+                    "border-width": 1,
+                    "border-color": "--md-sys-color-surface-container-dark",
+                    "hover": {
+                        "background-color": "--color-table-row-hover"
+                    },
+                    "selected": {
+                        "background-color": "--color-table-row-selected"
+                    }
                 },
                 "high": {
                     "background-color": "--md-sys-color-surface-container-dark"
@@ -695,7 +708,7 @@
                         "background-color": "--color-table-row-hover"
                     },
                     "selected": {
-                        "background-color": "--md-sys-color-primary-container-dark",
+                        "background-color": "--color-table-row-selected",
                         "color": "--md-sys-color-on-primary-container-dark"
                     },
                     "disabled": {
@@ -976,6 +989,7 @@
         "--md-ref-palette-neutral-variant100": "#ffffff",
         "--color-table-row": "#1d2026",
         "--color-table-row-hover": "#22252b",
+        "--color-table-row-selected": "#394956",
         "--color-table-row-item": "#1a1c21",
         "--color-table-text": "#dedede",
         "qt-active-window": "--md-sys-color-background-dark",

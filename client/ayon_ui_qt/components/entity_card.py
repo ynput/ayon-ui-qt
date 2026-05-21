@@ -38,9 +38,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QApplication,
-    QFrame,
     QHBoxLayout,
-    QSizePolicy,
     QStackedLayout,
     QVBoxLayout,
     QWidget,

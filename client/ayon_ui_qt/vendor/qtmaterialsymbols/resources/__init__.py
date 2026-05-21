@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
