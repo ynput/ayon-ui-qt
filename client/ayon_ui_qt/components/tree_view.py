@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from qtpy.QtCore import Qt, Signal, QItemSelection
 from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette
-from qtpy.QtWidgets import QTreeView, QWidget
+from qtpy.QtWidgets import QTreeView, QWidget, QStyle, QStyleOption
 
-from ..style import TreeViewItemDelegate, get_ayon_style
+from ..style import TreeViewItemDelegate, get_ayon_style, enum_to_str
 from ..variants import QTreeViewVariants
 from .scroll_area import AYScrollBar
 
@@ -106,6 +106,46 @@ class AYTreeView(QTreeView):
 
         # Let QTreeView draw its items on top.
         super().paintEvent(event)
+
+    def drawBranches(self, painter, rect, index):
+        """Draw branch indicators with AYONStyle directly.
+
+        Bypasses ``self.style()`` because, when an application-level QSS is
+        active, Qt wraps the widget's style in a ``QStyleSheetStyle`` proxy
+        which would otherwise intercept ``PE_IndicatorBranch`` and apply
+        QSS ``QTreeView::branch`` rules on top of (or instead of) ours.
+        """
+        style = get_ayon_style()  # the raw AYONStyle, never wrapped
+
+        opt = QStyleOption()
+        opt.rect = rect
+        opt.palette = self.palette()
+        state = QStyle.StateFlag.State_Item
+        if self.model() is not None and self.model().hasChildren(index):
+            state |= QStyle.StateFlag.State_Children
+        if self.isExpanded(index):
+            state |= QStyle.StateFlag.State_Open
+        if index in self.selectionModel().selectedIndexes():
+            state |= QStyle.StateFlag.State_Selected
+        if self.isEnabled():
+            state |= QStyle.StateFlag.State_Enabled
+        opt.state = state
+
+        # Fill the branch column with the variant background so the QSS
+        # widget background can't bleed through the indent area.
+        tv_style = style.model.get_style("QTreeView", self._variant_str)
+        painter.fillRect(
+            rect, QColor(tv_style.get("background-color", "#252a31"))
+        )
+
+        # Call our drawer directly, not through self.style().
+        style.drawers[
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            )
+        ](opt, painter, self)
 
     def mousePressEvent(self, event) -> None:
         """Deselect all items when clicking in an empty area."""
