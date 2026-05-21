@@ -701,6 +701,8 @@ class AYTableView(QTreeView):
         from a clean slate, then schedules a sync so visible rows get their
         editors back.
         """
+        self._hovered_index = QModelIndex()
+        self._hovered_row = -1
         self._active_editor_pmis.clear()
         self._schedule_editor_sync()
 
