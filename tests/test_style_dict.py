@@ -1,6 +1,5 @@
 """Tests for StyleDict class."""
 
-import pytest
 
 from ayon_ui_qt.style import StyleDict
 

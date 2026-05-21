@@ -10,7 +10,6 @@ These tests exercise the async path (``no_async=False``) and verify:
 
 from __future__ import annotations
 
-import pytest
 
 from ayon_ui_qt.components.tree_model import LazyTreeModel, TreeNode
 
