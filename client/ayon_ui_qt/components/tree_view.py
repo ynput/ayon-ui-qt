@@ -181,7 +181,7 @@ if __name__ == "__main__":
     try:
         from qtmaterialsymbols import get_icon  # type: ignore
     except ImportError:
-        from ..vendor.qtmaterialsymbols import get_icon
+        from ..vendor.qtmaterialsymbols import get_icon  # noqa: F401
 
     from ..tester import Style, test
 

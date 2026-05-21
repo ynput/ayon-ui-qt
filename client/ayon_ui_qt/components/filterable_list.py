@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QFrame, QWidget
 
 from .container import AYContainer
