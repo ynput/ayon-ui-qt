@@ -95,7 +95,7 @@ class AYTableHeader(QHeaderView):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setClipRect(rect)
 
-        # draw cell
+        # Draw cell background and border
         painter.setBrush(
             QBrush(QColor(tbl_style.get("header-background-color", "#272d35")))
         )
@@ -113,9 +113,7 @@ class AYTableHeader(QHeaderView):
         v_pad = int(padding[0])
         text_rect = rect.adjusted(h_pad, v_pad, -h_pad, -v_pad)
 
-        text_color = QColor(tbl_style.get("header-color", "#c1c7ce"))
-        painter.setPen(text_color)
-
+        painter.setPen(QColor(tbl_style.get("header-color", "#c1c7ce")))
         font = painter.font()
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
@@ -139,20 +137,18 @@ class AYTableHeader(QHeaderView):
             self.isSortIndicatorShown()
             and self.sortIndicatorSection() == logical_index
         ):
-            # do not draw sort indicator if column is not sortable
             is_sortable = True
-            if isinstance(model, PaginatedTableModel):
-                cols = model.columns
-                if 0 <= logical_index < len(cols):
-                    is_sortable = cols[logical_index].sortable
+            if isinstance(
+                model, PaginatedTableModel
+            ) and 0 <= logical_index < len(model.columns):
+                is_sortable = model.columns[logical_index].sortable
             if not is_sortable:
                 painter.restore()
                 return
 
-            # draw sort indicator (icon if available, otherwise arrow)
             order = self.sortIndicatorOrder()
-            icon_name = tbl_style.get("header-sort-indicator-icon", None)
-            if icon_name is not None:
+            icon_name = tbl_style.get("header-sort-indicator-icon")
+            if icon_name:
                 icon = get_icon(
                     icon_name,
                     color=tbl_style.get(
@@ -179,7 +175,6 @@ class AYTableHeader(QHeaderView):
                     painter.restore()
                 else:
                     painter.drawPixmap(target, pixmap)
-
             else:
                 arrow = "▲" if order == Qt.SortOrder.AscendingOrder else "▼"
                 painter.drawText(
@@ -524,29 +519,28 @@ class AYTableView(QTreeView):
             return
 
         # Unwrap proxy to access PaginatedTableModel column definitions.
-        source: Any = model
-        if isinstance(model, QAbstractProxyModel):
-            source = model.sourceModel()
-
-        # Check if model provides column width hints.
-        has_hints = isinstance(source, PaginatedTableModel) and any(
-            col_def.width > 0 for col_def in source.columns
+        source = (
+            model.sourceModel()
+            if isinstance(model, QAbstractProxyModel)
+            else model
         )
 
-        if has_hints:
+        # Configure column widths
+        if isinstance(source, PaginatedTableModel) and any(
+            col_def.width > 0 for col_def in source.columns
+        ):
+            # Use column definitions from the model.
             for i, col_def in enumerate(source.columns):
                 if i >= col_count:
                     break
                 if col_def.width > 0:
                     header.resizeSection(i, col_def.width)
                     header.setSectionResizeMode(
-                        i,
-                        QHeaderView.ResizeMode.Interactive,
+                        i, QHeaderView.ResizeMode.Interactive
                     )
                 else:
                     header.setSectionResizeMode(
-                        i,
-                        QHeaderView.ResizeMode.Stretch,
+                        i, QHeaderView.ResizeMode.Stretch
                     )
         else:
             # Default: stretch all columns equally.
@@ -722,9 +716,11 @@ class AYTableView(QTreeView):
         model = self.model()
         if model is None:
             return []
-        source: Any = self._source_model()
+
+        source = self._source_model()
         if not isinstance(source, PaginatedTableModel):
             return []
+
         widget_cols = [
             i
             for i, col in enumerate(source.columns)
@@ -749,11 +745,13 @@ class AYTableView(QTreeView):
             visual = self.visualRect(idx)
             if visual.top() > vp_rect.bottom():
                 break
+
             if not visual.isEmpty():
                 for col in widget_cols:
                     col_idx = model.index(idx.row(), col, idx.parent())
                     if col_idx.isValid():
                         results.append(col_idx)
+
             idx = self.indexBelow(idx)
 
         return results
@@ -779,7 +777,7 @@ class AYTableView(QTreeView):
         for idx in self._get_visible_widget_indexes():
             pmi = QtCore.QPersistentModelIndex(idx)
             if pmi.isValid() and pmi not in self._active_editor_pmis:
-                self.openPersistentEditor(pmi)  # type: ignore[arg-type]
+                self.openPersistentEditor(pmi)
                 self._active_editor_pmis.add(pmi)
 
     def mousePressEvent(  # type: ignore[override]
@@ -833,13 +831,16 @@ class AYTableView(QTreeView):
         """
         new_idx = self.indexAt(event.pos())
         new_row = new_idx.row() if new_idx.isValid() else -1
+
         if new_row != self._hovered_row:
             # Clear hover state on the previous row's editors.
             if self._hovered_index.isValid():
                 self._set_row_state(self._hovered_index, False)
+
             # Set hover state on the new row's editors.
             if new_idx.isValid():
                 self._set_row_state(new_idx, True)
+
             self._hovered_index = new_idx
 
             # Repaint the old row so its indicator clears.
@@ -848,8 +849,10 @@ class AYTableView(QTreeView):
             self._hovered_row_rect = (
                 self.visualRect(new_idx) if new_idx.isValid() else QRect()
             )
+
             # Repaint the new row so its indicator lights up immediately.
             self._repaint_row(self._hovered_row_rect)
+
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event: "QtCore.QEvent") -> None:
