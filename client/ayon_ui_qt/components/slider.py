@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from typing import Dict
 
 from qtpy.QtCore import QRectF, Qt, Signal
 from qtpy.QtGui import QBrush, QColor, QPainter, QPaintEvent, QPen, QPixmap

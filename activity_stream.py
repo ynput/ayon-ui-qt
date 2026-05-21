@@ -30,7 +30,6 @@ from qtpy.QtCore import QObject, Signal, Slot  # type: ignore
 from qtpy.QtWidgets import (
     QButtonGroup,
     QFormLayout,
-    QScrollArea,
     QWidget,
 )
 

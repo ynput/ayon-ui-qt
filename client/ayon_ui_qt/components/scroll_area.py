@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from qtpy.QtCore import Qt
-from qtpy.QtGui import QColor, QPainter, QPaintEvent, QPalette
+from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import (
     QScrollArea,
     QScrollBar,
