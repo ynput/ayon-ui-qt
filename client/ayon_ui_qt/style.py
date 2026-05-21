@@ -2991,63 +2991,60 @@ class TreeViewDrawer:
 
         is_table = type(tv).__name__ == "AYTableView"
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        variant = getattr(tv, "_variant_str", "default")
 
-        # State_MouseOver is only set when the cursor is directly over the
-        # branch rect — not when hovering another column in the same row.
-        # Query the actual cursor position for true row-level hover.
-        # Compare by y-coordinate rather than index.row() to avoid false
-        # matches between rows at the same row number under different parents
-        # (e.g. row 2 under root vs row 2 under an expanded child).
-        is_hovered = False
-        if not is_selected and is_table and isinstance(tv, QTreeView):
-            vp = tv.viewport()
-            cursor_vp = vp.mapFromGlobal(QtGui.QCursor.pos())
-            is_hovered = (
-                option.rect.top() <= cursor_vp.y() < option.rect.bottom()
-            )
+        if is_selected:
+            state_name = "selected"
+        elif is_hovered:
+            state_name = "hover"
+        else:
+            state_name = "base"
+
+        t_style = self.model.get_style(
+            "AYTableView" if is_table else "QTreeView",
+            variant=variant,
+            state=state_name,
+        )
 
         if not has_children:
             if is_table:
-                if is_selected:
-                    state_name = "selected"
-                elif is_hovered:
-                    state_name = "hover"
-                else:
-                    state_name = "base"
-                style = self.model.get_style("AYTableView", state=state_name)
                 painter.save()
                 painter.fillRect(
                     option.rect,
-                    QColor(style.get("background-color", "transparent")),
+                    QColor(t_style.get("background-color", "transparent")),
                 )
-                self._draw_cell_border(painter, option.rect, style)
+                self._draw_cell_border(painter, option.rect, t_style)
+                painter.restore()
+            else:
+                painter.save()
+                painter.fillRect(
+                    option.rect,
+                    QColor(t_style.get("background-color", "transparent")),
+                )
                 painter.restore()
             return
 
         is_open = bool(option.state & QStyle.StateFlag.State_Open)
 
-        variant = getattr(tv, "_variant_str", "default")
-        style = self.model.get_style("QTreeView", variant)
-        color = QColor(style.get("branch-indicator-color", "#8b9198"))
-        icon_name = style.get(
+        color = QColor(t_style.get("branch-indicator-color", "#8b9198"))
+        icon_name = t_style.get(
             "expanded-icon-name" if is_open else "expand-icon-name"
         )
 
         painter.save()
 
         if is_table:
-            if is_selected:
-                state_name = "selected"
-            elif is_hovered:
-                state_name = "hover"
-            else:
-                state_name = "base"
-            tbl_style = self.model.get_style("AYTableView", state=state_name)
             painter.fillRect(
                 option.rect,
-                QColor(tbl_style.get("background-color", "transparent")),
+                QColor(t_style.get("background-color", "transparent")),
             )
-            self._draw_cell_border(painter, option.rect, tbl_style)
+            self._draw_cell_border(painter, option.rect, t_style)
+        else:
+            painter.fillRect(
+                option.rect,
+                QColor(t_style.get("background-color", "transparent")),
+            )
 
         if icon_name:
             key = f"{icon_name}-{color.name()}"
@@ -3055,10 +3052,12 @@ class TreeViewDrawer:
                 self._icon_cache[key] = get_icon(icon_name, color=color)
             icon = self._icon_cache[key]
             rect = option.rect
-            if style.get("expand-icon-size"):
+            icn_size = t_style.get("expand-icon-size")
+            if icn_size is not None:
                 center = rect.center()
-                rect.setSize(QSize(16, 16))
-                rect.moveCenter(center)
+                right = rect.right()
+                rect.setSize(QSize(icn_size, icn_size))
+                rect.moveTo(right - icn_size, center.y() - icn_size // 2)
             icon.paint(painter, rect)
 
         else:

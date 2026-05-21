@@ -615,7 +615,7 @@
                     "border-radius": 4,
                     "border-width": 0,
                     "border-color": "--md-sys-color-background-dark",
-                    "indent": 20,
+                    "indent": 22,
                     "item-height": 28,
                     "item-padding": [
                         4,
@@ -623,7 +623,11 @@
                     ],
                     "icon-text-spacing": 6,
                     "branch-indicator-color": "--md-sys-color-on-surface-dark",
+                    "expand-icon-name": "keyboard_arrow_right",
+                    "expanded-icon-name": "keyboard_arrow_down",
+                    "expand-icon-size": 16,
                     "hover": {
+                        "branch-indicator-color": "--md-sys-color-primary-dark",
                         "background-color": "--md-sys-color-surface-container-high-dark"
                     },
                     "selected": {
@@ -632,10 +636,7 @@
                     },
                     "disabled": {
                         "opacity": 0.5
-                    },
-                    "expand-icon-name": "keyboard_arrow_right",
-                    "expanded-icon-name": "keyboard_arrow_down",
-                    "expand-icon-size": 16
+                    }
                 },
                 "low": {
                     "background-color": "--md-sys-color-surface-container-low-dark"

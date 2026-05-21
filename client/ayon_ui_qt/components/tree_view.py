@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt, Signal, QItemSelection
-from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette
+from qtpy.QtCore import Qt, Signal, QItemSelection, QEvent
+from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette, QCursor
 from qtpy.QtWidgets import QTreeView, QWidget, QStyle, QStyleOption
 
 from ..style import TreeViewItemDelegate, get_ayon_style, enum_to_str
@@ -48,6 +48,10 @@ class AYTreeView(QTreeView):
         self.viewport().setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, False
         )
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.viewport().setMouseTracking(True)
+        self.viewport().installEventFilter(self)
+        self._hovered_row_key: tuple | None = None
         self._sync_viewport_palette()
 
         # Custom item delegate — paints items directly, avoids QSS.
@@ -107,6 +111,20 @@ class AYTreeView(QTreeView):
         # Let QTreeView draw its items on top.
         super().paintEvent(event)
 
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            if event.type() == QEvent.Type.MouseMove:
+                idx = self.indexAt(event.pos())
+                key = (idx.row(), idx.parent()) if idx.isValid() else None
+                if key != self._hovered_row_key:
+                    self._hovered_row_key = key
+                    self.viewport().update()
+            elif event.type() == QEvent.Type.Leave:
+                if self._hovered_row_key is not None:
+                    self._hovered_row_key = None
+                    self.viewport().update()
+        return super().eventFilter(obj, event)
+
     def drawBranches(self, painter, rect, index):
         """Draw branch indicators with AYONStyle directly.
 
@@ -129,14 +147,19 @@ class AYTreeView(QTreeView):
             state |= QStyle.StateFlag.State_Selected
         if self.isEnabled():
             state |= QStyle.StateFlag.State_Enabled
-        opt.state = state
 
-        # Fill the branch column with the variant background so the QSS
-        # widget background can't bleed through the indent area.
-        tv_style = style.model.get_style("QTreeView", self._variant_str)
-        painter.fillRect(
-            rect, QColor(tv_style.get("background-color", "#252a31"))
+        # Row-level hover: is the cursor on the same row as `index`?
+        hovered_index = self.indexAt(
+            self.viewport().mapFromGlobal(QCursor.pos())
         )
+        if (
+            hovered_index.isValid()
+            and hovered_index.row() == index.row()
+            and hovered_index.parent() == index.parent()
+        ):
+            state |= QStyle.StateFlag.State_MouseOver
+
+        opt.state = state
 
         # Call our drawer directly, not through self.style().
         style.drawers[
