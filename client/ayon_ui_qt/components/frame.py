@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Union
-from enum import Enum
 
 from qtpy import QtCore, QtGui, QtWidgets
 

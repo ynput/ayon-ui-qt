@@ -19,7 +19,6 @@ from qtpy.QtGui import (
     QPen,
 )
 from qtpy.QtWidgets import (
-    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -28,7 +27,6 @@ from qtpy.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QListView,
     QPushButton,
     QStyle,
     QStyledItemDelegate,

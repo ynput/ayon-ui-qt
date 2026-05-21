@@ -17,7 +17,6 @@ from qtpy.QtGui import (
     QFont,
     QPalette,
     QPixmap,
-    QTextBlockFormat,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
