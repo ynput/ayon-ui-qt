@@ -2969,6 +2969,83 @@ class TreeViewDrawer:
             ]
         )
 
+    def _resolve_tree_view(self, widget: QWidget | None) -> QWidget | None:
+        """Resolve widget to the actual QTreeView/AYTableView."""
+        if widget is not None and not isinstance(widget, QTreeView):
+            return widget.parent() or widget
+        return widget
+
+    def _paint_cell_background(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        style: dict,
+        is_table: bool,
+        is_base_state: bool = False,
+    ) -> None:
+        """Paint background fill and optional cell borders.
+
+        Args:
+            painter: The QPainter to draw on.
+            rect: The rectangle to fill.
+            style: The style data dictionary.
+            is_table: Whether this is an AYTableView cell.
+            is_base_state: If True and is_table, use 'background-color-item'.
+        """
+        painter.save()
+        if is_table and is_base_state:
+            bg_key = "background-color-item"
+        else:
+            bg_key = "background-color"
+        painter.fillRect(rect, QColor(style.get(bg_key, "transparent")))
+        if is_table:
+            self._draw_cell_border(painter, rect, style)
+        painter.restore()
+
+    def _paint_icon(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        icon: QIcon,
+        icon_size: int | None,
+    ) -> None:
+        """Paint a cached icon, optionally resizing and repositioning it."""
+        draw_rect = QRect(rect)
+        if icon_size is not None:
+            center = rect.center()
+            draw_rect.setSize(QSize(icon_size, icon_size))
+            draw_rect.moveTo(
+                rect.right() - icon_size, center.y() - icon_size // 2
+            )
+        icon.paint(painter, draw_rect)
+
+    def _paint_fallback_arrow(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        color: QColor,
+        is_open: bool,
+    ) -> None:
+        """Paint a geometric triangle arrow when no icon is configured."""
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(color))
+
+        cx, cy = rect.center().x(), rect.center().y()
+        size = max(4, min(rect.width(), rect.height()) // 3)
+
+        path = QPainterPath()
+        if is_open:
+            path.moveTo(cx - size, cy - size // 2)
+            path.lineTo(cx + size, cy - size // 2)
+            path.lineTo(cx, cy + size // 2)
+        else:
+            path.moveTo(cx - size // 2, cy - size)
+            path.lineTo(cx - size // 2, cy + size)
+            path.lineTo(cx + size // 2, cy)
+        path.closeSubpath()
+        painter.drawPath(path)
+
     def draw_branch_indicator(
         self,
         option: QStyleOption,
@@ -2983,107 +3060,51 @@ class TreeViewDrawer:
             widget: The QTreeView widget (may be the viewport).
         """
         has_children = bool(option.state & QStyle.StateFlag.State_Children)
-
-        # Resolve to the actual QTreeView — widget may be the viewport.
-        tv = widget
-        if tv is not None and not isinstance(tv, QTreeView):
-            tv = tv.parent() if tv.parent() else tv
-
+        tv = self._resolve_tree_view(widget)
         is_table = type(tv).__name__ == "AYTableView"
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
         is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         variant = getattr(tv, "_variant_str", "default")
 
-        if is_selected:
-            state_name = "selected"
-        elif is_hovered:
-            state_name = "hover"
-        else:
-            state_name = "base"
-
-        t_style = self.model.get_style(
-            "AYTableView" if is_table else "QTreeView",
-            variant=variant,
-            state=state_name,
+        state_name = (
+            "selected" if is_selected else "hover" if is_hovered else "base"
         )
 
+        widget_class = "AYTableView" if is_table else "QTreeView"
+        t_style = self.model.get_style(
+            widget_class, variant=variant, state=state_name
+        )
+
+        # Items without children only need background/border painting
         if not has_children:
-            if is_table:
-                painter.save()
-                painter.fillRect(
-                    option.rect,
-                    QColor(t_style.get("background-color-item", "transparent")),
-                )
-                self._draw_cell_border(painter, option.rect, t_style)
-                painter.restore()
-            else:
-                painter.save()
-                painter.fillRect(
-                    option.rect,
-                    QColor(t_style.get("background-color", "transparent")),
-                )
-                painter.restore()
+            self._paint_cell_background(
+                painter,
+                option.rect,
+                t_style,
+                is_table,
+                is_base_state=(state_name == "base"),
+            )
             return
 
         is_open = bool(option.state & QStyle.StateFlag.State_Open)
-
         color = QColor(t_style.get("branch-indicator-color", "#8b9198"))
         icon_name = t_style.get(
             "expanded-icon-name" if is_open else "expand-icon-name"
         )
 
-        painter.save()
-
-        if is_table:
-            painter.fillRect(
-                option.rect,
-                QColor(t_style.get("background-color", "transparent")),
-            )
-            self._draw_cell_border(painter, option.rect, t_style)
-        else:
-            painter.fillRect(
-                option.rect,
-                QColor(t_style.get("background-color", "transparent")),
-            )
+        # Paint background for items with children
+        self._paint_cell_background(painter, option.rect, t_style, is_table)
 
         if icon_name:
             key = f"{icon_name}-{color.name()}"
             if key not in self._icon_cache:
                 self._icon_cache[key] = get_icon(icon_name, color=color)
-            icon = self._icon_cache[key]
-            rect = option.rect
-            icn_size = t_style.get("expand-icon-size")
-            if icn_size is not None:
-                center = rect.center()
-                right = rect.right()
-                rect.setSize(QSize(icn_size, icn_size))
-                rect.moveTo(right - icn_size, center.y() - icn_size // 2)
-            icon.paint(painter, rect)
-
+            icon_size = t_style.get("expand-icon-size")
+            self._paint_icon(
+                painter, option.rect, self._icon_cache[key], icon_size
+            )
         else:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(color))
-
-            rect = option.rect
-            cx, cy = rect.center().x(), rect.center().y()
-            size = max(4, min(rect.width(), rect.height()) // 3)
-
-            path = QPainterPath()
-            if is_open:
-                # Downward-pointing triangle
-                path.moveTo(cx - size, cy - size // 2)
-                path.lineTo(cx + size, cy - size // 2)
-                path.lineTo(cx, cy + size // 2)
-            else:
-                # Right-pointing triangle
-                path.moveTo(cx - size // 2, cy - size)
-                path.lineTo(cx - size // 2, cy + size)
-                path.lineTo(cx + size // 2, cy)
-            path.closeSubpath()
-            painter.drawPath(path)
-
-        painter.restore()
+            self._paint_fallback_arrow(painter, option.rect, color, is_open)
 
 
 # ----------------------------------------------------------------------------
