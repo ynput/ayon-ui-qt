@@ -3,8 +3,8 @@
 This module provides :class:`AYComboBox`, a styled :class:`QComboBox`
 subclass that supports per-item coloured icons, a short-text display mode,
 and an icon-only display mode via :class:`~ayon_ui_qt.data_models.MenuSize`.
-A dropdown arrow is always drawn using the Material Symbol ``arrow_drop_down``
-icon so the widget is visually recognisable as a dropdown in all use cases.
+A dropdown arrow is drawn using the Material Symbol ``arrow_drop_down``
+icon so the widget is visually recognizable as a dropdown when show_chevron is true.
 
 It also exposes :class:`AYComboBoxModel`, the default
 :class:`QStandardItemModel` subclass that adds two extra item-data roles:
@@ -206,6 +206,9 @@ class AYComboBox(QtWidgets.QComboBox):
         inverted: When ``True`` the icon foreground and background colours are
             swapped (default ``False``).
         icon_size: Icon size in pixels (default ``20``).
+        show_chevron: If False, the dropdown chevron (arrow) will not be drawn
+            in the custom style. Default is False.
+
         **kwargs: Additional keyword arguments forwarded to
             :class:`QComboBox`.
 
@@ -238,6 +241,7 @@ class AYComboBox(QtWidgets.QComboBox):
         inverted: bool = False,
         icon_size: int = 20,
         variant: Variants = Variants.Default,
+        show_chevron: bool = False,
         **kwargs,
     ) -> None:
         self._uses_incompatible_model = False
