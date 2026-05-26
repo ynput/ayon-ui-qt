@@ -2,14 +2,6 @@
 
 This package provides reusable Qt widgets styled according to the AYON
 design system.
-
-All components are re-exported here for convenience::
-
-    from ayon_ui_qt.components import (
-        AYButton, AYCheckBox, AYComboBox, AYLabel,
-        AYLineEdit, AYTextEdit, AYContainer,
-        AYHBoxLayout, AYVBoxLayout, AYGridLayout,
-    )
 """
 
 from .buttons import AYButton
@@ -22,8 +14,16 @@ from .line_edit import AYLineEdit
 from .text_edit import AYTextEdit
 from .tree_view import AYTreeView
 
-__all__ = [
-    "AYButton", "AYCheckBox", "AYComboBox", "AYContainer",
-    "AYLabel", "AYHBoxLayout", "AYVBoxLayout", "AYGridLayout",
-    "AYLineEdit", "AYTextEdit", "AYTreeView",
-]
+__all__ = (
+    "AYButton",
+    "AYCheckBox",
+    "AYComboBox",
+    "AYContainer",
+    "AYLabel",
+    "AYHBoxLayout",
+    "AYVBoxLayout",
+    "AYGridLayout",
+    "AYLineEdit",
+    "AYTextEdit",
+    "AYTreeView",
+)
