@@ -1949,6 +1949,9 @@ class ScrollBarDrawer:
         if not isinstance(self.style_inst, AYONStyle):
             raise ValueError
 
+        if not isinstance(opt, (QStyleOptionSlider, QStyleOptionComplex)):
+            raise ValueError
+
         sup = super(AYONStyle, self.style_inst)  # type: ignore
         try:
             als = self._cache["add_line_size"]
@@ -1960,35 +1963,33 @@ class ScrollBarDrawer:
             sls = self._cache["sub_line_size"]
         except KeyError:
             sls = self._cache["sub_line_size"] = sup.subControlRect(
-                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+                cc, opt, QStyle.SubControl.SC_ScrollBarSubLine, w
             ).size()
 
-        if (
-            sc == QStyle.SubControl.SC_ScrollBarSlider
-            or sc == QStyle.SubControl.SC_ScrollBarGroove
-        ) and isinstance(opt, QStyleOptionSlider):
+        orientation = w.orientation()
+
+        if sc in (
+            QStyle.SubControl.SC_ScrollBarSlider,
+            QStyle.SubControl.SC_ScrollBarGroove,
+        ):
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, als.height())
             else:
                 rect.adjust(-sls.width(), 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarAddPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, 0, 0, als.height())
             else:
                 rect.adjust(0, 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarSubPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, 0)
             else:
                 rect.adjust(-sls.width(), 0, 0, 0)
