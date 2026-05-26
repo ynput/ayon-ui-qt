@@ -261,6 +261,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._inverted: bool = inverted
         self._icon_size: int = icon_size
         self._inverted_icons: dict[str, QIcon] = {}
+        self.show_chevron: bool = show_chevron
 
         if placeholder:
             self.setPlaceholderText(placeholder)

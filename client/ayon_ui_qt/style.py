@@ -1710,7 +1710,7 @@ class ComboBoxDrawer:
             p.drawRoundedRect(rect, _radius, _radius)
             p.restore()
 
-            # Draw expand_more arrow if show_chevron is True (default)
+            # Draw expand_more arrow if show_chevron is True
             show_chevron = getattr(w, "show_chevron", True)
             if show_chevron:
                 arrow_rect = super(AYONStyle, self.style_inst).subControlRect(
