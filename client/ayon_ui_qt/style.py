@@ -2942,6 +2942,11 @@ class TreeViewDrawer:
                 QStyle.PrimitiveElement.PE_IndicatorBranch,
                 "QTreeView",
             ): self.draw_branch_indicator,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelScrollAreaCorner,
+                "QTreeView",
+            ): self.draw_scrollbar_corner,
         }
 
     def register_metrics(self) -> dict:
@@ -3135,6 +3140,20 @@ class TreeViewDrawer:
         else:
             self._paint_fallback_arrow(painter, option.rect, color, is_open)
 
+    def draw_scrollbar_corner(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        style = self.model.get_style("QScrollArea", variant="default")
+        style.set_context(widget)
+        painter.save()
+        # Draw corner background
+        bg = style.get("background-color", "transparent")
+        painter.fillRect(option.rect, QColor(bg))
+
+        painter.restore()
 
 # ----------------------------------------------------------------------------
 
