@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt, Signal, QItemSelection
-from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette
-from qtpy.QtWidgets import QTreeView, QWidget
+from qtpy.QtCore import Qt, Signal, QItemSelection, QEvent
+from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette, QCursor
+from qtpy.QtWidgets import QTreeView, QWidget, QStyle, QStyleOption
 
-from ..style import TreeViewItemDelegate, get_ayon_style
+from ..style import TreeViewItemDelegate, get_ayon_style, enum_to_str
 from ..variants import QTreeViewVariants
 from .scroll_area import AYScrollBar
 
@@ -48,6 +48,10 @@ class AYTreeView(QTreeView):
         self.viewport().setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, False
         )
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.viewport().setMouseTracking(True)
+        self.viewport().installEventFilter(self)
+        self._hovered_row_key: tuple | None = None
         self._sync_viewport_palette()
 
         # Custom item delegate — paints items directly, avoids QSS.
@@ -107,6 +111,65 @@ class AYTreeView(QTreeView):
         # Let QTreeView draw its items on top.
         super().paintEvent(event)
 
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            if event.type() == QEvent.Type.MouseMove:
+                idx = self.indexAt(event.pos())
+                key = (idx.row(), idx.parent()) if idx.isValid() else None
+                if key != self._hovered_row_key:
+                    self._hovered_row_key = key
+                    self.viewport().update()
+            elif event.type() == QEvent.Type.Leave:
+                if self._hovered_row_key is not None:
+                    self._hovered_row_key = None
+                    self.viewport().update()
+        return super().eventFilter(obj, event)
+
+    def drawBranches(self, painter, rect, index):
+        """Draw branch indicators with AYONStyle directly.
+
+        Bypasses ``self.style()`` because, when an application-level QSS is
+        active, Qt wraps the widget's style in a ``QStyleSheetStyle`` proxy
+        which would otherwise intercept ``PE_IndicatorBranch`` and apply
+        QSS ``QTreeView::branch`` rules on top of (or instead of) ours.
+        """
+        style = get_ayon_style()  # the raw AYONStyle, never wrapped
+
+        opt = QStyleOption()
+        opt.rect = rect
+        opt.palette = self.palette()
+        state = QStyle.StateFlag.State_Item
+        if self.model() is not None and self.model().hasChildren(index):
+            state |= QStyle.StateFlag.State_Children
+        if self.isExpanded(index):
+            state |= QStyle.StateFlag.State_Open
+        if self.selectionModel().isSelected(index):
+            state |= QStyle.StateFlag.State_Selected
+        if self.isEnabled():
+            state |= QStyle.StateFlag.State_Enabled
+
+        # Row-level hover: is the cursor on the same row as `index`?
+        hovered_index = self.indexAt(
+            self.viewport().mapFromGlobal(QCursor.pos())
+        )
+        if (
+            hovered_index.isValid()
+            and hovered_index.row() == index.row()
+            and hovered_index.parent() == index.parent()
+        ):
+            state |= QStyle.StateFlag.State_MouseOver
+
+        opt.state = state
+
+        # Call our drawer directly, not through self.style().
+        style.drawers[
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            )
+        ](opt, painter, self)
+
     def mousePressEvent(self, event) -> None:
         """Deselect all items when clicking in an empty area."""
         index = self.indexAt(event.pos())
@@ -141,7 +204,7 @@ if __name__ == "__main__":
     try:
         from qtmaterialsymbols import get_icon  # type: ignore
     except ImportError:
-        from ..vendor.qtmaterialsymbols import get_icon
+        from ..vendor.qtmaterialsymbols import get_icon  # noqa: F401
 
     from ..tester import Style, test
 

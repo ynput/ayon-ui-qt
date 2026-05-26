@@ -10,25 +10,33 @@ from typing import Any
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import (
+    QAbstractProxyModel,
     QItemSelection,
     QModelIndex,
     QRect,
-    QSortFilterProxyModel,
     Qt,
     Signal,  # type: ignore
 )
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QCursor,
     QFont,
     QPainter,
     QPaintEvent,
     QPalette,
     QPen,
 )
-from qtpy.QtWidgets import QHeaderView, QToolButton, QTreeView, QWidget
+from qtpy.QtWidgets import (
+    QHeaderView,
+    QStyle,
+    QStyleOption,
+    QToolButton,
+    QTreeView,
+    QWidget,
+)
 
-from ..style import StyleData, TableItemDelegate, get_ayon_style
+from ..style import StyleData, TableItemDelegate, enum_to_str, get_ayon_style
 from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
 from .table_model import PaginatedTableModel
@@ -95,7 +103,7 @@ class AYTableHeader(QHeaderView):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setClipRect(rect)
 
-        # draw cell
+        # Draw cell background and border
         painter.setBrush(
             QBrush(QColor(tbl_style.get("header-background-color", "#272d35")))
         )
@@ -113,9 +121,7 @@ class AYTableHeader(QHeaderView):
         v_pad = int(padding[0])
         text_rect = rect.adjusted(h_pad, v_pad, -h_pad, -v_pad)
 
-        text_color = QColor(tbl_style.get("header-color", "#c1c7ce"))
-        painter.setPen(text_color)
-
+        painter.setPen(QColor(tbl_style.get("header-color", "#c1c7ce")))
         font = painter.font()
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
@@ -139,20 +145,18 @@ class AYTableHeader(QHeaderView):
             self.isSortIndicatorShown()
             and self.sortIndicatorSection() == logical_index
         ):
-            # do not draw sort indicator if column is not sortable
             is_sortable = True
-            if isinstance(model, PaginatedTableModel):
-                cols = model.columns
-                if 0 <= logical_index < len(cols):
-                    is_sortable = cols[logical_index].sortable
+            if isinstance(
+                model, PaginatedTableModel
+            ) and 0 <= logical_index < len(model.columns):
+                is_sortable = model.columns[logical_index].sortable
             if not is_sortable:
                 painter.restore()
                 return
 
-            # draw sort indicator (icon if available, otherwise arrow)
             order = self.sortIndicatorOrder()
-            icon_name = tbl_style.get("header-sort-indicator-icon", None)
-            if icon_name is not None:
+            icon_name = tbl_style.get("header-sort-indicator-icon")
+            if icon_name:
                 icon = get_icon(
                     icon_name,
                     color=tbl_style.get(
@@ -179,7 +183,6 @@ class AYTableHeader(QHeaderView):
                     painter.restore()
                 else:
                     painter.drawPixmap(target, pixmap)
-
             else:
                 arrow = "▲" if order == Qt.SortOrder.AscendingOrder else "▼"
                 painter.drawText(
@@ -335,6 +338,13 @@ class AYTableView(QTreeView):
         self._hovered_row: int = -1
         self._hovered_row_rect: QRect = QRect()
 
+        # Track the currently hovered index so we may pass hover state to
+        # editors.
+        self._hovered_index: QModelIndex = QModelIndex()
+
+        # Column indices that have widget_factory set (cached from model).
+        self._widget_col_indices: list[int] = []
+
         # Track model connections for cleanup.  Each entry is (source_object,
         # connection) so we can call the right object's .disconnect().
         self._model_connections: list[
@@ -398,7 +408,21 @@ class AYTableView(QTreeView):
         super().setModel(model)
 
         if model is None:
+            self._widget_col_indices = []
             return
+
+        # Cache widget-factory column indices for hover state updates.
+        source_mdl: Any = model
+        if isinstance(model, QAbstractProxyModel):
+            source_mdl = model.sourceModel()
+        if isinstance(source_mdl, PaginatedTableModel):
+            self._widget_col_indices = [
+                i
+                for i, col in enumerate(source_mdl.columns)
+                if col.widget_factory is not None
+            ]
+        else:
+            self._widget_col_indices = []
 
         # Configure header from column width hints.
         self._configure_header(model)
@@ -418,7 +442,7 @@ class AYTableView(QTreeView):
 
         # Connect to the source PaginatedTableModel for tree mode changes.
         source: Any = model
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             source = model.sourceModel()
         if isinstance(source, PaginatedTableModel):
             conn2 = source.tree_mode_changed.connect(self._apply_tree_mode)
@@ -463,7 +487,7 @@ class AYTableView(QTreeView):
             The source model, or ``None`` if no model is set.
         """
         model = self.model()
-        if isinstance(model, QSortFilterProxyModel):
+        if isinstance(model, QAbstractProxyModel):
             return model.sourceModel()
         return model
 
@@ -503,29 +527,28 @@ class AYTableView(QTreeView):
             return
 
         # Unwrap proxy to access PaginatedTableModel column definitions.
-        source: Any = model
-        if isinstance(model, QSortFilterProxyModel):
-            source = model.sourceModel()
-
-        # Check if model provides column width hints.
-        has_hints = isinstance(source, PaginatedTableModel) and any(
-            col_def.width > 0 for col_def in source.columns
+        source = (
+            model.sourceModel()
+            if isinstance(model, QAbstractProxyModel)
+            else model
         )
 
-        if has_hints:
+        # Configure column widths
+        if isinstance(source, PaginatedTableModel) and any(
+            col_def.width > 0 for col_def in source.columns
+        ):
+            # Use column definitions from the model.
             for i, col_def in enumerate(source.columns):
                 if i >= col_count:
                     break
                 if col_def.width > 0:
                     header.resizeSection(i, col_def.width)
                     header.setSectionResizeMode(
-                        i,
-                        QHeaderView.ResizeMode.Interactive,
+                        i, QHeaderView.ResizeMode.Interactive
                     )
                 else:
                     header.setSectionResizeMode(
-                        i,
-                        QHeaderView.ResizeMode.Stretch,
+                        i, QHeaderView.ResizeMode.Stretch
                     )
         else:
             # Default: stretch all columns equally.
@@ -579,7 +602,7 @@ class AYTableView(QTreeView):
         display_model = self.model()
         if display_model is None:
             return
-        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+        is_proxy = isinstance(display_model, QAbstractProxyModel)
 
         def _collect(parent_view_idx: QModelIndex) -> None:
             for row in range(display_model.rowCount(parent_view_idx)):
@@ -622,14 +645,14 @@ class AYTableView(QTreeView):
             return
         source = (
             display_model.sourceModel()
-            if isinstance(display_model, QSortFilterProxyModel)
+            if isinstance(display_model, QAbstractProxyModel)
             else display_model
         )
         if not isinstance(source, PaginatedTableModel):
             return
         if not source._tree_mode:
             return
-        is_proxy = isinstance(display_model, QSortFilterProxyModel)
+        is_proxy = isinstance(display_model, QAbstractProxyModel)
         for row in range(first, last + 1):
             child_view_idx = display_model.index(row, 0, parent)
             src_idx = (
@@ -680,6 +703,9 @@ class AYTableView(QTreeView):
         from a clean slate, then schedules a sync so visible rows get their
         editors back.
         """
+        self._hovered_index = QModelIndex()
+        self._hovered_row = -1
+        self._hovered_row_rect = QRect()
         self._active_editor_pmis.clear()
         self._schedule_editor_sync()
 
@@ -698,9 +724,11 @@ class AYTableView(QTreeView):
         model = self.model()
         if model is None:
             return []
-        source: Any = self._source_model()
+
+        source = self._source_model()
         if not isinstance(source, PaginatedTableModel):
             return []
+
         widget_cols = [
             i
             for i, col in enumerate(source.columns)
@@ -725,11 +753,13 @@ class AYTableView(QTreeView):
             visual = self.visualRect(idx)
             if visual.top() > vp_rect.bottom():
                 break
+
             if not visual.isEmpty():
                 for col in widget_cols:
                     col_idx = model.index(idx.row(), col, idx.parent())
                     if col_idx.isValid():
                         results.append(col_idx)
+
             idx = self.indexBelow(idx)
 
         return results
@@ -755,7 +785,7 @@ class AYTableView(QTreeView):
         for idx in self._get_visible_widget_indexes():
             pmi = QtCore.QPersistentModelIndex(idx)
             if pmi.isValid() and pmi not in self._active_editor_pmis:
-                self.openPersistentEditor(pmi)  # type: ignore[arg-type]
+                self.openPersistentEditor(pmi)
                 self._active_editor_pmis.add(pmi)
 
     def mousePressEvent(  # type: ignore[override]
@@ -773,6 +803,31 @@ class AYTableView(QTreeView):
             return
         super().mousePressEvent(event)
 
+    def _set_row_state(self, row_idx: QModelIndex, hovered: bool) -> None:
+        """Set ``row_state`` property on all editor widgets in a row.
+
+        Iterates the cached widget-factory column indices and updates
+        each persistent editor's dynamic property so the style system
+        can react to hover, selected, and enabled states.
+
+        Args:
+            row_idx: Any valid index in the target row.
+            hovered: Whether the row is being hovered.
+        """
+        state = QStyle.StateFlag.State_None
+        if hovered:
+            state |= QStyle.StateFlag.State_MouseOver
+        if self.selectionModel().isSelected(row_idx):
+            state |= QStyle.StateFlag.State_Selected
+        if not self.model().flags(row_idx) & Qt.ItemFlag.ItemIsEnabled:
+            state &= ~QStyle.StateFlag.State_Enabled
+
+        for col in self._widget_col_indices:
+            editor = self.indexWidget(row_idx.siblingAtColumn(col))
+            if editor:
+                editor.setProperty("row_state", state)
+                editor.update()
+
     def mouseMoveEvent(self, event: "QtGui.QMouseEvent") -> None:  # type: ignore[override]
         """Track the hovered row and force-repaint it when it changes.
 
@@ -784,15 +839,28 @@ class AYTableView(QTreeView):
         """
         new_idx = self.indexAt(event.pos())
         new_row = new_idx.row() if new_idx.isValid() else -1
+
         if new_row != self._hovered_row:
+            # Clear hover state on the previous row's editors.
+            if self._hovered_index.isValid():
+                self._set_row_state(self._hovered_index, False)
+
+            # Set hover state on the new row's editors.
+            if new_idx.isValid():
+                self._set_row_state(new_idx, True)
+
+            self._hovered_index = new_idx
+
             # Repaint the old row so its indicator clears.
             self._repaint_row(self._hovered_row_rect)
             self._hovered_row = new_row
             self._hovered_row_rect = (
                 self.visualRect(new_idx) if new_idx.isValid() else QRect()
             )
+
             # Repaint the new row so its indicator lights up immediately.
             self._repaint_row(self._hovered_row_rect)
+
         super().mouseMoveEvent(event)
 
     def leaveEvent(self, event: "QtCore.QEvent") -> None:
@@ -814,7 +882,61 @@ class AYTableView(QTreeView):
             deselected: Newly deselected items.
         """
         super().selectionChanged(selected, deselected)
+
+        # Update row_state for newly selected rows
+        for index in selected.indexes():
+            self._set_row_state(index, True)
+
+        # Update row_state for newly deselected rows
+        for index in deselected.indexes():
+            self._set_row_state(index, False)
+
         self.selection_changed.emit(selected, deselected)
+
+    def drawBranches(self, painter, rect, index):
+        """Draw branch indicators with AYONStyle directly.
+
+        Bypasses ``self.style()`` because, when an application-level QSS is
+        active, Qt wraps the widget's style in a ``QStyleSheetStyle`` proxy
+        which would otherwise intercept ``PE_IndicatorBranch`` and apply
+        QSS ``QTreeView::branch`` rules on top of (or instead of) ours.
+        """
+        style = get_ayon_style()  # the raw AYONStyle, never wrapped
+
+        opt = QStyleOption()
+        opt.rect = rect
+        opt.palette = self.palette()
+        state = QStyle.StateFlag.State_Item
+        if self.model() is not None and self.model().hasChildren(index):
+            state |= QStyle.StateFlag.State_Children
+        if self.isExpanded(index):
+            state |= QStyle.StateFlag.State_Open
+        if self.selectionModel().isSelected(index):
+            state |= QStyle.StateFlag.State_Selected
+        if self.isEnabled():
+            state |= QStyle.StateFlag.State_Enabled
+
+        # Row-level hover: is the cursor on the same row as `index`?
+        hovered_index = self.indexAt(
+            self.viewport().mapFromGlobal(QCursor.pos())
+        )
+        if (
+            hovered_index.isValid()
+            and hovered_index.row() == index.row()
+            and hovered_index.parent() == index.parent()
+        ):
+            state |= QStyle.StateFlag.State_MouseOver
+
+        opt.state = state
+
+        # Call our drawer directly, not through self.style().
+        style.drawers[
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            )
+        ](opt, painter, self)
 
 
 # =============================================================================
@@ -826,10 +948,9 @@ if __name__ == "__main__":
 
     from qtpy import QtWidgets
 
-    from .container import AYContainer
-    from .check_box import AYCheckBox
-
     from ..tester import Style, test
+    from .check_box import AYCheckBox
+    from .container import AYContainer
     from .table_model import (
         HIERARCHICAL_TEST_DATA,
         PaginatedTableModel,

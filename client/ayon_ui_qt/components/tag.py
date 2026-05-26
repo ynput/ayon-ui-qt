@@ -5,7 +5,7 @@ from qtpy import QtCore, QtGui, QtWidgets
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
-    from ..vendor.qtmaterialsymbols import get_icon
+    from ..vendor.qtmaterialsymbols import get_icon  # noqa: F401
 
 from ..style import get_ayon_style
 from .buttons import AYButton
