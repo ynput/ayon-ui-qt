@@ -692,6 +692,10 @@
                         8
                     ],
                     "icon-text-spacing": 6,
+                    "branch-indicator-color": "--md-sys-color-on-surface-dark",
+                    "expand-icon-name": "keyboard_arrow_right",
+                    "expanded-icon-name": "keyboard_arrow_down",
+                    "expand-icon-size": 16,
                     "header-background-color": "--md-sys-color-surface-container-lowest-dark",
                     "header-color": "--md-sys-color-on-surface-variant-dark",
                     "header-border-color": "--md-sys-color-surface-container-dark",
@@ -706,6 +710,7 @@
                     "header-sort-indicator-size": 18,
                     "disabled-opacity": 0.5,
                     "hover": {
+                        "branch-indicator-color": "--md-sys-color-primary-dark",
                         "background-color": "--color-table-row-hover"
                     },
                     "selected": {

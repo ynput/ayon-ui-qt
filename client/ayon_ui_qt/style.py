@@ -3012,7 +3012,7 @@ class TreeViewDrawer:
                 painter.save()
                 painter.fillRect(
                     option.rect,
-                    QColor(t_style.get("background-color", "transparent")),
+                    QColor(t_style.get("background-color-item", "transparent")),
                 )
                 self._draw_cell_border(painter, option.rect, t_style)
                 painter.restore()
