@@ -421,6 +421,14 @@
                 }
             }
         },
+        "QScrollArea": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                }
+            }
+        },
         "QFrame": {
             "states": [
                 "hover",
