@@ -20,15 +20,23 @@ from qtpy.QtCore import (
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QCursor,
     QFont,
     QPainter,
     QPaintEvent,
     QPalette,
     QPen,
 )
-from qtpy.QtWidgets import QHeaderView, QStyle, QToolButton, QTreeView, QWidget
+from qtpy.QtWidgets import (
+    QHeaderView,
+    QStyle,
+    QStyleOption,
+    QToolButton,
+    QTreeView,
+    QWidget,
+)
 
-from ..style import StyleData, TableItemDelegate, get_ayon_style
+from ..style import StyleData, TableItemDelegate, enum_to_str, get_ayon_style
 from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
 from .table_model import PaginatedTableModel
@@ -884,6 +892,51 @@ class AYTableView(QTreeView):
             self._set_row_state(index, False)
 
         self.selection_changed.emit(selected, deselected)
+
+    def drawBranches(self, painter, rect, index):
+        """Draw branch indicators with AYONStyle directly.
+
+        Bypasses ``self.style()`` because, when an application-level QSS is
+        active, Qt wraps the widget's style in a ``QStyleSheetStyle`` proxy
+        which would otherwise intercept ``PE_IndicatorBranch`` and apply
+        QSS ``QTreeView::branch`` rules on top of (or instead of) ours.
+        """
+        style = get_ayon_style()  # the raw AYONStyle, never wrapped
+
+        opt = QStyleOption()
+        opt.rect = rect
+        opt.palette = self.palette()
+        state = QStyle.StateFlag.State_Item
+        if self.model() is not None and self.model().hasChildren(index):
+            state |= QStyle.StateFlag.State_Children
+        if self.isExpanded(index):
+            state |= QStyle.StateFlag.State_Open
+        if self.selectionModel().isSelected(index):
+            state |= QStyle.StateFlag.State_Selected
+        if self.isEnabled():
+            state |= QStyle.StateFlag.State_Enabled
+
+        # Row-level hover: is the cursor on the same row as `index`?
+        hovered_index = self.indexAt(
+            self.viewport().mapFromGlobal(QCursor.pos())
+        )
+        if (
+            hovered_index.isValid()
+            and hovered_index.row() == index.row()
+            and hovered_index.parent() == index.parent()
+        ):
+            state |= QStyle.StateFlag.State_MouseOver
+
+        opt.state = state
+
+        # Call our drawer directly, not through self.style().
+        style.drawers[
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            )
+        ](opt, painter, self)
 
 
 # =============================================================================
