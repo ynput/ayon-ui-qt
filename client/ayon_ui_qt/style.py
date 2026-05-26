@@ -2616,7 +2616,7 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
     def _table_styles(self) -> dict[str, dict]:
         """Return base, hover and selected style dicts at once."""
         if self._style_model is None:
-            return {"base": {}, "hover": {}, "selected": {}}
+            raise ValueError("TableItemDelegate requires a style model")
         return self._style_model.get_styles(
             "AYTableView",
             self._variant_str,
