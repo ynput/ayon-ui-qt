@@ -1916,13 +1916,15 @@ class ScrollBarDrawer:
         w: QWidget | None = None,
     ) -> QRect | None:
         if not w:
-            raise ValueError
+            raise ValueError(
+                "Widget required to calculate scrollbar sub-control rects"
+            )
 
         if not isinstance(self.style_inst, AYONStyle):
-            raise ValueError
+            raise ValueError("AYONStyle instance required")
 
         if not isinstance(opt, (QStyleOptionSlider, QStyleOptionComplex)):
-            raise ValueError
+            raise ValueError(f"Unexpected option type: {type(opt)}")
 
         sup = super(AYONStyle, self.style_inst)  # type: ignore
         try:
@@ -1967,7 +1969,7 @@ class ScrollBarDrawer:
                 rect.adjust(-sls.width(), 0, 0, 0)
             return rect
 
-        raise ValueError
+        raise ValueError("Unexpected sub-control")
 
     def get_metric(
         self,
