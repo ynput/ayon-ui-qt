@@ -911,7 +911,7 @@ class AYTableView(QTreeView):
             state |= QStyle.StateFlag.State_Children
         if self.isExpanded(index):
             state |= QStyle.StateFlag.State_Open
-        if index in self.selectionModel().selectedIndexes():
+        if self.selectionModel().isSelected(index):
             state |= QStyle.StateFlag.State_Selected
         if self.isEnabled():
             state |= QStyle.StateFlag.State_Enabled
