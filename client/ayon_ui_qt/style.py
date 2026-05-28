@@ -6,6 +6,7 @@ import logging
 from functools import partial
 from pathlib import Path
 from typing import Any
+from functools import cmp_to_key
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -1916,10 +1917,15 @@ class ScrollBarDrawer:
         w: QWidget | None = None,
     ) -> QRect | None:
         if not w:
-            raise ValueError
+            raise ValueError(
+                "Widget required to calculate scrollbar sub-control rects"
+            )
 
         if not isinstance(self.style_inst, AYONStyle):
-            raise ValueError
+            raise ValueError("AYONStyle instance required")
+
+        if not isinstance(opt, (QStyleOptionSlider, QStyleOptionComplex)):
+            raise ValueError(f"Unexpected option type: {type(opt)}")
 
         sup = super(AYONStyle, self.style_inst)  # type: ignore
         try:
@@ -1932,41 +1938,39 @@ class ScrollBarDrawer:
             sls = self._cache["sub_line_size"]
         except KeyError:
             sls = self._cache["sub_line_size"] = sup.subControlRect(
-                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+                cc, opt, QStyle.SubControl.SC_ScrollBarSubLine, w
             ).size()
 
-        if (
-            sc == QStyle.SubControl.SC_ScrollBarSlider
-            or sc == QStyle.SubControl.SC_ScrollBarGroove
-        ) and isinstance(opt, QStyleOptionSlider):
+        orientation = w.orientation()
+
+        if sc in (
+            QStyle.SubControl.SC_ScrollBarSlider,
+            QStyle.SubControl.SC_ScrollBarGroove,
+        ):
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, als.height())
             else:
                 rect.adjust(-sls.width(), 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarAddPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, 0, 0, als.height())
             else:
                 rect.adjust(0, 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarSubPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, 0)
             else:
                 rect.adjust(-sls.width(), 0, 0, 0)
             return rect
 
-        raise ValueError
+        raise ValueError("Unexpected sub-control")
 
     def get_metric(
         self,
@@ -2913,6 +2917,11 @@ class TreeViewDrawer:
                 QStyle.PrimitiveElement.PE_IndicatorBranch,
                 "QTreeView",
             ): self.draw_branch_indicator,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelScrollAreaCorner,
+                "QTreeView",
+            ): self.draw_scrollbar_corner,
         }
 
     def register_metrics(self) -> dict:
@@ -3106,6 +3115,21 @@ class TreeViewDrawer:
         else:
             self._paint_fallback_arrow(painter, option.rect, color, is_open)
 
+    def draw_scrollbar_corner(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        style = self.model.get_style("QScrollArea", variant="default")
+        style.set_context(widget)
+        painter.save()
+        # Draw corner background
+        bg = style.get("background-color", "transparent")
+        painter.fillRect(option.rect, QColor(bg))
+
+        painter.restore()
+
 
 # ----------------------------------------------------------------------------
 
@@ -3294,6 +3318,41 @@ class TableHeaderDrawer:
 # ----------------------------------------------------------------------------
 
 
+class ScrollAreaDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollArea", variant="default")
+
+    @property
+    def base_class(self):
+        return {"QScrollArea": QtWidgets.QScrollArea}
+
+    def register_drawers(self) -> dict:
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelScrollAreaCorner,
+                "QScrollArea",
+            ): self.draw_scrollbar_corner,
+        }
+
+    def draw_scrollbar_corner(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        self._style.set_context(widget)
+        painter.save()
+        # Draw corner background
+        bg = self._style.get("background-color", "transparent")
+        painter.fillRect(option.rect, QColor(bg))
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
 W_T = {}
 
 
@@ -3313,7 +3372,7 @@ class AYONStyle(QCommonStyle):
         self.base_classes = {}
         self.drawer_objs = [
             TooltipDrawer(self),
-            LabelDrawer(self),  # first because QLabel inherits from QFrame.
+            LabelDrawer(self),
             LineEditDrawer(self),
             ButtonDrawer(self),
             CheckboxDrawer(self),
@@ -3323,6 +3382,7 @@ class AYONStyle(QCommonStyle):
             TreeViewDrawer(self),
             TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
+            ScrollAreaDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -3333,13 +3393,30 @@ class AYONStyle(QCommonStyle):
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
 
-        # Sort base_classes: most-specific (deepest MRO) first
+        # Sort base_classes: most-specific first to guarantee correct widget
+        # key resolution order.
+        def _specificity_cmp(a, b):
+            """Return <0 if `a` is more specific than `b`.
+
+            More specific means: `a` is a (strict) subclass of `b`.
+            For unrelated classes, fall back to MRO depth so deeper
+            classes still come first, then class name for stability.
+            """
+            ca, cb = a[1], b[1]
+            if ca is cb:
+                return 0
+            if issubclass(ca, cb):
+                return -1  # a before b
+            if issubclass(cb, ca):
+                return 1  # b before a
+            # Unrelated: deeper MRO first, then name for determinism.
+            d = len(cb.__mro__) - len(ca.__mro__)
+            if d:
+                return d
+            return (ca.__name__ > cb.__name__) - (ca.__name__ < cb.__name__)
+
         self.base_classes = dict(
-            sorted(
-                self.base_classes.items(),
-                key=lambda kv: len(kv[1].__mro__),
-                reverse=True,
-            )
+            sorted(self.base_classes.items(), key=cmp_to_key(_specificity_cmp))
         )
 
     def widget_key(self, w: QWidget | None) -> str:
