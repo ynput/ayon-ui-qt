@@ -5,6 +5,7 @@ from __future__ import annotations
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QPainter, QPaintEvent
 from qtpy.QtWidgets import (
+    QFrame,
     QScrollArea,
     QScrollBar,
     QStyle,
@@ -61,6 +62,10 @@ class AYScrollArea(QScrollArea):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setStyle(get_ayon_style())
+        # AYONStyle's FrameDrawer would otherwise draw a 1px frame around the
+        # viewport, which shows as a thin line on the right edge (above the
+        # scrollbar) and along the bottom.
+        self.setFrameShape(QFrame.Shape.NoFrame)
 
         self.setVerticalScrollBar(AYScrollBar(Qt.Orientation.Vertical))
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
