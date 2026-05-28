@@ -6,6 +6,7 @@ import logging
 from functools import partial
 from pathlib import Path
 from typing import Any
+from functools import cmp_to_key
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -3399,7 +3400,7 @@ class AYONStyle(QCommonStyle):
         self.base_classes = {}
         self.drawer_objs = [
             TooltipDrawer(self),
-            LabelDrawer(self),  # first because QLabel inherits from QFrame.
+            LabelDrawer(self),
             LineEditDrawer(self),
             ButtonDrawer(self),
             CheckboxDrawer(self),
@@ -3420,13 +3421,30 @@ class AYONStyle(QCommonStyle):
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
 
-        # Sort base_classes: most-specific (deepest MRO) first
+        # Sort base_classes: most-specific first to guarantee correct widget
+        # key resolution order.
+        def _specificity_cmp(a, b):
+            """Return <0 if `a` is more specific than `b`.
+
+            More specific means: `a` is a (strict) subclass of `b`.
+            For unrelated classes, fall back to MRO depth so deeper
+            classes still come first, then class name for stability.
+            """
+            ca, cb = a[1], b[1]
+            if ca is cb:
+                return 0
+            if issubclass(ca, cb):
+                return -1  # a before b
+            if issubclass(cb, ca):
+                return 1  # b before a
+            # Unrelated: deeper MRO first, then name for determinism.
+            d = len(cb.__mro__) - len(ca.__mro__)
+            if d:
+                return d
+            return (ca.__name__ > cb.__name__) - (ca.__name__ < cb.__name__)
+
         self.base_classes = dict(
-            sorted(
-                self.base_classes.items(),
-                key=lambda kv: len(kv[1].__mro__),
-                reverse=True,
-            )
+            sorted(self.base_classes.items(), key=cmp_to_key(_specificity_cmp))
         )
 
     def widget_key(self, w: QWidget | None) -> str:
