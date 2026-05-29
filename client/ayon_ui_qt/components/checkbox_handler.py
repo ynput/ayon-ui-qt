@@ -43,7 +43,7 @@ CHECKED_COLOR = "#4CAF50"
 
 MD_DIALECT = QTextDocument.MarkdownFeature.MarkdownDialectGitHub
 
-_PH_RE = re.compile(r"^\s*\ufffc ")  # place holder regex
+_PH_RE = re.compile(r"[*_`]+$")
 
 
 @dataclass
@@ -547,12 +547,12 @@ class CheckboxHandler(QObject):
 
         for line in lines:
             if "\ufffc" in line and current_cb:
-                # Replace "  \ufffc " with prefix + checkbox syntax
                 checked_char = "x" if current_cb.checked else " "
-                # Remove the spaces before \ufffc and add the proper prefix
-                line = _PH_RE.sub(
-                    f"{current_cb.prefix}[{checked_char}] ", line, count=1
-                )
+                cb_idx = line.index("\ufffc")
+                raw_after = line[cb_idx + 1:]       # everything after \ufffc
+                raw_after = raw_after.lstrip(" ")    # drop the space Qt inserts
+                raw_after = _PH_RE.sub("", raw_after).rstrip()
+                line = f"{current_cb.prefix}[{checked_char}] {raw_after}"
                 current_cb = next(checkbox_iter, None)
             result_lines.append(line)
 
