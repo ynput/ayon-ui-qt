@@ -811,16 +811,18 @@ class AYLabel(QtWidgets.QLabel):
     def set_icon_color(self, color: str) -> None:
         """Update the icon color and refresh the widget.
 
-        Resets contrast color cache so Badge background fill and text
-        contrast are recalculated with the new color.
+        Resets contrast color cache so filled variants (e.g. Badge) and any
+        palette-based contrast logic are recalculated with the new color.
 
         Args:
             color: New hex color string e.g. '#44ee9f'.
         """
         self._icon_color = color
-        self._contrast_color = None  # reset so _configure_palette recalculates
+        self._contrast_color = None  # reset so contrast is recalculated
+        self._configure_palette()
         self.set_icon(color=color)   # repaints icon pixmap with new color
-        self.update()                # triggers paintEvent -> _configure_palette
+        self._copy_pix_normal = self._copy_pix_hover = self._copy_pix_done = None
+        self.update()
 
     def palette(self) -> QPalette:
         return QPalette(self._style_palette)
