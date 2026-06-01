@@ -18,7 +18,7 @@ class _CompositeComboWidget(CompositeWidget):
     This is a thin wrapper around `CompositeWidget` for backward compatibility.
 
     Args:
-        combo: The ``AYComboBox`` whose popup will be composited.
+        combos: The ``AYComboBox`` instances whose popups will be composited.
         parent: Optional parent widget.
     """
 
