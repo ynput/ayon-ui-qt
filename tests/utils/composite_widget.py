@@ -24,7 +24,7 @@ class CompositeWidget(AYFrame):
     - Compositing any number of child widgets.
     - Dynamic positioning of child widgets relative to the parent.
     - Optional background color for the base layer.
-    - Skipping hidden or invalid widgets.
+    - Skipping hidden widgets.
 
     Args:
         widgets: A list of tuples, where each tuple contains:
