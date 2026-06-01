@@ -25,9 +25,10 @@ except ImportError:
 from ..color_utils import compute_color_for_contrast
 from ..style import StyleDict, get_ayon_style
 from ..variants import QLabelVariants
+from .style_mixin import StyleMixin
 
 
-class AYLabel(QtWidgets.QLabel):
+class AYLabel(StyleMixin, QtWidgets.QLabel):
     Variants = QLabelVariants
 
     def __init__(
@@ -52,9 +53,6 @@ class AYLabel(QtWidgets.QLabel):
         # style params
         self._variant_str: str = variant.value
         self._style_data = StyleDict()
-        self._style_palette = QPalette()
-        self._style_font = QFont()
-        self._style_font_metrics: QFontMetrics | None = None
 
         # widget params
         self._dim = dim
@@ -200,20 +198,19 @@ class AYLabel(QtWidgets.QLabel):
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal
         self._font.setWeight(weight)
         self.setFont(self._font)
-        self._style_font_metrics = QFontMetrics(self._font)
 
     def _display_text(self) -> str:
         """Recompute the elided version of the stored text."""
         if (
             self._elide_mode == Qt.TextElideMode.ElideNone
-            or not self._style_font_metrics
+            or not self.fontMetrics()
         ):
             return self._text
         available_w = self.contentsRect().width()
         if self._icon:
             spacing = self._icon_text_spacing
             available_w -= self._icon_size + spacing
-        text = self._style_font_metrics.elidedText(
+        text = self.fontMetrics().elidedText(
             self._text, self._elide_mode, max(0, available_w)
         )
         return text
@@ -302,16 +299,14 @@ class AYLabel(QtWidgets.QLabel):
 
     def _paint_filled(self, state: str) -> None:
         """Render a filled-background label driven by style data."""
-        assert isinstance(self._style_font_metrics, QFontMetrics)
+        assert isinstance(self.fontMetrics(), QFontMetrics)
 
         # Auto-size from text metrics
         if self._style_data[state].get("auto-size"):
             padding = self._style_data[state].get("auto-size-padding", [0, 0])
-            t_rect = self._style_font_metrics.boundingRect(self.text())
-            padx = int(
-                self._style_font_metrics.averageCharWidth() * padding[0]
-            )
-            pady = int(self._style_font_metrics.height() * padding[1])
+            t_rect = self.fontMetrics().boundingRect(self.text())
+            padx = int(self.fontMetrics().averageCharWidth() * padding[0])
+            pady = int(self.fontMetrics().height() * padding[1])
             self.setFixedSize(
                 t_rect.width() + padx,
                 t_rect.height() + pady,
@@ -373,13 +368,13 @@ class AYLabel(QtWidgets.QLabel):
             style_data: Variant style properties resolved from the style
                 JSON for the current ``QLabel`` variant.
         """
-        assert isinstance(self._style_font_metrics, QFontMetrics)
+        assert isinstance(self.fontMetrics(), QFontMetrics)
 
         p = QPainter(self)
         p.setFont(self._font)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        text_rect = self._style_font_metrics.boundingRect(self._display_text())
+        text_rect = self.fontMetrics().boundingRect(self._display_text())
         text_rect.adjust(0, 0, 1, 0)  # +1 pixel for antialiasing
 
         icon_w = self._icon_size
@@ -685,9 +680,9 @@ class AYLabel(QtWidgets.QLabel):
             The recommended widget size.
         """
         # self._configure_font()
-        assert isinstance(self._style_font_metrics, QFontMetrics)
+        assert isinstance(self.fontMetrics(), QFontMetrics)
 
-        fm = self._style_font_metrics
+        fm = self.fontMetrics()
 
         # --- text size --------------------------------------------------
         if self._text:
@@ -788,8 +783,8 @@ class AYLabel(QtWidgets.QLabel):
         if not self.wordWrap() or not self._text or self._icon:
             return super().heightForWidth(width)
 
-        assert isinstance(self._style_font_metrics, QFontMetrics)
-        fm = self._style_font_metrics
+        assert isinstance(self.fontMetrics(), QFontMetrics)
+        fm = self.fontMetrics()
 
         explicit_padding = self._style_data["base"].get("padding", [0, 0])
         pad_h = int(explicit_padding[0])

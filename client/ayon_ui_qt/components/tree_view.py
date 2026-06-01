@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt, Signal, QItemSelection, QEvent
-from qtpy.QtGui import QColor, QMouseEvent, QPaintEvent, QPainter, QPalette, QCursor
-from qtpy.QtWidgets import QTreeView, QWidget, QStyle, QStyleOption
+from qtpy.QtCore import QEvent, QItemSelection, Qt, Signal
+from qtpy.QtGui import QColor, QCursor, QPainter, QPaintEvent, QPalette, QMouseEvent
+from qtpy.QtWidgets import QStyle, QStyleOption, QTreeView, QWidget
 
-from ..style import TreeViewItemDelegate, get_ayon_style, enum_to_str
+from ..style import TreeViewItemDelegate, enum_to_str, get_ayon_style
 from ..variants import QTreeViewVariants
 from .scroll_area import AYScrollBar
+from .style_mixin import StyleMixin
 
 
-class AYTreeView(QTreeView):
+class AYTreeView(StyleMixin, QTreeView):
     """AYON-styled tree view.
 
     Fully self-contained: uses AYONStyle for all painting, a custom
@@ -217,7 +218,7 @@ if __name__ == "__main__":
     def _build() -> QtWidgets.QWidget:
         """Show one AYTreeView per variant with lazy-loaded fake data."""
         from .layouts import AYVBoxLayout
-        from .tree_model import LazyTreeModel, TreeNode, PRODUCTS_TEST_DATA
+        from .tree_model import PRODUCTS_TEST_DATA, LazyTreeModel, TreeNode
 
         def fetch_children(
             parent_id: str | None,

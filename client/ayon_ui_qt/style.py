@@ -3,16 +3,18 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from functools import partial
+from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
-from functools import cmp_to_key
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QFont,
+    QFontDatabase,
+    QFontMetrics,
     QIcon,
     QPainter,
     QPainterPath,
@@ -73,12 +75,12 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
     p.restore()
 
 
-def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
-    font = QtGui.QFont()
+def _style_font(style: dict, w: QWidget | None) -> QFont:
+    font = QFont()
     font.setFamily(style["font-family"])
     px_size = style["font-size"]
     font.setPixelSize(px_size)
-    font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
+    font.setWeight(QFont.Weight(style["font-weight"]))
     # log.debug(
     #     "FONT: %s, %g pts, w=%d",
     #     font.family(),
@@ -348,19 +350,42 @@ class StyleData:
         self._cache = {}
         self.last_key = ""
         # base palette
-        self.base_palette = self._build_palette()
-        self._base_font = None
+        self.base_palette: QPalette = self._build_palette()
+        self._base_font: QFont | None = None
+        self._base_font_checked: bool = False
 
     @property
-    def base_font(self):
+    def base_font(self) -> QFont:
         # delayed to make sure QApplication is initialized
         if self._base_font is None:
             self._base_font = _style_font(
                 self.data.get("global", {}), QWidget()
             )
+            if not self._base_font_checked:
+                self._check_font_availability(self._base_font)
         return self._base_font
 
-    def _build_palette(self):
+    def _check_font_availability(self, font: QFont):
+        # check if the font is available and load it if need be.
+        families = QFontDatabase.families()
+        if font.family() not in families:
+            # Attempt to load from resources/fonts
+            font_path = (
+                Path(__file__).parent
+                / "resources"
+                / (font.family().replace(" ", "") + ".ttf")
+            )
+            if font_path.exists():
+                if QFontDatabase.addApplicationFont(str(font_path)) != -1:
+                    log.error(f"Failed to load base font from {font_path}")
+            else:
+                log.error(
+                    f"Base font '{font.family()}' not "
+                    f"found in resources/fonts. ({font_path})"
+                )
+        self._base_font_checked = True
+
+    def _build_palette(self) -> QPalette:
         bp = {
             QPalette.ColorRole.Window: "qt-active-window",
             QPalette.ColorRole.WindowText: "qt-active-window-text",
@@ -1014,7 +1039,7 @@ class ButtonDrawer:
         font = _style_font(style, widget)
 
         # Create font metrics for accurate text measurement
-        font_metrics = QtGui.QFontMetrics(font)
+        font_metrics = QFontMetrics(font)
 
         # Determine if button has icon
         has_icon = (
@@ -3287,7 +3312,7 @@ class TableHeaderDrawer:
         painter.setPen(text_color)
 
         font = painter.font()
-        font.setWeight(QtGui.QFont.Weight.DemiBold)
+        font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
 
         text_rect = option.rect.adjusted(
@@ -3514,9 +3539,9 @@ class AYONStyle(QCommonStyle):
                 widget.setPalette(QtGui.QPalette(self.model.base_palette))
 
             if hasattr(widget, "set_font"):
-                widget.set_font(QtGui.QFont(self.model.base_font))
+                widget.set_font(QFont(self.model.base_font))
             else:
-                widget.setFont(QtGui.QFont(self.model.base_font))
+                widget.setFont(QFont(self.model.base_font))
 
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
