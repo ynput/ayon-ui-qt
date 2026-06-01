@@ -39,6 +39,7 @@ from qtpy.QtWidgets import (
 from ..style import StyleData, TableItemDelegate, enum_to_str, get_ayon_style
 from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
+from .style_mixin import StyleMixin
 from .table_model import PaginatedTableModel
 
 try:
@@ -216,7 +217,7 @@ class AYTableHeader(QHeaderView):
     # -------------------------------------------------------------------------
 
 
-class AYTableView(QTreeView):
+class AYTableView(StyleMixin, QTreeView):
     """AYON-styled flat table view.
 
     Subclasses QTreeView in flat-table mode (no tree indentation or
