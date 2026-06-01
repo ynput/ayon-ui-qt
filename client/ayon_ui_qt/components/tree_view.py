@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from qtpy.QtCore import Qt, Signal, QItemSelection, QEvent
-from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette, QCursor
+from qtpy.QtGui import QColor, QMouseEvent, QPaintEvent, QPainter, QPalette, QCursor
 from qtpy.QtWidgets import QTreeView, QWidget, QStyle, QStyleOption
 
 from ..style import TreeViewItemDelegate, get_ayon_style, enum_to_str
@@ -26,6 +26,7 @@ class AYTreeView(QTreeView):
 
     Variants = QTreeViewVariants
     selection_changed = Signal(QItemSelection, QItemSelection)
+    double_clicked = Signal(QMouseEvent)
 
     def __init__(
         self,
@@ -169,6 +170,11 @@ class AYTreeView(QTreeView):
                 "QTreeView",
             )
         ](opt, painter, self)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        """Emit double_clicked signal on double-click."""
+        self.double_clicked.emit(event)
+        super().mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event) -> None:
         """Deselect all items when clicking in an empty area."""
