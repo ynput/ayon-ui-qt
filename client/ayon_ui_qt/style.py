@@ -369,14 +369,14 @@ class StyleData:
         # check if the font is available and load it if need be.
         families = QFontDatabase.families()
         if font.family() not in families:
-            # Attempt to load from resources/fonts
+            # Attempt to load from resources
             font_path = (
                 Path(__file__).parent
                 / "resources"
                 / (font.family().replace(" ", "") + ".ttf")
             )
             if font_path.exists():
-                if QFontDatabase.addApplicationFont(str(font_path)) != -1:
+                if QFontDatabase.addApplicationFont(str(font_path)) == -1:
                     log.error(f"Failed to load base font from {font_path}")
             else:
                 log.error(
