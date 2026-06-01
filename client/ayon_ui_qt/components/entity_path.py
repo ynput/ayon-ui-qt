@@ -26,7 +26,7 @@ class AYEntityPathSegment(AYLabel):
         )
         self._variant_str: str = variant.value
         self.setFixedSize(
-            self._style_font_metrics.size(self.alignment(), self.text()),
+            self.fontMetrics().size(self.alignment(), self.text()),
         )
 
 
