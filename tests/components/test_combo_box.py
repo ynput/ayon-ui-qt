@@ -125,10 +125,6 @@ class ComboBoxTest(WidgetTest):
         """Process pending events so the popup is fully laid out."""
         QApplication.processEvents()
 
-    def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
-        """Process pending events so the popup is fully laid out."""
-        QApplication.processEvents()
-
     def set_inverted(self) -> None:
         self._default_full.set_inverted(True)
         self._low_full.set_inverted(True)
