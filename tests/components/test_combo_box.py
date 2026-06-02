@@ -118,7 +118,12 @@ class ComboBoxTest(WidgetTest):
         root_layout.setSpacing(0)
         root_layout.addWidget(inner)
 
-        return root
+        self.widget = root
+        return self.widget
+
+    def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
+        """Process pending events so the popup is fully laid out."""
+        QApplication.processEvents()
 
     def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
         """Process pending events so the popup is fully laid out."""
@@ -140,18 +145,28 @@ class ComboBoxTest(WidgetTest):
         self._default_full.showPopup()
         QApplication.processEvents()
 
+
+    def open_menu_default_hover(self) -> None:
+        self._default_full.showPopup()
+        QApplication.processEvents()
+        view = self._default_full.view()
+
+        # 0-based index, so 4 = 5th item
+        model_index = view.model().index(4, 0)
+        rect = view.visualRect(model_index)
+
+        self._qbot.mouseMove(view.viewport(), rect.center())
+        QApplication.processEvents()
+
     def open_menu_low(self) -> None:
-        self._default_full.hidePopup()
         self._low_full.showPopup()
         QApplication.processEvents()
 
     def open_menu_short(self) -> None:
-        self._low_full.hidePopup()
         self._short_combo.showPopup()
         QApplication.processEvents()
 
     def open_menu_icon(self) -> None:
-        self._short_combo.hidePopup()
         self._icon_combo.showPopup()
         QApplication.processEvents()
 
@@ -160,7 +175,23 @@ class ComboBoxTest(WidgetTest):
             self.set_inverted,
             self.set_not_inverted,
             self.open_menu_default,
+            self.open_menu_default_hover,
             self.open_menu_low,
             self.open_menu_short,
             self.open_menu_icon,
         ]
+
+    def cleanup(self, step_name: str) -> None:
+        # Ensure all popups are closed before the next step
+        for combo in [
+            self._default_full,
+            self._low_full,
+            self._short_combo,
+            self._icon_combo,
+        ]:
+            if combo.view().window().isVisible():
+                combo.hidePopup()
+                QApplication.processEvents()
+
+        self._qbot.mouseMove(self.widget, QtCore.QPoint(0, 0))
+        QApplication.processEvents()

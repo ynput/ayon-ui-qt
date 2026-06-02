@@ -2,32 +2,13 @@
 
 from __future__ import annotations
 
-from qtpy import QtWidgets
-from qtpy.QtWidgets import QWidget
-
-from widget_test import WidgetTest
-from ayon_ui_qt.components.page_button import AYPageButton
 from ayon_ui_qt.components.container import AYContainer
+from ayon_ui_qt.components.page_button import AYPageButton
 from ayon_ui_qt.style import get_ayon_style
-
-
-# =============================================================================
-# Helper: subclass that can force the hover appearance for snapshot tests
-# =============================================================================
-
-
-class _HoverPageButton(AYPageButton):
-    """AYPageButton that can force hover appearance for snapshot tests."""
-
-    def set_force_hover(self, value: bool) -> None:
-        """Force (or release) the painted hover state.
-
-        Args:
-            value: ``True`` to paint as if hovered; ``False`` to restore
-                normal appearance.
-        """
-        self._force_hover = value
-        self.update()
+from qtpy import QtWidgets
+from qtpy.QtCore import QPoint
+from qtpy.QtWidgets import QWidget
+from widget_test import WidgetTest
 
 
 # =============================================================================
@@ -59,10 +40,10 @@ class PageButtonTest(WidgetTest):
             layout_spacing=2,
         )
 
-        self._hover_btn: _HoverPageButton | None = None
+        self._hover_btn: AYPageButton | None = None
 
         # Row 1: icon + label + value (main showcase row)
-        btn1 = _HoverPageButton(
+        btn1 = AYPageButton(
             label="Featured version",
             value="Done",
             icon="star",
@@ -111,20 +92,27 @@ class PageButtonTest(WidgetTest):
         root.add_widget(btn6)
 
         root.addStretch(1)
+        self.widget = root
         return root
 
     def hover_first(self) -> None:
         """Force the hover appearance on the first button."""
         if self._hover_btn is not None:
-            self._hover_btn.set_force_hover(True)
+            self._qbot.mouseMove(self._hover_btn)
 
     def unhover_first(self) -> None:
         """Release the forced hover state on the first button."""
         if self._hover_btn is not None:
-            self._hover_btn.set_force_hover(False)
+            self._qbot.mouseMove(
+                self.widget, QPoint(-100, -100)
+            )  # move away to clear hover
 
     def steps(self) -> list:
         return [self.hover_first, self.unhover_first]
+
+    def cleanup(self, step_name: str) -> None:
+        self._qbot.mouseMove(self.widget, QPoint(-100, -100))
+        QtWidgets.QApplication.processEvents()
 
 
 # =============================================================================
@@ -222,9 +210,7 @@ def test_size_hint_height_matches_style(qtbot) -> None:
     btn = AYPageButton(label="Height check")
     qtbot.addWidget(btn)
     expected = (
-        get_ayon_style()
-        .model.get_style("AYPageButton")
-        .get("height", 44)
+        get_ayon_style().model.get_style("AYPageButton").get("height", 44)
     )
     assert btn.sizeHint().height() == expected, (
         "sizeHint height must match the 'height' value in the style block"
@@ -264,12 +250,13 @@ def test_paint_no_crash_with_hover_forced(qtbot) -> None:
     Args:
         qtbot: The pytest-qt bot fixture.
     """
-    btn = _HoverPageButton(label="Hover test", value="OK", icon="star")
+    btn = AYPageButton(label="Hover test", value="OK", icon="star")
     qtbot.addWidget(btn)
     btn.show()
     qtbot.waitExposed(btn)
 
-    btn.set_force_hover(True)
+    # btn.set_force_hover(True)
+    qtbot.mouseMove(btn)
     btn.repaint()  # should not crash
 
 

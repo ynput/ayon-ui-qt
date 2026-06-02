@@ -6,6 +6,7 @@ import logging
 from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
+from functools import cmp_to_key
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt

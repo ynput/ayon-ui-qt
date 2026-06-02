@@ -980,7 +980,7 @@ class AYComment(AYContainer):
             variant=AYCommentField.Variants.High,
         )
 
-        editor_lyt = AYContainer(
+        self.editor_lyt = AYContainer(
             layout=AYContainer.Layout.VBox,
             variant=AYContainer.Variants.High,
             bg_tint=self._data.category_color,
@@ -1000,12 +1000,23 @@ class AYComment(AYContainer):
         )
         self.images_container.setContentsMargins(0, 0, 0, 0)
         self.top_line.setFixedHeight(20)
-        editor_lyt.add_widget(self.top_line, stretch=0)
-        editor_lyt.add_widget(self.images_container, stretch=0)
-        editor_lyt.add_widget(self.text_field, stretch=10)
 
-        editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
-        self.add_widget(editor_lyt)
+        # Create comment category once — hidden until a category is set
+        self.comment_category = AYLabel(
+            "",
+            icon_color="",
+            variant=AYLabel.Variants.Badge,
+            rel_text_size=-2,
+        )
+        self.comment_category.setVisible(False)
+        self.top_line.insert_widget(0, self.comment_category)
+
+        self.editor_lyt.add_widget(self.top_line, stretch=0)
+        self.editor_lyt.add_widget(self.images_container, stretch=0)
+        self.editor_lyt.add_widget(self.text_field, stretch=10)
+
+        self.editor_lyt.add_layout(self._build_editor_toolbar(), stretch=0)
+        self.add_widget(self.editor_lyt)
         self._build_edit_buttons()
 
     def _build_image_attachments(self):
@@ -1139,15 +1150,30 @@ class AYComment(AYContainer):
             self.edit_frame.move((vr.width() + vr.x()) - fr.width(), 0)
 
     def set_comment_category(self):
+        """Update the comment category and comment background tint"""
+        self._update_category_bg_tint()
+
         if not self._data.category:
+            self.comment_category.setVisible(False)
             return
-        cat = AYLabel(
-            self._data.category,
-            icon_color=self._data.category_color,
-            variant=AYLabel.Variants.Badge,
-            rel_text_size=-2,
-        )
-        self.top_line.insert_widget(0, cat)
+
+        # Update comment category
+        self.comment_category.setText(self._data.category)
+        self.comment_category.set_icon_color(self._data.category_color)
+        self.comment_category.setVisible(True)
+
+    def _update_category_bg_tint(self):
+        """Update bg_tint on containers that use category_color."""
+        tint = self._data.category_color or ""
+        for widget in (
+            self.editor_lyt,
+            self.top_line,
+            self.images_container,
+            self.edit_frame,
+        ):
+            widget._bg_tint = tint
+            widget._bg_color = None  # reset cache so it recalculates
+            widget.update()  # trigger repaint
 
     def enterEvent(self, event: QEnterEvent) -> None:
         self._show_edit_buttons(True)
