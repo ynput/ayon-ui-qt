@@ -468,10 +468,14 @@ class StyleData:
         print(f"[StyleData]   >> {list(self._cache.keys())}")
 
     def widget_variants(self, widget_cls: str) -> list[str]:
-        return list(self.data["widgets"][widget_cls]["variants"].keys())
+        return list(
+            self.data["widgets"].get(widget_cls, {}).get("variants", {}).keys()
+        )
 
     def widget_states(self, widget_cls: str) -> list[str]:
-        states = list(self.data["widgets"][widget_cls].get("states", []))
+        states = list(
+            self.data["widgets"].get(widget_cls, {}).get("states", [])
+        )
         return states if "base" in states else ["base"] + states
 
     def widget_data(self, widget_cls: str) -> dict:
@@ -480,12 +484,13 @@ class StyleData:
     def widget_list(self) -> list[str]:
         return list(self.data["widgets"].keys())
 
-    def default_variant(self, widget_data):
+    def default_variant(self, widget_data) -> str:
+        variants = widget_data.get("variants", {})
         return widget_data.get(
-            "default-variant", next(iter(widget_data.get("variants", {})))
+            "default-variant", next(iter(variants.keys()), "default")
         )
 
-    def validate_variant(self, widget_data, variant):
+    def validate_variant(self, widget_data, variant) -> str:
         if variant not in widget_data.get("variants", {}):
             return self.default_variant(widget_data)
         return variant
