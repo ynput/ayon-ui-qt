@@ -147,8 +147,7 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
 
     def set_font(self, font: QFont) -> None:
         """Set the widget font and trigger a repaint."""
-        self._style_font = font
-        self._configure_font()
+        self._style_font = self._configure_font(font)
         self.update()
 
     # Private methods -------------------------------------------------------
@@ -178,26 +177,24 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
             )
             self.setPixmap(icn.pixmap(QSize(self._icon_size, self._icon_size)))
 
-    def _configure_font(self) -> None:
+    def _configure_font(self, font: QFont) -> QFont:
         """Initialize font configuration on first paint."""
         if self._text_setup_done:
-            return
-
-        self._text_setup_done = True
-        self._font = self.font()
+            return font
 
         if self._rel_text_size != 0:
             # _rel_text_size is in points but setting pixels is more reliable.
             # use QFontInfo in case PixelSize() or pointSize() returns -1
-            px_size = QFontInfo(self._font).pixelSize()
-            px_to_pt = px_size / QFontInfo(self._font).pointSize()
-            self._font.setPixelSize(
-                round(px_size + self._rel_text_size * px_to_pt)
-            )
+            px_size = QFontInfo(font).pixelSize()
+            px_to_pt = px_size / QFontInfo(font).pointSize()
+            new_px_size = round(px_size + self._rel_text_size * px_to_pt)
+            font.setPixelSize(new_px_size)
 
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal
-        self._font.setWeight(weight)
-        self.setFont(self._font)
+        font.setWeight(weight)
+
+        self._text_setup_done = True
+        return font
 
     def _display_text(self) -> str:
         """Recompute the elided version of the stored text."""
@@ -314,7 +311,7 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
 
         p = QPainter(self)
         self.initPainter(p)
-        p.setFont(self._font)
+        p.setFont(self.font())
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Fill color from foreground
@@ -371,7 +368,7 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         assert isinstance(self.fontMetrics(), QFontMetrics)
 
         p = QPainter(self)
-        p.setFont(self._font)
+        p.setFont(self.font())
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         text_rect = self.fontMetrics().boundingRect(self._display_text())
@@ -441,7 +438,7 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
     def _paint_text_only(self, state: str) -> None:
         """Render text-only label."""
         p = QPainter(self)
-        p.setFont(self._font)
+        p.setFont(self.font())
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         pal = self.palette()
         if self._text_color:
@@ -679,9 +676,6 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         Returns:
             The recommended widget size.
         """
-        # self._configure_font()
-        assert isinstance(self.fontMetrics(), QFontMetrics)
-
         fm = self.fontMetrics()
 
         # --- text size --------------------------------------------------
@@ -753,9 +747,11 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
                     wrap_rect.height() + 2 * pad_v,
                 )
 
+        cm = self.contentsMargins()
+
         return QSize(
-            content_w + 2 * pad_h,
-            content_h + 2 * pad_v,
+            content_w + 2 * pad_h + cm.left() + cm.right(),
+            content_h + 2 * pad_v + cm.top() + cm.bottom(),
         )
 
     def hasHeightForWidth(self) -> bool:
@@ -928,6 +924,30 @@ if __name__ == "__main__":
 
             row.setEnabled(enabled)
             w.add_widget(row)
+
+            # Font sizes and styles
+            row_font = AYContainer(
+                layout=AYContainer.Layout.HBox,
+                variant=AYContainer.Variants.High,
+                layout_spacing=16,
+            )
+            row_font.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
+            row_font.add_widget(AYLabel("Default font"), stretch=0)
+            row_font.add_widget(
+                AYLabel("Default font bold", bold=True), stretch=0
+            )
+            row_font.add_widget(
+                AYLabel("Default font dim", dim=True), stretch=0
+            )
+            row_font.add_widget(
+                AYLabel("Default font +2", rel_text_size=2), stretch=0
+            )
+            row_font.add_widget(
+                AYLabel("Default font +4", rel_text_size=4), stretch=0
+            )
+
+            w.add_widget(row_font)
+
         return w
 
     test(_build, style=Style.AyonStyleOverCSS)

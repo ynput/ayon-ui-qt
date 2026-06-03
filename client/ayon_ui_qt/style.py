@@ -46,6 +46,8 @@ from qtpy.QtWidgets import (
 )
 from qtpy.shiboken import isValid
 
+from .components.style_mixin import StyleMixin
+
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
@@ -1447,7 +1449,7 @@ class CheckboxDrawer:
 # ----------------------------------------------------------------------------
 
 
-class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
+class ComboBoxItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     def __init__(
         self,
         parent=None,
@@ -1499,6 +1501,17 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
                 bg if invert else fg,
             )
         return self._icon_cache[key]
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Initialize style option and apply any custom font from model."""
+        super().initStyleOption(option, index)
+        option.font = self.font()
+        option.fontMetrics = self.fontMetrics()
+        # print(f"PAINT: font = {option.font.family()}")
 
     def paint(
         self,
@@ -2434,7 +2447,7 @@ class ItemViewItemDrawer:
 # ----------------------------------------------------------------------------
 
 
-class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
+class TreeViewItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     """Item delegate for AYTreeView that paints directly, bypassing QSS.
 
     Reads style data from the QTreeView style entry to draw item
@@ -2468,6 +2481,22 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
             self._variant_str,
             ["base", "hover", "selected"],
         )
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Initialize the style option with the default implementation, then
+        override any properties needed for our custom painting.
+
+        Args:
+            option: The style option to initialize.
+            index: The model index of the item.
+        """
+        super().initStyleOption(option, index)
+        option.font = self.font()
+        option.fontMetrics = self.fontMetrics()
 
     def sizeHint(
         self,
@@ -2613,7 +2642,7 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
 # ----------------------------------------------------------------------------
 
 
-class TableItemDelegate(QtWidgets.QStyledItemDelegate):
+class TableItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     """Item delegate for AYTableView that paints cells directly, bypassing QSS.
 
     Reads style data from the AYTableView style entry to draw cell
@@ -2905,7 +2934,7 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             text_rect.setLeft(content_left)
             text_rect.setRight(content_rect.right())
             painter.setPen(text_color)
-            painter.setFont(opt.font)
+            painter.setFont(self.font())
             painter.drawText(
                 text_rect,
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
