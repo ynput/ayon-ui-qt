@@ -7,6 +7,7 @@ from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
 from glob import glob
+import platform
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -81,8 +82,10 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
 def _style_font(style: dict, w: QWidget | None) -> QFont:
     font = QFont()
     font.setFamily(style["font-family"])
-    px_size = style["font-size"]
-    font.setPixelSize(px_size)
+    os = platform.system().lower()
+    # print(f"[Style] Detected OS: {os}")
+    pt_size = style.get(f"font-size-{os}", style["font-size"])
+    font.setPointSize(pt_size)
     font.setWeight(QFont.Weight(style["font-weight"]))
     # log.debug(
     #     "FONT: %s, %g pts, w=%d",
@@ -871,7 +874,7 @@ class ButtonDrawer:
         painter.setPen(text_color)
 
         # Set up font
-        painter.setFont(_style_font(style, widget))
+        painter.setFont(widget.font())
 
         # Get content rectangle
         content_rect = self.style_inst.subElementRect(
@@ -1048,7 +1051,7 @@ class ButtonDrawer:
 
         # Set up font for text measurement
         style, _ = self.get_button_style(widget, option.state)  # type: ignore
-        font = _style_font(style, widget)
+        font = widget.font() if widget else _style_font(style, widget)
 
         # Create font metrics for accurate text measurement
         font_metrics = QFontMetrics(font)

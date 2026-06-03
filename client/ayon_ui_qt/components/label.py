@@ -190,10 +190,9 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         if self._rel_text_size != 0:
             # _rel_text_size is in points but setting pixels is more reliable.
             # use QFontInfo in case PixelSize() or pointSize() returns -1
-            px_size = QFontInfo(font).pixelSize()
-            px_to_pt = px_size / QFontInfo(font).pointSize()
-            new_px_size = round(px_size + self._rel_text_size * px_to_pt)
-            font.setPixelSize(new_px_size)
+            pt_size = QFontInfo(font).pointSize()
+            new_pt_size = pt_size + self._rel_text_size
+            font.setPointSize(new_pt_size)
 
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal
         font.setWeight(weight)
@@ -914,28 +913,28 @@ if __name__ == "__main__":
             row.setEnabled(enabled)
             w.add_widget(row)
 
-            # Font sizes and styles
-            row_font = AYContainer(
-                layout=AYContainer.Layout.HBox,
-                variant=AYContainer.Variants.High,
-                layout_spacing=16,
-            )
-            row_font.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-            row_font.add_widget(AYLabel("Default font"), stretch=0)
-            row_font.add_widget(
-                AYLabel("Default font bold", bold=True), stretch=0
-            )
-            row_font.add_widget(
-                AYLabel("Default font dim", dim=True), stretch=0
-            )
-            row_font.add_widget(
-                AYLabel("Default font +2", rel_text_size=2), stretch=0
-            )
-            row_font.add_widget(
-                AYLabel("Default font +4", rel_text_size=4), stretch=0
-            )
+        # Font sizes and styles
+        row_font = AYContainer(
+            layout=AYContainer.Layout.HBox,
+            variant=AYContainer.Variants.High,
+            layout_spacing=16,
+        )
+        row_font.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
+        row_font.add_widget(AYLabel("Default font"), stretch=0)
+        row_font.add_widget(
+            AYLabel("Default font bold", bold=True), stretch=0
+        )
+        row_font.add_widget(
+            AYLabel("Default font dim", dim=True), stretch=0
+        )
+        row_font.add_widget(
+            AYLabel("Default font +2", rel_text_size=2), stretch=0
+        )
+        row_font.add_widget(
+            AYLabel("Default font +4", rel_text_size=4), stretch=0
+        )
 
-            w.add_widget(row_font)
+        w.add_widget(row_font)
 
         return w
 
