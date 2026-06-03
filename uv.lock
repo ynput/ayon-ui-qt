@@ -10,6 +10,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pillow" },
     { name = "pyside6" },
+    { name = "pytest" },
     { name = "qtpy" },
     { name = "ruff" },
 ]
@@ -26,6 +27,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0.2" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "pyside6", specifier = ">=6.7.1" },
+    { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-qt", marker = "extra == 'test'" },
     { name = "pytest-regressions", extras = ["image"], marker = "extra == 'test'" },

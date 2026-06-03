@@ -100,6 +100,11 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
 
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+
         # set alignment from style data if specified.
         alignment = self._style_data["base"].get("alignment")
         if alignment is not None:
