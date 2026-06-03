@@ -4,7 +4,7 @@
     "global": {
         "font-family": "Nunito Sans",
         "font-size": 12,
-        "font-weight": 500
+        "font-weight": 400
     },
     "widgets": {
         "QPushButton": {
