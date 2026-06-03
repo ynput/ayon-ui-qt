@@ -176,7 +176,7 @@ class AYEntityThumbnail(QPushButton):
         a diagonal separation effect between composite images. We default to
         10% of the widget's width.
         """
-        return int(self._size[0] * 0.1)
+        return int(self._size[0] * 0.1 * self.devicePixelRatio())
 
     @property
     def max_slices(self) -> int:
@@ -195,6 +195,22 @@ class AYEntityThumbnail(QPushButton):
         """
         self._anim.setDuration(duration)
 
+    def _make_placeholder_icon(self) -> QIcon:
+        """Build a placeholder icon scaled to the current size and DPR.
+
+        Returns:
+            A QIcon sized for the current widget dimensions and pixel ratio.
+        """
+        dpr = self.devicePixelRatio()
+        icn_size = int(self._size[1] * self._placeholder_scale * dpr)
+        return QIcon(
+            get_icon(
+                self._placeholder_icon_name,
+                color="#10ffffff",
+                fill=self._placeholder_icon_fill,
+            ).pixmap(QSize(icn_size, icn_size) * dpr)
+        )
+
     def set_size(self, size: tuple[int, int]) -> None:
         """Resize the thumbnail and update the icon size to match.
 
@@ -207,14 +223,7 @@ class AYEntityThumbnail(QPushButton):
         self._size = size
         # Cached composites are size-specific; they must be rebuilt.
         self._composite_cache.clear()
-        icn_size = int(size[1] * self._placeholder_scale)
-        self._placeholder_icon = QIcon(
-            get_icon(
-                self._placeholder_icon_name,
-                color="#10ffffff",
-                fill=self._placeholder_icon_fill,
-            ).pixmap(QSize(icn_size, icn_size))
-        )
+        self._placeholder_icon = self._make_placeholder_icon()
         self.setFixedSize(*self._size)
         if self.icon() and not self.icon().isNull():
             self.setIconSize(QSize(*self._size))
@@ -229,14 +238,7 @@ class AYEntityThumbnail(QPushButton):
         if not icon_name:
             return
         self._placeholder_icon_name = icon_name
-        icn_size = int(self._size[1] * self._placeholder_scale)
-        self._placeholder_icon = QIcon(
-            get_icon(
-                icon_name,
-                color="#10ffffff",
-                fill=self._placeholder_icon_fill,
-            ).pixmap(QSize(icn_size, icn_size))
-        )
+        self._placeholder_icon = self._make_placeholder_icon()
         if not self.icon() or self.icon().isNull():
             self.setIcon(self._placeholder_icon)
             self.setIconSize(QSize(*self._size))
@@ -350,9 +352,11 @@ class AYEntityThumbnail(QPushButton):
         Returns:
             A composite QPixmap of ``self._size``.
         """
-        w, h = self._size
+        dpr = self.devicePixelRatio()
+        w = int(self._size[0] * dpr)
+        h = int(self._size[1] * dpr)
         num_paths = len(paths)
-        slot_w = max(w // num_paths, self._MIN_SLICE_WIDTH)
+        slot_w = max(w // num_paths, int(self._MIN_SLICE_WIDTH * dpr))
         ci = self._CLIP_INSET
 
         result = QPixmap(w, h)
@@ -434,7 +438,7 @@ class AYEntityThumbnail(QPushButton):
             icon = QIcon()
             icon.addPixmap(pixmap)
             self.setIcon(icon)
-            self.setIconSize(QSize(*self._size))
+            self.setIconSize(QSize(*self._size) * self.devicePixelRatio())
         else:
             self.setIcon(QIcon())
         self._incoming_pixmap = None
@@ -455,8 +459,9 @@ class AYEntityThumbnail(QPushButton):
         self._src = fpath
         self._anim.stop()
         raw = QPixmap(fpath)
+        raw.setDevicePixelRatio(self.devicePixelRatio())
         self._incoming_pixmap = raw.scaled(
-            QSize(*self._size),
+            QSize(*self._size) * raw.devicePixelRatio(),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -605,8 +610,9 @@ class AYEntityThumbnail(QPushButton):
         )
         # overlay incoming pixmap with fade opacity
         if self._incoming_pixmap and not self._incoming_pixmap.isNull():
-            x = (size.width() - self._incoming_pixmap.width()) // 2
-            y = (size.height() - self._incoming_pixmap.height()) // 2
+            dpr = self.devicePixelRatio()
+            x = (size.width() - self._incoming_pixmap.width() // dpr) // 2
+            y = (size.height() - self._incoming_pixmap.height() // dpr) // 2
             p.save()
             p.setClipRect(QRect(1, 1, size.width() - 2, size.height() - 2))
             p.setOpacity(self._opacity)
