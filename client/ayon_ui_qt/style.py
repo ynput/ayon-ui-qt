@@ -6,6 +6,7 @@ import logging
 from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
+from glob import glob
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
@@ -372,19 +373,23 @@ class StyleData:
         families = QFontDatabase.families()
         if font.family() not in families:
             # Attempt to load from resources
-            font_path = (
-                Path(__file__).parent
-                / "resources"
-                / (font.family().replace(" ", "") + ".ttf")
+            font_name = font.family().replace(" ", "")
+            glob_path = str(
+                Path(__file__).parent / "resources" / f"{font_name}*.ttf"
             )
-            if font_path.exists():
-                if QFontDatabase.addApplicationFont(str(font_path)) == -1:
-                    log.error(f"Failed to load base font from {font_path}")
-            else:
+            font_files = glob(glob_path)
+
+            if not font_files:
                 log.error(
-                    f"Base font '{font.family()}' not "
-                    f"found in resources/fonts. ({font_path})"
+                    f"Base font '{font.family()}' is not available and no font "
+                    f"files were found in '{glob_path}'"
                 )
+            else:
+                for font_path in font_files:
+                    if QFontDatabase.addApplicationFont(str(font_path)) == -1:
+                        log.error(f"Failed to load base font from {font_path}")
+                    else:
+                        log.debug(f"Loaded base font file {font_path}")
         self._base_font_checked = True
 
     def _build_palette(self) -> QPalette:
