@@ -545,6 +545,9 @@ class AYComboBox(StyleMixin, QtWidgets.QComboBox):
         option = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(option)
 
+        p.setFont(self.font())
+        option.fontMetrics = self.fontMetrics()
+
         if self._inverted:
             option.currentIcon = self._get_inverted_icon(option.currentIcon)
 
