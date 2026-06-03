@@ -817,7 +817,7 @@ class AYCardView(QAbstractItemView):
         # Set header font based on view font, but larger and bold.
         font = painter.font()
         header_font = QFont(font)
-        header_font.setPixelSize(QFontInfo(font).pixelSize() + 3)
+        header_font.setPointSize(font.pointSize() + 3)
         header_font.setBold(True)
         painter.setFont(header_font)
 
