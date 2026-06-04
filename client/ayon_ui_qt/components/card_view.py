@@ -785,6 +785,7 @@ class AYCardView(QAbstractItemView):
         super().resizeEvent(event)
         self._calculate_layout()
         self._reposition_visible_editors()
+        self._schedule_editor_sync()
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self.viewport())

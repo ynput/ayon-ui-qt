@@ -790,6 +790,21 @@ class AYTableView(StyleMixin, QTreeView):
                 self.openPersistentEditor(pmi)
                 self._active_editor_pmis.add(pmi)
 
+    def resizeEvent(self, event: Any) -> None:  # type: ignore[override]
+        """Schedule an editor sync when the view is resized.
+
+        A viewport resize may reveal rows that have never been visible
+        before.  Those rows need ``openPersistentEditor`` called on them
+        before their thumbnail widgets can be created and painted.  The
+        regular scroll-driven sync misses this case because the scrollbar
+        value does not change on a pure resize.
+
+        Args:
+            event: The resize event.
+        """
+        super().resizeEvent(event)
+        self._schedule_editor_sync()
+
     def mousePressEvent(  # type: ignore[override]
         self, event: "QtGui.QMouseEvent"
     ) -> None:
