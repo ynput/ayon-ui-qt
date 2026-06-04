@@ -85,7 +85,7 @@ def _style_font(style: dict, w: QWidget | None) -> QFont:
     font.setFamily(style["font-family"])
     os = platform.system().lower()
     pt_size = style.get(f"font-size-{os}", style["font-size"])
-    font.setPointSize(pt_size)
+    font.setPointSizeF(pt_size)
     font.setWeight(QFont.Weight(style["font-weight"]))
     # print(
     #     "FONT: %s, %g pts, w=%d -- %s"

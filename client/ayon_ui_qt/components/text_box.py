@@ -386,7 +386,7 @@ class AYTextEditor(AYTextEdit):
 
         elif style == "stl_h1":
             # Toggle heading size, preserving all other formatting
-            base_size = self.font().pointSize()
+            base_size = self.font().pointSizeF()
             current_size = cursor.charFormat().fontPointSize()
 
             fmt = QTextCharFormat()
