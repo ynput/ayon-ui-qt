@@ -189,10 +189,10 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
 
         if self._rel_text_size != 0:
             # _rel_text_size is in points but setting pixels is more reliable.
-            # use QFontInfo in case PixelSize() or pointSize() returns -1
-            pt_size = QFontInfo(font).pointSize()
+            # use QFontInfo in case PixelSize() or pointSizeF() returns -1
+            pt_size = QFontInfo(font).pointSizeF()
             new_pt_size = pt_size + self._rel_text_size
-            font.setPointSize(new_pt_size)
+            font.setPointSizeF(new_pt_size)
 
         weight = QFont.Weight.Bold if self._bold else QFont.Weight.Normal
         font.setWeight(weight)

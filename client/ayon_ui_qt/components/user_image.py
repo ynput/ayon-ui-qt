@@ -138,7 +138,7 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
             painter.setPen(QtGui.QPen(fg_color))
             font = painter.font()
             pt_size = max(8, self._size // 2)
-            font.setPointSize(pt_size)
+            font.setPointSizeF(pt_size)
             painter.setFont(font)
 
             painter.drawText(
