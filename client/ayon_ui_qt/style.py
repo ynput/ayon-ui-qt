@@ -81,17 +81,15 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
 
 def _style_font(style: dict, w: QWidget | None) -> QFont:
     font = QFont()
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
     font.setFamily(style["font-family"])
     os = platform.system().lower()
-    # print(f"[Style] Detected OS: {os}")
     pt_size = style.get(f"font-size-{os}", style["font-size"])
     font.setPointSize(pt_size)
     font.setWeight(QFont.Weight(style["font-weight"]))
-    # log.debug(
-    #     "FONT: %s, %g pts, w=%d",
-    #     font.family(),
-    #     font.pointSizeF(),
-    #     font.weight(),
+    # print(
+    #     "FONT: %s, %g pts, w=%d -- %s"
+    #     % (font.family(), font.pointSizeF(), font.weight(), os)
     # )
     return font
 
@@ -369,7 +367,7 @@ class StyleData:
             )
             if not self._base_font_checked:
                 self._check_font_availability(self._base_font)
-        return self._base_font
+        return QFont(self._base_font)
 
     def _check_font_availability(self, font: QFont):
         # check if the font is available and load it if need be.
