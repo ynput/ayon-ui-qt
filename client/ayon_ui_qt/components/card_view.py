@@ -28,7 +28,6 @@ from qtpy.QtGui import (
     QBrush,
     QColor,
     QFont,
-    QFontInfo,
     QIcon,
     QPainter,
     QPaintEvent,
@@ -1178,13 +1177,13 @@ if __name__ == "__main__":
     from ..tester import Style, test
     from .check_box import AYCheckBox
     from .container import AYContainer
+    from .slider import AYSlider
     from .table_model import (
         HIERARCHICAL_TEST_DATA,
         PaginatedTableModel,
         TableColumn,
         make_hierarchical_test_fetch,
     )
-    from .slider import AYSlider
 
     def _make_card_mapper(
         row_data: dict,
