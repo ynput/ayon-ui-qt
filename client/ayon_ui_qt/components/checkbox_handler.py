@@ -97,7 +97,7 @@ class CheckboxTextObject(QPyTextObject):
             Size of the checkbox icon based on font size.
         """
         font = doc.defaultFont()
-        size = max(font.pointSize() * 1.4, 14)
+        size = max(font.pointSizeF() * 1.4, 14)
         return QSizeF(size, size)
 
     def drawObject(

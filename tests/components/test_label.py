@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from qtpy.QtWidgets import QWidget
-from qtpy.QtGui import QColor
-
-from widget_test import WidgetTest
-from ayon_ui_qt.components.label import AYLabel
 from ayon_ui_qt.components.container import AYContainer
+from ayon_ui_qt.components.label import AYLabel
+from qtpy.QtGui import QColor
+from qtpy.QtWidgets import QWidget
+from widget_test import WidgetTest
 
 
 class LabelTest(WidgetTest):

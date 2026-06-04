@@ -60,6 +60,7 @@ from qtpy.QtGui import (
 
 from ..data_models import MenuSize
 from ..variants import QComboBoxVariants
+from .style_mixin import StyleMixin
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ class AYComboBoxModel(QStandardItemModel):
     IconNameRole = QtCore.Qt.ItemDataRole.UserRole + 2
 
 
-class AYComboBox(QtWidgets.QComboBox):
+class AYComboBox(StyleMixin, QtWidgets.QComboBox):
     """AYON-styled combo-box with icon, short-text, and inverted-colour support.
 
     :class:`AYComboBox` wraps :class:`QComboBox` and adds:
@@ -544,6 +545,9 @@ class AYComboBox(QtWidgets.QComboBox):
         option = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(option)
 
+        p.setFont(self.font())
+        option.fontMetrics = self.fontMetrics()
+
         if self._inverted:
             option.currentIcon = self._get_inverted_icon(option.currentIcon)
 
@@ -613,7 +617,9 @@ if __name__ == "__main__":
             if icon_name:
                 item.setIcon(
                     get_icon(
-                        icon_name, color_normal=bg_color, color_selected=color
+                        icon_name,
+                        color_normal=bg_color,
+                        color_selected=color,
                         # TODO: add fill support to get_icon and pass self._icon_fill here
                     )
                 )

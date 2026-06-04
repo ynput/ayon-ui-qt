@@ -7,14 +7,15 @@ from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-from ..style import get_ayon_style
 from ..image_cache import ImageCache
+from ..style import get_ayon_style
 from ..variants import AYUserImageVariants
+from .style_mixin import StyleMixin
 
 log = logging.getLogger(__name__)
 
 
-class AYUserImage(QtWidgets.QLabel):
+class AYUserImage(StyleMixin, QtWidgets.QLabel):
     Variants = AYUserImageVariants
 
     def __init__(
@@ -81,6 +82,7 @@ class AYUserImage(QtWidgets.QLabel):
         self.pxm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(self.pxm)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.setFont(self.font())
 
         if self._src:
             if not Path(str(self._src)).exists() and self._file_cacher:
@@ -135,8 +137,8 @@ class AYUserImage(QtWidgets.QLabel):
             # Draw white initials
             painter.setPen(QtGui.QPen(fg_color))
             font = painter.font()
-            point_size = max(8, self._size // 2)
-            font.setPointSize(point_size)
+            pt_size = max(8, self._size // 2)
+            font.setPointSizeF(pt_size)
             painter.setFont(font)
 
             painter.drawText(
