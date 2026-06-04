@@ -31,6 +31,7 @@ from qtpy.QtWidgets import QPushButton, QStyle, QStyleOptionButton
 from ..image_cache import ImageCache
 from ..style import get_ayon_style
 from ..variants import QPushButtonVariants
+from .style_mixin import StyleMixin
 
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
@@ -54,7 +55,7 @@ class _PendingCompositeState:
     total: int
 
 
-class AYEntityThumbnail(QPushButton):
+class AYEntityThumbnail(StyleMixin, QPushButton):
     """A push button widget that displays a thumbnail image for an entity.
 
     Supports single images or comma-separated composites with automatic

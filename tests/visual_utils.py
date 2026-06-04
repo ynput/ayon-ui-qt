@@ -170,7 +170,7 @@ def show_images(*images: tuple[str, str, str]) -> None:
     )
 
     cards: list[tuple[str, QWidget]] = []
-    for name, *rest in images:
+    for name, *rest in sorted(images, key=lambda x: os.path.basename(x[0])):
         card = _make_image_card(name, *rest)
         root.add_widget(card)
         cards.append((name, card))
@@ -187,7 +187,7 @@ def show_images(*images: tuple[str, str, str]) -> None:
     search_field.textChanged.connect(_filter_cards)
 
     window.show()
-    window.resize(root.sizeHint() + QSize(20, 40))
+    window.resize(root.sizeHint() + QSize(40, 40))
     app.exec()
 
 
@@ -202,10 +202,7 @@ if __name__ == "__main__":
             # inspection
             ref_dir = os.path.join(os.getcwd(), "tests", "test_visual")
             ref_images = glob.glob(os.path.join(ref_dir, "*.png"))
-            images = [
-                (os.path.basename(img), img, img)
-                for img in sorted(ref_images, key=os.path.basename)
-            ]
+            images = [(os.path.basename(img), img, img) for img in ref_images]
             show_images(*images)
         else:
             show_images(*json.loads(sys.argv[1]))

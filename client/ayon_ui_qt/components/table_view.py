@@ -39,6 +39,7 @@ from qtpy.QtWidgets import (
 from ..style import StyleData, TableItemDelegate, enum_to_str, get_ayon_style
 from ..variants import AYTableViewVariants
 from .scroll_area import AYScrollBar
+from .style_mixin import StyleMixin
 from .table_model import PaginatedTableModel
 
 try:
@@ -49,7 +50,7 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-class AYTableHeader(QHeaderView):
+class AYTableHeader(StyleMixin, QHeaderView):
     """Custom QHeaderView that paints sections directly, bypassing QSS.
 
     Draws header sections using QPainter to avoid interference from
@@ -122,7 +123,7 @@ class AYTableHeader(QHeaderView):
         text_rect = rect.adjusted(h_pad, v_pad, -h_pad, -v_pad)
 
         painter.setPen(QColor(tbl_style.get("header-color", "#c1c7ce")))
-        font = painter.font()
+        font = self.font()
         font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
 
@@ -216,7 +217,7 @@ class AYTableHeader(QHeaderView):
     # -------------------------------------------------------------------------
 
 
-class AYTableView(QTreeView):
+class AYTableView(StyleMixin, QTreeView):
     """AYON-styled flat table view.
 
     Subclasses QTreeView in flat-table mode (no tree indentation or
@@ -285,6 +286,7 @@ class AYTableView(QTreeView):
             style_model=style.model,
             variant=self._variant_str,
         )
+        delegate.setFont(self.font())
         self.setItemDelegate(delegate)
 
         # Styled scrollbars.
