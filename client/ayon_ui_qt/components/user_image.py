@@ -78,10 +78,17 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
         fg_color, bg_color, outline_color, highlight_color = self._get_colors()
         active_outline = highlight_color if self._highlight else outline_color
 
-        self.pxm = QtGui.QPixmap(self._size, self._size)
+        dpr = self.devicePixelRatioF()
+        dpr_size = int(self._size * dpr)
+        has_outline = self._outline or self._highlight
+        line_width = int(1 * dpr if has_outline else 0)
+        half_line = line_width / 2
+
+        self.pxm = QtGui.QPixmap(dpr_size, dpr_size)
+        self.pxm.setDevicePixelRatio(dpr)
         self.pxm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(self.pxm)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.setFont(self.font())
 
         if self._src:
@@ -93,12 +100,13 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
 
             # Load and draw src icon file in a circle
             source_pixmap = QtGui.QPixmap(self._src)
+            source_pixmap.setDevicePixelRatio(dpr)
             if not source_pixmap.isNull():
                 # Scale the source image to fit within the circle (with some
                 # margin for outline)
 
                 # Leave space for outline
-                inner_size = self._size - (2 if self._outline else 0)
+                inner_size = int(dpr_size - line_width)
                 scaled_pixmap = source_pixmap.scaled(
                     inner_size,
                     inner_size,
@@ -112,8 +120,8 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
                 painter.setClipPath(clip_path)
 
                 # Draw the scaled image centered
-                x = (self._size - scaled_pixmap.width()) // 2
-                y = (self._size - scaled_pixmap.height()) // 2
+                x = (dpr_size - scaled_pixmap.width()) // 2
+                y = (dpr_size - scaled_pixmap.height()) // 2
                 painter.drawPixmap(x, y, scaled_pixmap)
 
                 # Reset clipping
@@ -137,7 +145,7 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
             # Draw white initials
             painter.setPen(QtGui.QPen(fg_color))
             font = painter.font()
-            pt_size = max(8, self._size // 2)
+            pt_size = max(8, self._size // 2 - 3)
             font.setPointSizeF(pt_size)
             painter.setFont(font)
 
@@ -148,10 +156,17 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
             )
 
         # Draw outline
-        if self._outline or self._highlight:
+        if has_outline:
             painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.setPen(QtGui.QPen(active_outline, 1))
-            painter.drawEllipse(1, 1, self._size - 2, self._size - 2)
+            painter.setPen(QtGui.QPen(active_outline, line_width))
+            painter.drawEllipse(
+                QtCore.QRectF(
+                    half_line,
+                    half_line,
+                    self._size - line_width,
+                    self._size - line_width,
+                )
+            )
 
         painter.end()
 
