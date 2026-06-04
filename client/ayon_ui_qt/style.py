@@ -7,6 +7,7 @@ from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
 from glob import glob
+import os
 import platform
 
 from qtpy import QtCore, QtGui, QtWidgets
@@ -79,18 +80,33 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
     p.restore()
 
 
+# Override the platform key used for OS-specific font sizes.
+# Set the ``AYON_UI_QT_FONT_OS`` env var to a fixed value (e.g. ``"linux"``)
+# to make font selection deterministic across machines — useful for visual
+# regression tests.
+
+
+def _font_platform() -> str:
+    """Return the platform key used to select OS-specific font sizes.
+
+    Resolution order:
+    1. ``AYON_UI_QT_FONT_OS`` environment variable.
+    2. Live ``platform.system()`` result (normalised to lower-case).
+    """
+    env_val = os.environ.get("AYON_UI_QT_FONT_OS")
+    if env_val:
+        return env_val.lower()
+    return platform.system().lower()
+
+
 def _style_font(style: dict, w: QWidget | None) -> QFont:
     font = QFont()
     font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
     font.setFamily(style["font-family"])
-    os = platform.system().lower()
-    pt_size = style.get(f"font-size-{os}", style["font-size"])
+    os_name = _font_platform()
+    pt_size = style.get(f"font-size-{os_name}", style["font-size"])
     font.setPointSizeF(pt_size)
     font.setWeight(QFont.Weight(style["font-weight"]))
-    # print(
-    #     "FONT: %s, %g pts, w=%d -- %s"
-    #     % (font.family(), font.pointSizeF(), font.weight(), os)
-    # )
     return font
 
 
