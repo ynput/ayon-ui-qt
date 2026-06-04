@@ -81,7 +81,7 @@ class AYUserImage(StyleMixin, QtWidgets.QLabel):
         dpr = self.devicePixelRatioF()
         dpr_size = int(self._size * dpr)
         has_outline = self._outline or self._highlight
-        line_width = int(1 * dpr if has_outline else 0)
+        line_width = 1 if has_outline else 0
         half_line = line_width / 2
 
         self.pxm = QtGui.QPixmap(dpr_size, dpr_size)

@@ -209,7 +209,7 @@ class AYEntityThumbnail(StyleMixin, QPushButton):
                 self._placeholder_icon_name,
                 color="#10ffffff",
                 fill=self._placeholder_icon_fill,
-            ).pixmap(QSize(icn_size, icn_size) * dpr)
+            ).pixmap(QSize(icn_size, icn_size))
         )
 
     def set_size(self, size: tuple[int, int]) -> None:
@@ -439,7 +439,7 @@ class AYEntityThumbnail(StyleMixin, QPushButton):
             icon = QIcon()
             icon.addPixmap(pixmap)
             self.setIcon(icon)
-            self.setIconSize(QSize(*self._size) * self.devicePixelRatio())
+            self.setIconSize(QSize(*self._size))
         else:
             self.setIcon(QIcon())
         self._incoming_pixmap = None
