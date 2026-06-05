@@ -951,7 +951,8 @@ class ButtonDrawer:
                     # Draw text
                     painter.drawText(
                         text_rect,
-                        Qt.AlignmentFlag.AlignCenter,
+                        Qt.AlignmentFlag.AlignLeft
+                        | Qt.AlignmentFlag.AlignVCenter,
                         option.text,  # type: ignore
                     )
             elif variant not in ("thumbnail", "entity-card"):
