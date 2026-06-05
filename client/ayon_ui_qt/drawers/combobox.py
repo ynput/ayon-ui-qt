@@ -1,4 +1,5 @@
 """ComboBox drawers: ComboBoxItemDelegate and ComboBoxDrawer."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -8,7 +9,6 @@ from qtpy.QtCore import QRect, Qt
 from qtpy.QtGui import QBrush, QColor, QIcon, QPainter, QPalette
 from qtpy.QtWidgets import (
     QComboBox,
-    QHeaderView,
     QStyle,
     QStyleOption,
     QStyleOptionComboBox,
@@ -322,6 +322,39 @@ class ComboBoxDrawer:
             p.drawRoundedRect(rect, _radius, _radius)
             p.restore()
 
+            # Draw expand_more arrow if show_chevron is True
+            show_chevron = getattr(w, "show_chevron", True)
+            if show_chevron:
+                arrow_rect = super(AYONStyle, self.style_inst).subControlRect(
+                    QStyle.ComplexControl.CC_ComboBox,
+                    opt,
+                    QStyle.SubControl.SC_ComboBoxArrow,
+                    w,
+                )
+                arrow_icon = get_icon("expand_more", fg_color)
+                if arrow_icon and not arrow_rect.isEmpty():
+                    arrow_size = min(arrow_rect.width(), arrow_rect.height())
+                    pixmap = arrow_icon.pixmap(arrow_size, arrow_size)
+                    px = (
+                        arrow_rect.x() + (arrow_rect.width() - arrow_size) // 2
+                    )
+                    py = (
+                        arrow_rect.y()
+                        + (arrow_rect.height() - arrow_size) // 2
+                    )
+                    popup_open = bool(opt.state & QStyle.StateFlag.State_On)
+                    if popup_open:
+                        cx = px + arrow_size / 2
+                        cy = py + arrow_size / 2
+                        p.save()
+                        p.translate(cx, cy)
+                        p.rotate(180)
+                        p.translate(-cx, -cy)
+                        p.drawPixmap(px, py, pixmap)
+                        p.restore()
+                    else:
+                        p.drawPixmap(px, py, pixmap)
+
             # set pen for text drawing
             p.setPen(fg_color)
         else:
@@ -381,9 +414,7 @@ class ComboBoxDrawer:
                 p, icon_rect, Qt.AlignmentFlag.AlignCenter, pixmap
             )
             if opt.direction == Qt.LayoutDirection.RightToLeft:
-                edit_rect.translate(
-                    -icon_padding[0] - opt.iconSize.width(), 0
-                )
+                edit_rect.translate(-icon_padding[0] - opt.iconSize.width(), 0)
             else:
                 edit_rect.translate(opt.iconSize.width() + icon_padding[0], 0)
 

@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import glob
 import io
+import json
 import os
+import shutil
+import sys
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 from PIL import Image
@@ -35,25 +40,35 @@ def capture_widget(widget: QWidget) -> bytes:
     return buf.getvalue()
 
 
-def copy_result_to_refs(obtained_path: str, ref_path: str, w: QWidget) -> None:
-    """Copy obtained image to reference path, for quick acceptance of new results."""
-    import shutil
+def accept_image_result(
+    card: QWidget,
+    test_img_path: str,
+    ref_path: str,
+    accept_btn: QWidget,
+    callback: Callable,
+) -> None:
+    """Copy obtained image to reference path, enabling quick acceptance."""
+    print(f"Accepting new result: {test_img_path} to {ref_path}")
+    shutil.copy(test_img_path, ref_path)
+    accept_btn.setEnabled(False)
+    card.setProperty("accepted", True)
+    callback()
 
-    print(f"Accepting new result: {obtained_path} to {ref_path}")
-    shutil.copy(obtained_path, ref_path)
-    w.setEnabled(False)
 
-
-def _make_image_card(test_name: str, test_img_path: str, ref_img_path: str):
+def _make_image_card(
+    test_name: str,
+    test_img_path: str,
+    ref_img_path: str,
+    on_accepted: Callable,
+):
     """Build one comparison card for show_images()."""
-    from qtpy.QtCore import Qt
-    from qtpy.QtGui import QPixmap
-    from qtpy.QtWidgets import QLabel, QStackedWidget
-
     from ayon_ui_qt.components.buttons import AYButton
     from ayon_ui_qt.components.check_box import AYCheckBox
     from ayon_ui_qt.components.container import AYContainer
     from ayon_ui_qt.components.label import AYLabel
+    from qtpy.QtCore import Qt
+    from qtpy.QtGui import QPixmap
+    from qtpy.QtWidgets import QLabel, QStackedWidget
 
     card = AYContainer(
         variant=AYContainer.Variants.Low_Framed_Thin,
@@ -94,6 +109,8 @@ def _make_image_card(test_name: str, test_img_path: str, ref_img_path: str):
     show_ref_cb.setChecked(is_same)
     show_ref_cb.setEnabled(not is_same)
     accept_btn.setEnabled(not is_same)
+    card.setProperty("accepted", is_same)
+
     if is_same:
         accept_btn.setToolTip("Test and reference images are the same.")
     else:
@@ -109,9 +126,11 @@ def _make_image_card(test_name: str, test_img_path: str, ref_img_path: str):
         )
         accept_btn.clicked.connect(
             lambda _,
+            c=card,
             p=test_img_path,
             r=dest_ref,
-            w=accept_btn: copy_result_to_refs(p, r, w)
+            w=accept_btn,
+            cb=on_accepted: accept_image_result(c, p, r, w, cb)
         )
 
     return card
@@ -131,13 +150,13 @@ def show_images(*images: tuple[str, str, str]) -> None:
             and reference image path.
 
     """
-    from qtpy.QtCore import QSize
-    from qtpy.QtWidgets import QApplication
-
-    from ayon_ui_qt.style import get_ayon_style
+    from ayon_ui_qt.components.check_box import AYCheckBox
     from ayon_ui_qt.components.container import AYContainer
     from ayon_ui_qt.components.line_edit import AYLineEdit
     from ayon_ui_qt.components.scroll_area import AYScrollArea
+    from ayon_ui_qt.style import get_ayon_style
+    from qtpy.QtCore import QSize
+    from qtpy.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
     app.setStyle(get_ayon_style())
@@ -151,12 +170,19 @@ def show_images(*images: tuple[str, str, str]) -> None:
     window.setWindowTitle("Image Comparison")
     window_lyt = window._layout
 
+    search_lyt = AYContainer(
+        layout=AYContainer.Layout.HBox,
+        layout_margin=0,
+        layout_spacing=10,
+    )
     search_field = AYLineEdit(
-        placeholder="Search images…",
-        variant=AYLineEdit.Variants.Search_Field,
+        placeholder="Search images…", variant=AYLineEdit.Variants.Search_Field
     )
     search_field.setFixedHeight(search_field.sizeHint().height())
-    window_lyt.addWidget(search_field)
+    search_lyt.add_widget(search_field)
+    hide_accepted_cb = AYCheckBox("Hide accepted")
+    search_lyt.add_widget(hide_accepted_cb)
+    window_lyt.addWidget(search_lyt)
 
     scroll = AYScrollArea()
     scroll.setWidgetResizable(True)
@@ -170,21 +196,33 @@ def show_images(*images: tuple[str, str, str]) -> None:
     )
 
     cards: list[tuple[str, QWidget]] = []
+
+    def _apply_filters() -> None:
+        print("Applying filters...")
+        query = search_field.text().strip().lower()
+        hide_accepted = hide_accepted_cb.isChecked()
+        for card_name, card in cards:
+            matches_query = not query or query in card_name.lower()
+            matches_accept = not hide_accepted or not card.property("accepted")
+            card.setVisible(matches_query and matches_accept)
+
+    regressions = 0
+
     for name, *rest in sorted(images, key=lambda x: os.path.basename(x[0])):
-        card = _make_image_card(name, *rest)
+        card = _make_image_card(name, *rest, on_accepted=_apply_filters)
         root.add_widget(card)
         cards.append((name, card))
+        regressions += int(card.property("accepted") is False)
+
+    if regressions > 0:
+        window.setWindowTitle(f"Image Comparison - {regressions} regressions")
 
     root._layout.addStretch(1)
-
     scroll.setWidget(root)
 
-    def _filter_cards(text: str) -> None:
-        query = text.strip().lower()
-        for card_name, card in cards:
-            card.setVisible(not query or query in card_name.lower())
-
-    search_field.textChanged.connect(_filter_cards)
+    search_field.textChanged.connect(lambda _: _apply_filters())
+    hide_accepted_cb.toggled.connect(lambda _: _apply_filters())
+    _apply_filters()
 
     window.show()
     window.resize(root.sizeHint() + QSize(40, 40))
@@ -192,10 +230,6 @@ def show_images(*images: tuple[str, str, str]) -> None:
 
 
 if __name__ == "__main__":
-    import json
-    import sys
-    import glob
-
     if sys.argv[1:]:
         if sys.argv[1] == "--show-refs" and len(sys.argv) == 2:
             # show all reference images in the refs directory for manual
@@ -208,10 +242,10 @@ if __name__ == "__main__":
             show_images(*json.loads(sys.argv[1]))
     else:
         imgs = [
-            [
+            (
                 "checkbox initial",
                 "./tests/foo/CheckBoxTest_00_initial.obtained.png",
                 "./tests/foo/CheckBoxTest_00_initial.png",
-            ],
+            ),
         ]
         show_images(*imgs)

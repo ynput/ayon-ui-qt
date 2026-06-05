@@ -1,4 +1,5 @@
 """ButtonDrawer: custom painting for QPushButton."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -6,7 +7,14 @@ from typing import TYPE_CHECKING
 
 from qtpy import QtCore, QtGui
 from qtpy.QtCore import QRect, Qt
-from qtpy.QtGui import QBrush, QColor, QFontMetrics, QPainter, QPainterPath, QPen
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QFontMetrics,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from qtpy.QtWidgets import (
     QStyle,
     QStyleOption,
@@ -312,8 +320,7 @@ class ButtonDrawer:
                 if label_alignment is not None:
                     # Group layout: icon + text move together as a unit
                     h_align = (
-                        label_alignment
-                        & Qt.AlignmentFlag.AlignHorizontal_Mask
+                        label_alignment & Qt.AlignmentFlag.AlignHorizontal_Mask
                     )
                     text_w = painter.fontMetrics().horizontalAdvance(
                         option.text  # type: ignore
@@ -358,8 +365,7 @@ class ButtonDrawer:
                     icon_rect.setSize(icon_size)
                     icon_rect.moveCenter(
                         QtCore.QPoint(
-                            content_rect.left()
-                            + style["icon-padding"][0],
+                            content_rect.left() + style["icon-padding"][0],
                             content_rect.center().y(),
                         )
                     )
@@ -375,7 +381,8 @@ class ButtonDrawer:
                     # Draw text
                     painter.drawText(
                         text_rect,
-                        Qt.AlignmentFlag.AlignCenter,
+                        Qt.AlignmentFlag.AlignLeft
+                        | Qt.AlignmentFlag.AlignVCenter,
                         option.text,  # type: ignore
                     )
             elif variant not in ("thumbnail", "entity-card"):
