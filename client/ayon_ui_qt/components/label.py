@@ -23,7 +23,8 @@ except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon  # type: ignore
 
 from ..color_utils import compute_color_for_contrast
-from ..style import StyleDict, get_ayon_style
+from ..style import get_ayon_style
+from ..style_types import StyleDict
 from ..variants import QLabelVariants
 from .style_mixin import StyleMixin
 
@@ -815,8 +816,10 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         self._icon_color = color
         self._contrast_color = None  # reset so contrast is recalculated
         self._configure_palette()
-        self.set_icon(color=color)   # repaints icon pixmap with new color
-        self._copy_pix_normal = self._copy_pix_hover = self._copy_pix_done = None
+        self.set_icon(color=color)  # repaints icon pixmap with new color
+        self._copy_pix_normal = self._copy_pix_hover = self._copy_pix_done = (
+            None
+        )
         self.update()
 
 
@@ -937,12 +940,8 @@ if __name__ == "__main__":
         )
         row_font.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
         row_font.add_widget(AYLabel("Default font"), stretch=0)
-        row_font.add_widget(
-            AYLabel("Default font bold", bold=True), stretch=0
-        )
-        row_font.add_widget(
-            AYLabel("Default font dim", dim=True), stretch=0
-        )
+        row_font.add_widget(AYLabel("Default font bold", bold=True), stretch=0)
+        row_font.add_widget(AYLabel("Default font dim", dim=True), stretch=0)
         row_font.add_widget(
             AYLabel("Default font +2", rel_text_size=2), stretch=0
         )

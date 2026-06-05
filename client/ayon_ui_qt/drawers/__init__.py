@@ -4,16 +4,18 @@ Each drawer handles custom QPainter-based painting for a specific Qt
 widget class, registered with the AYONStyle instance via
 register_drawers / register_sizers / register_metrics.
 """
+
 from __future__ import annotations
 
 from ._utils import do_nothing, enum_to_str, get_icon, style_font
 from .button import ButtonDrawer
 from .checkbox import CheckboxDrawer
-from .combobox import ComboBoxDrawer, ComboBoxItemDelegate
+from .combobox import ComboBoxDrawer
 from .frame import FrameDrawer
-from .item_view import ItemViewItemDrawer, TableItemDelegate, TreeViewItemDelegate
+from .item_view import ItemViewItemDrawer
 from .label import LabelDrawer
 from .lineedit import LineEditDrawer
+from .menu import MenuDrawer
 from .scroll_area import ScrollAreaDrawer
 from .scrollbar import ScrollBarDrawer
 from .table_header import TableHeaderDrawer
@@ -28,16 +30,14 @@ __all__ = [
     "ButtonDrawer",
     "CheckboxDrawer",
     "ComboBoxDrawer",
-    "ComboBoxItemDelegate",
     "FrameDrawer",
     "ItemViewItemDrawer",
     "LabelDrawer",
     "LineEditDrawer",
+    "MenuDrawer",
     "ScrollAreaDrawer",
     "ScrollBarDrawer",
     "TableHeaderDrawer",
-    "TableItemDelegate",
     "TooltipDrawer",
     "TreeViewDrawer",
-    "TreeViewItemDelegate",
 ]

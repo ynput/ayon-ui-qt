@@ -79,6 +79,10 @@ class QToolTipVariants(Enum):
     Default = "default"
 
 
+class QMenuVariants(Enum):
+    Default = "default"
+
+
 class QLabelVariants(Enum):
     Default = "default"
     Tag = "tag"

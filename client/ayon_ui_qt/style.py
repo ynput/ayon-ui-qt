@@ -1,25 +1,21 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
 import os
 import platform
 from functools import cmp_to_key
-from glob import glob
 from pathlib import Path
-from typing import Any
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, Qt
 from qtpy.QtGui import (
+    QAction,
     QBrush,
     QColor,
     QFont,
-    QFontDatabase,
     QKeySequence,
     QPainter,
-    QPalette,
     QPen,
 )
 from qtpy.QtWidgets import (
@@ -36,28 +32,33 @@ from qtpy.QtWidgets import (
 )
 from qtpy.shiboken import isValid
 
+from .style_types import (
+    StyleData,
+    StyleDict,  # noqa: F401  (re-exported for backward compatibility)
+    get_ayon_style,
+    get_ayon_style_data,  # noqa: F401  (re-exported for backward compatibility)
+    hsl_to_html_color,  # noqa: F401  (re-exported for backward compatibility)
+)
 from .drawers import (
     ButtonDrawer,
     CheckboxDrawer,
     ComboBoxDrawer,
-    ComboBoxItemDelegate,
     FrameDrawer,
     ItemViewItemDrawer,
     LabelDrawer,
     LineEditDrawer,
+    MenuDrawer,
     ScrollAreaDrawer,
     ScrollBarDrawer,
     TableHeaderDrawer,
-    TableItemDelegate,
     TooltipDrawer,
     TreeViewDrawer,
-    TreeViewItemDelegate,
     enum_to_str,
     style_font,
 )
-
-_ayon_style_instance: AYONStyle | None = None
-
+from .components.combo_box import ComboBoxItemDelegate
+from .components.table_view import TableItemDelegate
+from .components.tree_view import TreeViewItemDelegate
 
 logging.basicConfig(
     level=logging.INFO,
@@ -150,42 +151,6 @@ def _enum_values_dict(enum):
     return vals
 
 
-def hsl_to_html_color(hsl: str):
-    vals = hsl[4:-1].split(", ")
-    hue = int(vals[0]) / 360.0
-    sat = int(vals[1][:-1]) / 100.0
-    lum = int(vals[2][:-1]) / 100.0
-    return QColor.fromHslF(hue, sat, lum).name()
-
-
-# ----------------------------------------------------------------------------
-
-
-def get_ayon_style() -> AYONStyle:
-    """Get the singleton AYONStyle instance.
-
-    Returns:
-        The singleton AYONStyle instance.
-    """
-    global _ayon_style_instance
-    if _ayon_style_instance is None:
-        _ayon_style_instance = AYONStyle()
-    return _ayon_style_instance
-
-
-def get_ayon_style_data(
-    widget_cls: str, variant: str | None = None
-) -> StyleDict:
-    """Get the AYON style data.
-
-    Returns:
-        The AYON style data.
-    """
-    return get_ayon_style().model.get_style(
-        widget_cls, variant=variant, state="all"
-    )
-
-
 def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:
     """Apply AYON style to a widget and its siblings recursively.
 
@@ -249,349 +214,6 @@ def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:
         app.setStyleSheet(qss)
 
 
-class StyleDict(dict):
-    """A dict where string values starting with '@' are resolved
-    via getattr() on a bound context object.
-
-    Example:
-        ctx = SomeWidget(...)
-        d = StyleDict({"color": "@fg_color"}, _context=ctx)
-        d["color"]  # -> ctx.fg_color
-    """
-
-    _SENTINEL = object()
-
-    def __init__(
-        self,
-        *args: Any,
-        _context: Any = None,
-        deepcopy: bool = True,
-        **kwargs: Any,
-    ) -> None:
-        if deepcopy:
-            args = copy.deepcopy(args)
-            kwargs = copy.deepcopy(kwargs)
-        super().__init__(*args, **kwargs)
-        # store as attribute on the instance — not as a dict key
-        object.__setattr__(self, "_context", _context)
-        # convert nested dicts to StyleDicts with the same context
-        for k, v in self.items():
-            super().__setitem__(
-                k,
-                StyleDict(v, _context=_context) if isinstance(v, dict) else v,
-            )
-
-    def set_context(self, _context: Any) -> None:
-        object.__setattr__(self, "_context", _context)
-        for v in self.values():
-            if isinstance(v, StyleDict):
-                v.set_context(_context)
-
-    def __getitem__(self, key: str) -> Any:
-        value = super().__getitem__(key)
-        return self._resolve(value)
-
-    def get(self, key: str, default: Any = None, raw: bool = False) -> Any:
-        value = super().get(key, self._SENTINEL)
-        if value is self._SENTINEL:
-            return default
-        if raw:
-            return value
-        return self._resolve(value)
-
-    def _resolve(self, value: Any) -> Any:
-        if (
-            isinstance(value, str)
-            and value.startswith("@")
-            and self._context is not None
-        ):
-            return getattr(self._context, value[1:], value)
-        return value
-
-    def __repr__(self) -> str:
-        return f"StyleDict({super().__repr__()}, context={self._context!r})"
-
-
-class StyleData:
-    def __init__(self) -> None:
-        fpath = Path(__file__).parent / "ayon_style.json"
-        with open(fpath, "r") as fh:
-            self.data = json.load(fh)
-        # Palette values can reference each other
-        self._palette = self.data.get("palette", {})
-        for k, v in self._palette.items():
-            if v.startswith("hsl("):
-                self._palette[k] = hsl_to_html_color(v)
-        for k, v in self._palette.items():
-            self._palette[k] = self._palette.get(v, v)
-        for k, v in self._palette.items():
-            if v in self._palette:
-                raise ValueError(f"Unresolved palette value in {k}")
-        # cache
-        self._cache = {}
-        self.last_key = ""
-        # base palette
-        self.base_palette: QPalette = self._build_palette()
-        self._base_font: QFont | None = None
-        self._base_font_checked: bool = False
-
-    @property
-    def base_font(self) -> QFont:
-        # delayed to make sure QApplication is initialized
-        if self._base_font is None:
-            self._base_font = style_font(
-                self.data.get("global", {}), QWidget()
-            )
-            if not self._base_font_checked:
-                self._check_font_availability(self._base_font)
-        return QFont(self._base_font)
-
-    def _check_font_availability(self, font: QFont):
-        # check if the font is available and load it if need be.
-        families = QFontDatabase.families()
-        if font.family() not in families:
-            # Attempt to load from resources
-            font_name = font.family().replace(" ", "")
-            glob_path = str(
-                Path(__file__).parent / "resources" / f"{font_name}*.ttf"
-            )
-            font_files = glob(glob_path)
-
-            if not font_files:
-                log.error(
-                    f"Base font '{font.family()}' is not available and no "
-                    f"font files were found in '{glob_path}'"
-                )
-            else:
-                for font_path in font_files:
-                    if QFontDatabase.addApplicationFont(str(font_path)) == -1:
-                        log.error(f"Failed to load base font from {font_path}")
-                    else:
-                        log.debug(f"Loaded base font file {font_path}")
-        self._base_font_checked = True
-
-    def _build_palette(self) -> QPalette:
-        bp = {
-            QPalette.ColorRole.Window: "qt-active-window",
-            QPalette.ColorRole.WindowText: "qt-active-window-text",
-            QPalette.ColorRole.Base: "qt-active-base",
-            QPalette.ColorRole.Text: "qt-active-text",
-            QPalette.ColorRole.Link: "qt-active-link",
-            QPalette.ColorRole.Button: "qt-active-button",
-            QPalette.ColorRole.ButtonText: "qt-active-button-text",
-            QPalette.ColorRole.PlaceholderText: "qt-active-placeholder-text",
-            QPalette.ColorRole.Highlight: "qt-active-highlight",
-            QPalette.ColorRole.HighlightedText: "qt-active-highlight-text",
-            QPalette.ColorRole.Light: "qt-active-light",
-            QPalette.ColorRole.Midlight: "qt-active-midlight",
-            QPalette.ColorRole.Dark: "qt-active-dark",
-            QPalette.ColorRole.Mid: "qt-active-mid",
-            QPalette.ColorRole.Shadow: "qt-active-shadow",
-        }
-        p = QPalette()
-        for role, color_name in bp.items():
-            p.setColor(
-                QPalette.ColorGroup.Active,
-                role,
-                QColor(self._palette.get(color_name, "#ff0000")),
-            )
-        return p
-
-    def get_style_palette(self, widget: QWidget, widget_key: str) -> QPalette:
-        """Get a QPalette for the widget based on the current style data.
-
-        Resolves any @ references in the style data to widget attributes.
-        Caches results for efficiency, if there are no @ references.
-        """
-        variant = getattr(widget, "_variant_str", "default")
-        # check if cached
-        cache_key = f"{widget_key}-{variant}-palette"
-        if cache_key in self._cache:
-            return QPalette(self._cache[cache_key])
-
-        style: StyleDict = self.get_styles(
-            widget_key,
-            variant=variant,
-        )
-        style.set_context(widget)
-
-        p = QPalette(self.base_palette)
-
-        fg_color = style.get("base", {}).get("color")
-        if fg_color:
-            p.setColor(
-                widget.foregroundRole(),
-                QColor(fg_color),
-            )
-        opacity = style.get("disabled", {}).get("opacity")
-        if opacity:
-            disabled_fg_color = QColor(fg_color)
-            disabled_fg_color.setAlphaF(opacity)
-            p.setColor(
-                QPalette.ColorGroup.Disabled,
-                widget.foregroundRole(),
-                disabled_fg_color,
-            )
-
-        bg_color = style.get("base", {}).get("background-color")
-        if bg_color:
-            p.setColor(
-                widget.backgroundRole(),
-                QColor(bg_color),
-            )
-
-        # cache result
-        style.set_context(None)
-        self._cache[cache_key] = p
-
-        return QPalette(p)
-
-    def dump_cache_stats(self):
-        print(f"[StyleData] cached {len(self._cache)} styles.")
-        print(f"[StyleData]   >> {list(self._cache.keys())}")
-
-    def widget_variants(self, widget_cls: str) -> list[str]:
-        return list(
-            self.data["widgets"].get(widget_cls, {}).get("variants", {}).keys()
-        )
-
-    def widget_states(self, widget_cls: str) -> list[str]:
-        states = list(
-            self.data["widgets"].get(widget_cls, {}).get("states", [])
-        )
-        return states if "base" in states else ["base"] + states
-
-    def widget_data(self, widget_cls: str) -> dict:
-        return self.data["widgets"].get(widget_cls, {})
-
-    def widget_list(self) -> list[str]:
-        return list(self.data["widgets"].keys())
-
-    def default_variant(self, widget_data) -> str:
-        variants = widget_data.get("variants", {})
-        return widget_data.get(
-            "default-variant", next(iter(variants.keys()), "default")
-        )
-
-    def validate_variant(self, widget_data, variant) -> str:
-        if variant not in widget_data.get("variants", {}):
-            return self.default_variant(widget_data)
-        return variant
-
-    def palette(self):
-        return self._palette
-
-    def get_style(
-        self,
-        widget_cls: str,
-        variant=None,
-        state="base",
-    ) -> StyleDict:
-        """Returns a style for a widget, variant and state."""
-        try:
-            return StyleDict(self._cache[f"{widget_cls}-{variant}-{state}"])
-        except KeyError:
-            pass
-
-        data = self.widget_data(widget_cls)
-        vrt = self.validate_variant(data, variant)
-        dvrt = self.default_variant(data)
-        pal = self._palette
-        d = copy.copy(self.data["global"])
-        d.update(copy.deepcopy(data.get("variants", {}).get(dvrt, {})))
-        d.update(copy.deepcopy(data.get("variants", {}).get(vrt, {})))
-
-        if state == "all":
-            for key, val in d.items():
-                if isinstance(val, dict):
-                    d[key] = {kk: pal.get(vv, vv) for kk, vv in val.items()}
-                elif not isinstance(val, list):
-                    d[key] = pal.get(val, val)
-        else:
-            # Override palette variables with the current state's values and
-            # remove all states. That way, we can directly use
-            # "background-color" without checking the widget's state.
-            state_dict = {}
-            for key, val in list(d.items()):
-                if isinstance(val, dict):
-                    if key == state:
-                        state_dict = {
-                            kk: pal.get(vv, vv) for kk, vv in val.items()
-                        }
-                    d.pop(key)
-                elif not isinstance(val, list):
-                    d[key] = pal.get(val, val)
-            # apply current state overrides last to ensure they take precedence
-            # over the base variant
-            d.update(state_dict)
-
-        # cache result
-        d = StyleDict(d)
-        self.last_key = f"{widget_cls}-{variant}-{state}"
-        self._cache[self.last_key] = d
-        return StyleDict(d)
-
-    def get_styles(
-        self,
-        widget_cls: str,
-        variant: str | None = None,
-        states: list[str] | None = None,
-    ) -> StyleDict:
-        """Returns styles for a widget, variant and multiple states at once.
-
-        This is more efficient than calling get_style() multiple times
-        when you need styles for several states of the same widget/variant.
-
-        Args:
-            widget_cls: The widget class name (e.g., "QStyledItemDelegate").
-            variant: The variant name (e.g., "default"). Defaults to None.
-            states: List of states to retrieve (e.g., ["base", "hover",
-                "checked"]). Defaults to all defined states.
-
-        Returns:
-            A dictionary mapping state names to their style dictionaries.
-        """
-        if states is None:
-            states = self.widget_states(widget_cls)
-
-        cache_key = f"all-{widget_cls}-{variant}-{'|'.join(states)}"
-        try:
-            return StyleDict(self._cache[cache_key])
-        except KeyError:
-            pass
-
-        d = {
-            state: self.get_style(widget_cls, variant, state)
-            for state in states
-        }
-        self._cache[cache_key] = StyleDict(d)
-        return StyleDict(d)
-
-    def current_style(self):
-        return self._cache[self.last_key]
-
-    def get_widget_color(
-        self,
-        color_name: str,
-        style: dict,
-        w: QWidget,
-        default: str | QColor,
-    ) -> QColor:
-        """Process color definitions referencing a widget attribute/property
-        using the @ syntax.
-
-        Args:
-            color_name: The color name to retrieve.
-            style: The style dictionary.
-            w: The widget to get the color from.
-            default: The default color to use if the attribute is not found.
-        Returns:
-            The color.
-        """
-        color = style[color_name]
-        if isinstance(color, str) and color.startswith("@"):
-            color = getattr(w, color[1:], default)
-        return QColor(color)
 
 
 # ----------------------------------------------------------------------------
@@ -626,6 +248,7 @@ class AYONStyle(QCommonStyle):
             TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
             ScrollAreaDrawer(self),
+            MenuDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -1140,6 +763,39 @@ if __name__ == "__main__":
         usr_ly.addWidget(AYUserImage(full_name="John Doe"))
         col3_lyt.addLayout(usr_ly)
 
+        from qtpy.QtGui import QIcon as _QIcon
+        from qtpy.QtWidgets import QAction as _QAction
+        from qtpy.QtWidgets import QMenu as _QMenu
+
+        from .drawers import get_icon as _get_icon
+
+        ctx_menu_label = AYLabel(
+            "Right-click here for a menu",
+            variant=AYLabel.Variants.Default,
+            rel_text_size=2,
+            icon="menu",
+        )
+        col3_lyt.addWidget(ctx_menu_label)
+        # add a context menu to the label
+        menu = QMenu(parent=ctx_menu_label)
+        icn = _get_icon("content_copy", color="#f2f2f3")
+        a1 = QAction(
+            icn,
+            "Action 1",
+            menu,
+        )
+        a1.setShortcut(QKeySequence("Ctrl+C"))
+        menu.addAction(a1)
+        menu.addAction("Action 2")
+        menu.addSeparator()
+        menu.addAction("Action 3")
+        ctx_menu_label.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        ctx_menu_label.customContextMenuRequested.connect(
+            lambda pos: menu.exec_(ctx_menu_label.mapToGlobal(pos))
+        )
+
         col3_lyt.addStretch()
         container_3.add_layout(col3_lyt)
 
@@ -1148,4 +804,4 @@ if __name__ == "__main__":
 
         return widget
 
-    test(_ui_test, style=Style.AyonStyleOverCSS)
+    test(_ui_test, style=Style.AyonStyle)
