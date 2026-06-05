@@ -1,5 +1,6 @@
 """Item view drawers: ItemViewItemDrawer, TreeViewItemDelegate,
 TableItemDelegate."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -9,9 +10,9 @@ from qtpy.QtCore import QRect, Qt
 from qtpy.QtGui import QBrush, QColor, QIcon, QPainter, QPen
 from qtpy.QtWidgets import (
     QStyle,
+    QStyledItemDelegate,
     QStyleOption,
     QStyleOptionViewItem,
-    QStyledItemDelegate,
     QWidget,
 )
 
@@ -141,9 +142,7 @@ class ItemViewItemDrawer:
         # Text color: use checked style if checked, else base
         if is_checked:
             text_color = QColor(
-                checked_style.get(
-                    "color", base_style.get("color", "#8b9198")
-                )
+                checked_style.get("color", base_style.get("color", "#8b9198"))
             )
         else:
             text_color = QColor(base_style.get("color", "#8b9198"))
@@ -269,9 +268,7 @@ class TreeViewItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
             The size hint for the item.
         """
         if self._style_model:
-            style = self._style_model.get_style(
-                "QTreeView", self._variant_str
-            )
+            style = self._style_model.get_style("QTreeView", self._variant_str)
             h = int(style.get("item-height", 28))
         else:
             h = 28

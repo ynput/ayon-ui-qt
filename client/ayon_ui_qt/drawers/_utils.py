@@ -1,7 +1,7 @@
 """Shared utilities used by AYONStyle drawer modules."""
+
 from __future__ import annotations
 
-from qtpy import QtCore
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QStyle, QWidget
 

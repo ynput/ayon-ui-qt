@@ -1,12 +1,20 @@
 """TooltipDrawer: custom painting for QToolTip."""
+
 from __future__ import annotations
 
 from functools import partial
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QRect, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPen
-from qtpy.QtWidgets import QFrame, QStyle, QStyleOption, QStyleOptionFrame, QToolTip, QWidget
+from qtpy.QtGui import QBrush, QPainter, QPen
+from qtpy.QtWidgets import (
+    QFrame,
+    QStyle,
+    QStyleOption,
+    QStyleOptionFrame,
+    QToolTip,
+    QWidget,
+)
 
 from ._utils import enum_to_str
 
@@ -48,9 +56,7 @@ class TooltipDrawer:
                 QStyle.PrimitiveElement,
                 QStyle.PrimitiveElement.PE_Frame,
                 "QToolTip",
-            ): partial(
-                self.draw_primitive, QStyle.PrimitiveElement.PE_Frame
-            ),
+            ): partial(self.draw_primitive, QStyle.PrimitiveElement.PE_Frame),
         }
 
     def register_sizers(self):

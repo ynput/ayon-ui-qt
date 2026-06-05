@@ -1,10 +1,11 @@
 """CheckboxDrawer: custom painting for QCheckBox (toggle switch)."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QRect, QRectF, Qt
-from qtpy.QtGui import QBrush, QColor, QPainter, QPalette, QPen
+from qtpy.QtGui import QColor, QPainter, QPalette, QPen
 from qtpy.QtWidgets import QCheckBox, QStyle, QStyleOption, QWidget
 
 from ._utils import do_nothing, enum_to_str

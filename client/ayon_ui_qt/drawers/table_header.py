@@ -1,4 +1,5 @@
 """TableHeaderDrawer: custom painting for QHeaderView."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -7,7 +8,7 @@ from typing import TYPE_CHECKING
 from qtpy import QtWidgets
 from qtpy.QtCore import QRect, Qt
 from qtpy.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen
-from qtpy.QtWidgets import QHeaderView, QStyle, QStyleOption, QWidget
+from qtpy.QtWidgets import QStyle, QStyleOption, QWidget
 
 from ._utils import enum_to_str, get_icon
 

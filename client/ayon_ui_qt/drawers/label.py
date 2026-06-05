@@ -1,4 +1,5 @@
 """LabelDrawer: suppress default frame painting for QLabel."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
