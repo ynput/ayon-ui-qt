@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from qtpy.QtCore import QEvent, QItemSelection, Qt, Signal
-from qtpy.QtGui import QColor, QMouseEvent, QCursor, QPainter, QPaintEvent, QPalette
+from qtpy.QtGui import (
+    QColor,
+    QCursor,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+)
 from qtpy.QtWidgets import QStyle, QStyleOption, QTreeView, QWidget
 
 from ..style import TreeViewItemDelegate, enum_to_str, get_ayon_style
@@ -218,7 +225,7 @@ if __name__ == "__main__":
     def _build() -> QtWidgets.QWidget:
         """Show one AYTreeView per variant with lazy-loaded fake data."""
         from .layouts import AYVBoxLayout
-        from .tree_model import LazyTreeModel, TreeNode, PRODUCTS_TEST_DATA
+        from .tree_model import PRODUCTS_TEST_DATA, LazyTreeModel, TreeNode
 
         def fetch_children(
             parent_id: str | None,

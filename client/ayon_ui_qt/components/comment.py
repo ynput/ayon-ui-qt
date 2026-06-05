@@ -744,7 +744,7 @@ class AYImageAttachment(QLabel):
         # draw text on the right side
         painter.setPen(QColor("#eeeeee"))
         font = painter.font()
-        font.setPointSize(10)
+        font.setPointSizeF(10)
         painter.setFont(font)
         painter.drawText(
             lrect.adjusted(16 + 4, 0, 0, 0),
