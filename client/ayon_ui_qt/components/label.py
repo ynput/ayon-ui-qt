@@ -289,7 +289,13 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
         if "disabled" in self._style_data:
             opacity = self._style_data["disabled"].get("opacity", 1.0)
             if opacity < 1.0:
-                for role in QPalette.ColorRole:
+                def _iter_enum(enum):
+                    if hasattr(enum, "values"):
+                        # Shiboken.EnumType in PySide2
+                        return enum.values.values()
+                    return iter(enum)
+
+                for role in _iter_enum(QPalette.ColorRole):
                     color = self._style_palette.color(role)
                     if color == Qt.GlobalColor.transparent:
                         continue

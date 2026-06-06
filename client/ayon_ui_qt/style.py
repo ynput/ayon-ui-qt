@@ -387,7 +387,8 @@ class StyleData:
 
     def _check_font_availability(self, font: QFont):
         # check if the font is available and load it if need be.
-        families = QFontDatabase.families()
+        font_database = QFontDatabase()
+        families = font_database.families()
         if font.family() not in families:
             # Attempt to load from resources
             font_name = font.family().replace(" ", "")
@@ -1456,7 +1457,7 @@ class CheckboxDrawer:
             painter.setPen(pen)
         else:
             painter.setPen(Qt.PenStyle.NoPen)
-        frame_rect: QRectF = option.rect.toRectF().adjusted(1, 0, -1, 0)
+        frame_rect: QRectF = option.rect.adjusted(1, 0, -1, 0)
         radius = frame_rect.height() / 2.0
         painter.drawRoundedRect(frame_rect, radius, radius)
 
