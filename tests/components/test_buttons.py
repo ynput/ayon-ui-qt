@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QPainter, QColor
-from qtpy.QtWidgets import QStyle, QStyleOptionButton, QWidget
-
-from widget_test import WidgetTest
 from ayon_ui_qt.components.buttons import AYButton, AYButtonMenu
 from ayon_ui_qt.components.container import AYContainer
+from qtpy import QtCore, QtWidgets
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QStyle, QStyleOptionButton, QWidget
+from widget_test import WidgetTest
+
+from tests.utils.composite_widget import CompositeWidget
 
 
 class _HoverButton(AYButton):
@@ -138,20 +138,10 @@ class ButtonTest(WidgetTest):
 # =============================================================================
 
 
-class _CompositeMenuWidget(QWidget):
+class _CompositeMenuWidget(CompositeWidget):
     """A QWidget whose grab() composites the main container and its dropdown.
 
-    When the dropdown is not visible, ``grab()`` falls back to the normal
-    QWidget behaviour.  When the dropdown *is* visible, the pixmap is
-    assembled by stacking:
-
-    1. The main container pixmap (full size of this widget).
-    2. The dropdown pixmap painted at the position the dropdown occupies
-       relative to this widget's top-left corner.
-
-    This lets the existing ``capture_widget()`` infrastructure (which just
-    calls ``widget.grab()``) produce a combined snapshot without any
-    changes outside ``test_buttons.py``.
+    This is a thin wrapper around `CompositeWidget` for backward compatibility.
 
     Args:
         dropdown: The ``_ButtonMenuDropdown`` managed by ``AYButtonMenu``.
@@ -165,62 +155,16 @@ class _CompositeMenuWidget(QWidget):
         button: AYButtonMenu,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
-        self._dropdown = dropdown
-        self._button = button
+        def dropdown_pos() -> QtCore.QPoint:
+            btn_bottom_global = button.mapToGlobal(
+                QtCore.QPoint(0, button.height())
+            )
+            return self.mapFromGlobal(btn_bottom_global)
 
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        p = QPainter(self)
-        p.fillRect(event.rect(), QColor("#272d35"))
-        return super().paintEvent(event)
-
-    def grab(  # type: ignore[override]
-        self,
-        rectangle: QtCore.QRect = QtCore.QRect(
-            QtCore.QPoint(0, 0), QtCore.QSize(-1, -1)
-        ),
-    ) -> QtGui.QPixmap:
-        """Return a pixmap of this widget composited with the open dropdown.
-
-        Args:
-            rectangle: Sub-rectangle to grab (forwarded to the base
-                implementation for the main widget layer).
-
-        Returns:
-            A ``QPixmap`` containing the composite image.
-        """
-        base_pixmap = super().grab(rectangle)
-
-        if not self._dropdown.isVisible():
-            return base_pixmap
-
-        drop_pixmap = self._dropdown.grab()
-
-        # Compute the dropdown's top-left position in *this* widget's
-        # coordinate system.
-        btn_bottom_global = self._button.mapToGlobal(
-            QtCore.QPoint(0, self._button.height())
+        super().__init__(
+            widgets=[(dropdown, dropdown_pos)],
+            parent=parent,
         )
-        drop_local = self.mapFromGlobal(btn_bottom_global)
-
-        # Build a canvas tall enough to contain both layers.
-        total_height = max(
-            base_pixmap.height(),
-            drop_local.y() + drop_pixmap.height(),
-        )
-        total_width = max(
-            base_pixmap.width(),
-            drop_local.x() + drop_pixmap.width(),
-        )
-        canvas = QtGui.QPixmap(total_width, total_height)
-        canvas.fill(Qt.GlobalColor.transparent)
-
-        painter = QtGui.QPainter(canvas)
-        painter.drawPixmap(0, 0, base_pixmap)
-        painter.drawPixmap(drop_local.x(), drop_local.y(), drop_pixmap)
-        painter.end()
-
-        return canvas
 
 
 class ButtonMenuTest(WidgetTest):
@@ -245,7 +189,7 @@ class ButtonMenuTest(WidgetTest):
                     icon_color="white",
                     icon_size=16,
                     parent=container,
-                    variant=AYButton.Variants.Text
+                    variant=AYButton.Variants.Text,
                 )
                 _layout = container.layout()
                 assert _layout is not None

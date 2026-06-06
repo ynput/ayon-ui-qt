@@ -8,9 +8,10 @@ from qtpy.QtWidgets import QCheckBox, QSizePolicy, QStyle, QStyleOptionButton
 
 from ..style import get_ayon_style
 from ..variants import QCheckBoxVariants
+from .style_mixin import StyleMixin
 
 
-class AYCheckBox(QCheckBox):
+class AYCheckBox(StyleMixin, QCheckBox):
     """AYON styled checkbox widget.
 
     Overrides Qt's stylesheet painting with AYONStyle custom rendering.
@@ -45,8 +46,25 @@ class AYCheckBox(QCheckBox):
             self._style_dict.set_context(self)
         return self._style_dict
 
+    def initStyleOption(self, option: QStyleOptionButton) -> None:
+        """Initialize the style option with the default implementation, then
+        override any properties needed for our custom painting.
+
+        Args:
+            option: The style option to initialize.
+        """
+        super().initStyleOption(option)
+        option.fontMetrics = self.fontMetrics()
+
     def paintEvent(self, arg__1: QPaintEvent) -> None:
+        """Render the checkbox using the AYON custom style.
+
+        Args:
+            arg__1: The paint event delivered by Qt.
+        """
         p = QPainter(self)
+        p.setFont(self.font())
+
         option = QStyleOptionButton()
         self.initStyleOption(option)
         _style = get_ayon_style()
@@ -95,6 +113,20 @@ class AYCheckBox(QCheckBox):
             h_pad, v_pad = self.style_dict.get("padding", [6, 6])
             size.setWidth(size.width() + h_pad * 2)
             size.setHeight(size.height() + v_pad * 2)
+        else:
+            # Recalculate width using the custom style's actual metrics
+            option = QStyleOptionButton()
+            self.initStyleOption(option)
+            _style = get_ayon_style()
+            ind_w = _style.pixelMetric(
+                QStyle.PixelMetric.PM_IndicatorWidth, option, self
+            )
+            spacing = _style.pixelMetric(
+                QStyle.PixelMetric.PM_CheckBoxLabelSpacing, option, self
+            )
+            fm = self.fontMetrics()
+            text_w = fm.horizontalAdvance(self.text())
+            size.setWidth(ind_w + spacing + text_w)
 
         return size
 

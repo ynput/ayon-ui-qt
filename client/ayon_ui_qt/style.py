@@ -3,15 +3,21 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from functools import partial
+from functools import cmp_to_key, partial
 from pathlib import Path
 from typing import Any
+from glob import glob
+import os
+import platform
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, QSize, Qt
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QFont,
+    QFontDatabase,
+    QFontMetrics,
     QIcon,
     QPainter,
     QPainterPath,
@@ -43,6 +49,8 @@ from qtpy.QtWidgets import (
 )
 from qtpy.shiboken import isValid
 
+from .components.style_mixin import StyleMixin
+
 try:
     from qtmaterialsymbols import get_icon  # type: ignore
 except ImportError:
@@ -72,18 +80,33 @@ def _debug_rect(p: QPainter, color: str, rect: QRect | QRectF):
     p.restore()
 
 
-def _style_font(style: dict, w: QWidget | None) -> QtGui.QFont:
-    font = QtGui.QFont()
+# Override the platform key used for OS-specific font sizes.
+# Set the ``AYON_UI_QT_FONT_OS`` env var to a fixed value (e.g. ``"linux"``)
+# to make font selection deterministic across machines — useful for visual
+# regression tests.
+
+
+def _font_platform() -> str:
+    """Return the platform key used to select OS-specific font sizes.
+
+    Resolution order:
+    1. ``AYON_UI_QT_FONT_OS`` environment variable.
+    2. Live ``platform.system()`` result (normalised to lower-case).
+    """
+    env_val = os.environ.get("AYON_UI_QT_FONT_OS")
+    if env_val:
+        return env_val.lower()
+    return platform.system().lower()
+
+
+def _style_font(style: dict, w: QWidget | None) -> QFont:
+    font = QFont()
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
     font.setFamily(style["font-family"])
-    px_size = style["font-size"]
-    font.setPixelSize(px_size)
-    font.setWeight(QtGui.QFont.Weight(style["font-weight"]))
-    # log.debug(
-    #     "FONT: %s, %g pts, w=%d",
-    #     font.family(),
-    #     font.pointSizeF(),
-    #     font.weight(),
-    # )
+    os_name = _font_platform()
+    pt_size = style.get(f"font-size-{os_name}", style["font-size"])
+    font.setPointSizeF(pt_size)
+    font.setWeight(QFont.Weight(style["font-weight"]))
     return font
 
 
@@ -347,19 +370,46 @@ class StyleData:
         self._cache = {}
         self.last_key = ""
         # base palette
-        self.base_palette = self._build_palette()
-        self._base_font = None
+        self.base_palette: QPalette = self._build_palette()
+        self._base_font: QFont | None = None
+        self._base_font_checked: bool = False
 
     @property
-    def base_font(self):
+    def base_font(self) -> QFont:
         # delayed to make sure QApplication is initialized
         if self._base_font is None:
             self._base_font = _style_font(
                 self.data.get("global", {}), QWidget()
             )
-        return self._base_font
+            if not self._base_font_checked:
+                self._check_font_availability(self._base_font)
+        return QFont(self._base_font)
 
-    def _build_palette(self):
+    def _check_font_availability(self, font: QFont):
+        # check if the font is available and load it if need be.
+        families = QFontDatabase.families()
+        if font.family() not in families:
+            # Attempt to load from resources
+            font_name = font.family().replace(" ", "")
+            glob_path = str(
+                Path(__file__).parent / "resources" / f"{font_name}*.ttf"
+            )
+            font_files = glob(glob_path)
+
+            if not font_files:
+                log.error(
+                    f"Base font '{font.family()}' is not available and no font "
+                    f"files were found in '{glob_path}'"
+                )
+            else:
+                for font_path in font_files:
+                    if QFontDatabase.addApplicationFont(str(font_path)) == -1:
+                        log.error(f"Failed to load base font from {font_path}")
+                    else:
+                        log.debug(f"Loaded base font file {font_path}")
+        self._base_font_checked = True
+
+    def _build_palette(self) -> QPalette:
         bp = {
             QPalette.ColorRole.Window: "qt-active-window",
             QPalette.ColorRole.WindowText: "qt-active-window-text",
@@ -440,10 +490,14 @@ class StyleData:
         print(f"[StyleData]   >> {list(self._cache.keys())}")
 
     def widget_variants(self, widget_cls: str) -> list[str]:
-        return list(self.data["widgets"][widget_cls]["variants"].keys())
+        return list(
+            self.data["widgets"].get(widget_cls, {}).get("variants", {}).keys()
+        )
 
     def widget_states(self, widget_cls: str) -> list[str]:
-        states = list(self.data["widgets"][widget_cls].get("states", []))
+        states = list(
+            self.data["widgets"].get(widget_cls, {}).get("states", [])
+        )
         return states if "base" in states else ["base"] + states
 
     def widget_data(self, widget_cls: str) -> dict:
@@ -452,12 +506,13 @@ class StyleData:
     def widget_list(self) -> list[str]:
         return list(self.data["widgets"].keys())
 
-    def default_variant(self, widget_data):
+    def default_variant(self, widget_data) -> str:
+        variants = widget_data.get("variants", {})
         return widget_data.get(
-            "default-variant", next(iter(widget_data.get("variants", {})))
+            "default-variant", next(iter(variants.keys()), "default")
         )
 
-    def validate_variant(self, widget_data, variant):
+    def validate_variant(self, widget_data, variant) -> str:
         if variant not in widget_data.get("variants", {}):
             return self.default_variant(widget_data)
         return variant
@@ -833,7 +888,7 @@ class ButtonDrawer:
         painter.setPen(text_color)
 
         # Set up font
-        painter.setFont(_style_font(style, widget))
+        painter.setFont(widget.font())
 
         # Get content rectangle
         content_rect = self.style_inst.subElementRect(
@@ -925,7 +980,8 @@ class ButtonDrawer:
                     # Draw text
                     painter.drawText(
                         text_rect,
-                        Qt.AlignmentFlag.AlignCenter,
+                        Qt.AlignmentFlag.AlignLeft
+                        | Qt.AlignmentFlag.AlignVCenter,
                         option.text,  # type: ignore
                     )
             elif variant not in ("thumbnail", "entity-card"):
@@ -1010,10 +1066,10 @@ class ButtonDrawer:
 
         # Set up font for text measurement
         style, _ = self.get_button_style(widget, option.state)  # type: ignore
-        font = _style_font(style, widget)
+        font = widget.font() if widget else _style_font(style, widget)
 
         # Create font metrics for accurate text measurement
-        font_metrics = QtGui.QFontMetrics(font)
+        font_metrics = QFontMetrics(font)
 
         # Determine if button has icon
         has_icon = (
@@ -1421,7 +1477,7 @@ class CheckboxDrawer:
 # ----------------------------------------------------------------------------
 
 
-class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
+class ComboBoxItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     def __init__(
         self,
         parent=None,
@@ -1473,6 +1529,17 @@ class ComboBoxItemDelegate(QtWidgets.QStyledItemDelegate):
                 bg if invert else fg,
             )
         return self._icon_cache[key]
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Initialize style option and apply any custom font from model."""
+        super().initStyleOption(option, index)
+        option.font = self.font()
+        option.fontMetrics = self.fontMetrics()
+        # print(f"PAINT: font = {option.font.family()}")
 
     def paint(
         self,
@@ -1709,6 +1776,34 @@ class ComboBoxDrawer:
             p.drawRoundedRect(rect, _radius, _radius)
             p.restore()
 
+            # Draw expand_more arrow if show_chevron is True
+            show_chevron = getattr(w, "show_chevron", True)
+            if show_chevron:
+                arrow_rect = super(AYONStyle, self.style_inst).subControlRect(
+                    QStyle.ComplexControl.CC_ComboBox,
+                    opt,
+                    QStyle.SubControl.SC_ComboBoxArrow,
+                    w,
+                )
+                arrow_icon = get_icon("expand_more", fg_color)
+                if arrow_icon and not arrow_rect.isEmpty():
+                    arrow_size = min(arrow_rect.width(), arrow_rect.height())
+                    pixmap = arrow_icon.pixmap(arrow_size, arrow_size)
+                    px = arrow_rect.x() + (arrow_rect.width() - arrow_size) // 2
+                    py = arrow_rect.y() + (arrow_rect.height() - arrow_size) // 2
+                    popup_open = bool(opt.state & QStyle.StateFlag.State_On)
+                    if popup_open:
+                        cx = px + arrow_size / 2
+                        cy = py + arrow_size / 2
+                        p.save()
+                        p.translate(cx, cy)
+                        p.rotate(180)
+                        p.translate(-cx, -cy)
+                        p.drawPixmap(px, py, pixmap)
+                        p.restore()
+                    else:
+                        p.drawPixmap(px, py, pixmap)
+
             # set pen for text drawing
             p.setPen(fg_color)
         else:
@@ -1916,10 +2011,15 @@ class ScrollBarDrawer:
         w: QWidget | None = None,
     ) -> QRect | None:
         if not w:
-            raise ValueError
+            raise ValueError(
+                "Widget required to calculate scrollbar sub-control rects"
+            )
 
         if not isinstance(self.style_inst, AYONStyle):
-            raise ValueError
+            raise ValueError("AYONStyle instance required")
+
+        if not isinstance(opt, (QStyleOptionSlider, QStyleOptionComplex)):
+            raise ValueError(f"Unexpected option type: {type(opt)}")
 
         sup = super(AYONStyle, self.style_inst)  # type: ignore
         try:
@@ -1932,41 +2032,39 @@ class ScrollBarDrawer:
             sls = self._cache["sub_line_size"]
         except KeyError:
             sls = self._cache["sub_line_size"] = sup.subControlRect(
-                cc, opt, QStyle.SubControl.SC_ScrollBarAddLine, w
+                cc, opt, QStyle.SubControl.SC_ScrollBarSubLine, w
             ).size()
 
-        if (
-            sc == QStyle.SubControl.SC_ScrollBarSlider
-            or sc == QStyle.SubControl.SC_ScrollBarGroove
-        ) and isinstance(opt, QStyleOptionSlider):
+        orientation = w.orientation()
+
+        if sc in (
+            QStyle.SubControl.SC_ScrollBarSlider,
+            QStyle.SubControl.SC_ScrollBarGroove,
+        ):
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, als.height())
             else:
                 rect.adjust(-sls.width(), 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarAddPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarAddPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, 0, 0, als.height())
             else:
                 rect.adjust(0, 0, als.width(), 0)
             return rect
 
-        elif sc == QStyle.SubControl.SC_ScrollBarSubPage and isinstance(
-            opt, QStyleOptionSlider
-        ):
+        elif sc == QStyle.SubControl.SC_ScrollBarSubPage:
             rect = sup.subControlRect(cc, opt, sc, w)
-            if opt.orientation == Qt.Orientation.Vertical:
+            if orientation == Qt.Orientation.Vertical:
                 rect.adjust(0, -sls.height(), 0, 0)
             else:
                 rect.adjust(-sls.width(), 0, 0, 0)
             return rect
 
-        raise ValueError
+        raise ValueError("Unexpected sub-control")
 
     def get_metric(
         self,
@@ -2405,7 +2503,7 @@ class ItemViewItemDrawer:
 # ----------------------------------------------------------------------------
 
 
-class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
+class TreeViewItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     """Item delegate for AYTreeView that paints directly, bypassing QSS.
 
     Reads style data from the QTreeView style entry to draw item
@@ -2439,6 +2537,22 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
             self._variant_str,
             ["base", "hover", "selected"],
         )
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
+    ) -> None:
+        """Initialize the style option with the default implementation, then
+        override any properties needed for our custom painting.
+
+        Args:
+            option: The style option to initialize.
+            index: The model index of the item.
+        """
+        super().initStyleOption(option, index)
+        option.font = self.font()
+        option.fontMetrics = self.fontMetrics()
 
     def sizeHint(
         self,
@@ -2584,7 +2698,7 @@ class TreeViewItemDelegate(QtWidgets.QStyledItemDelegate):
 # ----------------------------------------------------------------------------
 
 
-class TableItemDelegate(QtWidgets.QStyledItemDelegate):
+class TableItemDelegate(StyleMixin, QtWidgets.QStyledItemDelegate):
     """Item delegate for AYTableView that paints cells directly, bypassing QSS.
 
     Reads style data from the AYTableView style entry to draw cell
@@ -2616,7 +2730,7 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
     def _table_styles(self) -> dict[str, dict]:
         """Return base, hover and selected style dicts at once."""
         if self._style_model is None:
-            return {"base": {}, "hover": {}, "selected": {}}
+            raise ValueError("TableItemDelegate requires a style model")
         return self._style_model.get_styles(
             "AYTableView",
             self._variant_str,
@@ -2876,7 +2990,7 @@ class TableItemDelegate(QtWidgets.QStyledItemDelegate):
             text_rect.setLeft(content_left)
             text_rect.setRight(content_rect.right())
             painter.setPen(text_color)
-            painter.setFont(opt.font)
+            painter.setFont(self.font())
             painter.drawText(
                 text_rect,
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -2913,6 +3027,11 @@ class TreeViewDrawer:
                 QStyle.PrimitiveElement.PE_IndicatorBranch,
                 "QTreeView",
             ): self.draw_branch_indicator,
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelScrollAreaCorner,
+                "QTreeView",
+            ): self.draw_scrollbar_corner,
         }
 
     def register_metrics(self) -> dict:
@@ -2969,6 +3088,83 @@ class TreeViewDrawer:
             ]
         )
 
+    def _resolve_tree_view(self, widget: QWidget | None) -> QWidget | None:
+        """Resolve widget to the actual QTreeView/AYTableView."""
+        if widget is not None and not isinstance(widget, QTreeView):
+            return widget.parent() or widget
+        return widget
+
+    def _paint_cell_background(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        style: dict,
+        is_table: bool,
+        is_base_state: bool = False,
+    ) -> None:
+        """Paint background fill and optional cell borders.
+
+        Args:
+            painter: The QPainter to draw on.
+            rect: The rectangle to fill.
+            style: The style data dictionary.
+            is_table: Whether this is an AYTableView cell.
+            is_base_state: If True and is_table, use 'background-color-item'.
+        """
+        painter.save()
+        if is_table and is_base_state:
+            bg_key = "background-color-item"
+        else:
+            bg_key = "background-color"
+        painter.fillRect(rect, QColor(style.get(bg_key, "transparent")))
+        if is_table:
+            self._draw_cell_border(painter, rect, style)
+        painter.restore()
+
+    def _paint_icon(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        icon: QIcon,
+        icon_size: int | None,
+    ) -> None:
+        """Paint a cached icon, optionally resizing and repositioning it."""
+        draw_rect = QRect(rect)
+        if icon_size is not None:
+            center = rect.center()
+            draw_rect.setSize(QSize(icon_size, icon_size))
+            draw_rect.moveTo(
+                rect.right() - icon_size, center.y() - icon_size // 2
+            )
+        icon.paint(painter, draw_rect)
+
+    def _paint_fallback_arrow(
+        self,
+        painter: QPainter,
+        rect: "QRect",
+        color: QColor,
+        is_open: bool,
+    ) -> None:
+        """Paint a geometric triangle arrow when no icon is configured."""
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(color))
+
+        cx, cy = rect.center().x(), rect.center().y()
+        size = max(4, min(rect.width(), rect.height()) // 3)
+
+        path = QPainterPath()
+        if is_open:
+            path.moveTo(cx - size, cy - size // 2)
+            path.lineTo(cx + size, cy - size // 2)
+            path.lineTo(cx, cy + size // 2)
+        else:
+            path.moveTo(cx - size // 2, cy - size)
+            path.lineTo(cx - size // 2, cy + size)
+            path.lineTo(cx + size // 2, cy)
+        path.closeSubpath()
+        painter.drawPath(path)
+
     def draw_branch_indicator(
         self,
         option: QStyleOption,
@@ -2983,106 +3179,64 @@ class TreeViewDrawer:
             widget: The QTreeView widget (may be the viewport).
         """
         has_children = bool(option.state & QStyle.StateFlag.State_Children)
-
-        # Resolve to the actual QTreeView — widget may be the viewport.
-        tv = widget
-        if tv is not None and not isinstance(tv, QTreeView):
-            tv = tv.parent() if tv.parent() else tv
-
+        tv = self._resolve_tree_view(widget)
         is_table = type(tv).__name__ == "AYTableView"
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        variant = getattr(tv, "_variant_str", "default")
 
-        # State_MouseOver is only set when the cursor is directly over the
-        # branch rect — not when hovering another column in the same row.
-        # Query the actual cursor position for true row-level hover.
-        # Compare by y-coordinate rather than index.row() to avoid false
-        # matches between rows at the same row number under different parents
-        # (e.g. row 2 under root vs row 2 under an expanded child).
-        is_hovered = False
-        if not is_selected and is_table and isinstance(tv, QTreeView):
-            vp = tv.viewport()
-            cursor_vp = vp.mapFromGlobal(QtGui.QCursor.pos())
-            is_hovered = (
-                option.rect.top() <= cursor_vp.y() < option.rect.bottom()
-            )
+        state_name = (
+            "selected" if is_selected else "hover" if is_hovered else "base"
+        )
 
+        widget_class = "AYTableView" if is_table else "QTreeView"
+        t_style = self.model.get_style(
+            widget_class, variant=variant, state=state_name
+        )
+
+        # Items without children only need background/border painting
         if not has_children:
-            if is_table:
-                if is_selected:
-                    state_name = "selected"
-                elif is_hovered:
-                    state_name = "hover"
-                else:
-                    state_name = "base"
-                style = self.model.get_style("AYTableView", state=state_name)
-                painter.save()
-                painter.fillRect(
-                    option.rect,
-                    QColor(style.get("background-color", "transparent")),
-                )
-                self._draw_cell_border(painter, option.rect, style)
-                painter.restore()
+            self._paint_cell_background(
+                painter,
+                option.rect,
+                t_style,
+                is_table,
+                is_base_state=(state_name == "base"),
+            )
             return
 
         is_open = bool(option.state & QStyle.StateFlag.State_Open)
-
-        variant = getattr(tv, "_variant_str", "default")
-        style = self.model.get_style("QTreeView", variant)
-        color = QColor(style.get("branch-indicator-color", "#8b9198"))
-        icon_name = style.get(
+        color = QColor(t_style.get("branch-indicator-color", "#8b9198"))
+        icon_name = t_style.get(
             "expanded-icon-name" if is_open else "expand-icon-name"
         )
 
-        painter.save()
-
-        if is_table:
-            if is_selected:
-                state_name = "selected"
-            elif is_hovered:
-                state_name = "hover"
-            else:
-                state_name = "base"
-            tbl_style = self.model.get_style("AYTableView", state=state_name)
-            painter.fillRect(
-                option.rect,
-                QColor(tbl_style.get("background-color", "transparent")),
-            )
-            self._draw_cell_border(painter, option.rect, tbl_style)
+        # Paint background for items with children
+        self._paint_cell_background(painter, option.rect, t_style, is_table)
 
         if icon_name:
             key = f"{icon_name}-{color.name()}"
             if key not in self._icon_cache:
                 self._icon_cache[key] = get_icon(icon_name, color=color)
-            icon = self._icon_cache[key]
-            rect = option.rect
-            if style.get("expand-icon-size"):
-                center = rect.center()
-                rect.setSize(QSize(16, 16))
-                rect.moveCenter(center)
-            icon.paint(painter, rect)
-
+            icon_size = t_style.get("expand-icon-size")
+            self._paint_icon(
+                painter, option.rect, self._icon_cache[key], icon_size
+            )
         else:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(color))
+            self._paint_fallback_arrow(painter, option.rect, color, is_open)
 
-            rect = option.rect
-            cx, cy = rect.center().x(), rect.center().y()
-            size = max(4, min(rect.width(), rect.height()) // 3)
-
-            path = QPainterPath()
-            if is_open:
-                # Downward-pointing triangle
-                path.moveTo(cx - size, cy - size // 2)
-                path.lineTo(cx + size, cy - size // 2)
-                path.lineTo(cx, cy + size // 2)
-            else:
-                # Right-pointing triangle
-                path.moveTo(cx - size // 2, cy - size)
-                path.lineTo(cx - size // 2, cy + size)
-                path.lineTo(cx + size // 2, cy)
-            path.closeSubpath()
-            painter.drawPath(path)
+    def draw_scrollbar_corner(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        style = self.model.get_style("QScrollArea", variant="default")
+        style.set_context(widget)
+        painter.save()
+        # Draw corner background
+        bg = style.get("background-color", "transparent")
+        painter.fillRect(option.rect, QColor(bg))
 
         painter.restore()
 
@@ -3215,7 +3369,7 @@ class TableHeaderDrawer:
         painter.setPen(text_color)
 
         font = painter.font()
-        font.setWeight(QtGui.QFont.Weight.DemiBold)
+        font.setWeight(QFont.Weight.DemiBold)
         painter.setFont(font)
 
         text_rect = option.rect.adjusted(
@@ -3274,6 +3428,41 @@ class TableHeaderDrawer:
 # ----------------------------------------------------------------------------
 
 
+class ScrollAreaDrawer:
+    def __init__(self, style_inst: AYONStyle) -> None:
+        self.style_inst = style_inst
+        self.model = style_inst.model
+        self._style = self.model.get_style("QScrollArea", variant="default")
+
+    @property
+    def base_class(self):
+        return {"QScrollArea": QtWidgets.QScrollArea}
+
+    def register_drawers(self) -> dict:
+        return {
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_PanelScrollAreaCorner,
+                "QScrollArea",
+            ): self.draw_scrollbar_corner,
+        }
+
+    def draw_scrollbar_corner(
+        self,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        self._style.set_context(widget)
+        painter.save()
+        # Draw corner background
+        bg = self._style.get("background-color", "transparent")
+        painter.fillRect(option.rect, QColor(bg))
+
+        painter.restore()
+
+
+# ----------------------------------------------------------------------------
 W_T = {}
 
 
@@ -3293,7 +3482,7 @@ class AYONStyle(QCommonStyle):
         self.base_classes = {}
         self.drawer_objs = [
             TooltipDrawer(self),
-            LabelDrawer(self),  # first because QLabel inherits from QFrame.
+            LabelDrawer(self),
             LineEditDrawer(self),
             ButtonDrawer(self),
             CheckboxDrawer(self),
@@ -3303,6 +3492,7 @@ class AYONStyle(QCommonStyle):
             TreeViewDrawer(self),
             TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
+            ScrollAreaDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -3313,13 +3503,30 @@ class AYONStyle(QCommonStyle):
             if hasattr(obj, "register_metrics"):
                 self.metrics.update(obj.register_metrics())
 
-        # Sort base_classes: most-specific (deepest MRO) first
+        # Sort base_classes: most-specific first to guarantee correct widget
+        # key resolution order.
+        def _specificity_cmp(a, b):
+            """Return <0 if `a` is more specific than `b`.
+
+            More specific means: `a` is a (strict) subclass of `b`.
+            For unrelated classes, fall back to MRO depth so deeper
+            classes still come first, then class name for stability.
+            """
+            ca, cb = a[1], b[1]
+            if ca is cb:
+                return 0
+            if issubclass(ca, cb):
+                return -1  # a before b
+            if issubclass(cb, ca):
+                return 1  # b before a
+            # Unrelated: deeper MRO first, then name for determinism.
+            d = len(cb.__mro__) - len(ca.__mro__)
+            if d:
+                return d
+            return (ca.__name__ > cb.__name__) - (ca.__name__ < cb.__name__)
+
         self.base_classes = dict(
-            sorted(
-                self.base_classes.items(),
-                key=lambda kv: len(kv[1].__mro__),
-                reverse=True,
-            )
+            sorted(self.base_classes.items(), key=cmp_to_key(_specificity_cmp))
         )
 
     def widget_key(self, w: QWidget | None) -> str:
@@ -3389,9 +3596,9 @@ class AYONStyle(QCommonStyle):
                 widget.setPalette(QtGui.QPalette(self.model.base_palette))
 
             if hasattr(widget, "set_font"):
-                widget.set_font(QtGui.QFont(self.model.base_font))
+                widget.set_font(QFont(self.model.base_font))
             else:
-                widget.setFont(QtGui.QFont(self.model.base_font))
+                widget.setFont(QFont(self.model.base_font))
 
             # Enable mouse tracking for buttons to receive hover events
             widget.setAttribute(Qt.WidgetAttribute.WA_Hover, True)

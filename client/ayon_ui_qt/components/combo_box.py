@@ -3,6 +3,8 @@
 This module provides :class:`AYComboBox`, a styled :class:`QComboBox`
 subclass that supports per-item coloured icons, a short-text display mode,
 and an icon-only display mode via :class:`~ayon_ui_qt.data_models.MenuSize`.
+A dropdown arrow is drawn using the Material Symbol ``arrow_drop_down``
+icon so the widget is visually recognizable as a dropdown when show_chevron is true.
 
 It also exposes :class:`AYComboBoxModel`, the default
 :class:`QStandardItemModel` subclass that adds two extra item-data roles:
@@ -60,6 +62,7 @@ from qtpy.QtGui import (
 
 from ..data_models import MenuSize
 from ..variants import QComboBoxVariants
+from .style_mixin import StyleMixin
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -164,7 +167,7 @@ class AYComboBoxModel(QStandardItemModel):
     IconNameRole = QtCore.Qt.ItemDataRole.UserRole + 2
 
 
-class AYComboBox(QtWidgets.QComboBox):
+class AYComboBox(StyleMixin, QtWidgets.QComboBox):
     """AYON-styled combo-box with icon, short-text, and inverted-colour support.
 
     :class:`AYComboBox` wraps :class:`QComboBox` and adds:
@@ -204,6 +207,9 @@ class AYComboBox(QtWidgets.QComboBox):
         inverted: When ``True`` the icon foreground and background colours are
             swapped (default ``False``).
         icon_size: Icon size in pixels (default ``20``).
+        show_chevron: If False, the dropdown chevron (arrow) will not be drawn
+            in the custom style. Default is False.
+
         **kwargs: Additional keyword arguments forwarded to
             :class:`QComboBox`.
 
@@ -236,6 +242,7 @@ class AYComboBox(QtWidgets.QComboBox):
         inverted: bool = False,
         icon_size: int = 20,
         variant: Variants = Variants.Default,
+        show_chevron: bool = False,
         **kwargs,
     ) -> None:
         self._uses_incompatible_model = False
@@ -255,6 +262,7 @@ class AYComboBox(QtWidgets.QComboBox):
         self._inverted: bool = inverted
         self._icon_size: int = icon_size
         self._inverted_icons: dict[str, QIcon] = {}
+        self.show_chevron: bool = show_chevron
 
         if placeholder:
             self.setPlaceholderText(placeholder)
@@ -538,11 +546,15 @@ class AYComboBox(QtWidgets.QComboBox):
         Args:
             arg__1: The paint event delivered by Qt.
         """
+
         from ..style import get_ayon_style
 
         p = QPainter(self)
         option = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(option)
+
+        p.setFont(self.font())
+        option.fontMetrics = self.fontMetrics()
 
         if self._inverted:
             option.currentIcon = self._get_inverted_icon(option.currentIcon)
@@ -613,7 +625,9 @@ if __name__ == "__main__":
             if icon_name:
                 item.setIcon(
                     get_icon(
-                        icon_name, color_normal=bg_color, color_selected=color
+                        icon_name,
+                        color_normal=bg_color,
+                        color_selected=color,
                         # TODO: add fill support to get_icon and pass self._icon_fill here
                     )
                 )

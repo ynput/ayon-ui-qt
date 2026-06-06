@@ -6,13 +6,14 @@ from typing import Callable
 
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import Qt
-from qtpy.QtGui import QFont, QFontMetrics, QPalette, QColor
+from qtpy.QtGui import QColor, QPalette
 
-from ..style import get_ayon_style, get_ayon_style_data, StyleDict
 from ..color_utils import compute_color_for_contrast
+from ..style import StyleDict, get_ayon_style, get_ayon_style_data
 from ..variants import QPushButtonVariants
 from .container import AYContainer
 from .dropdown import AYDropdownPopup
+from .style_mixin import StyleMixin
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ except ImportError:
     from ..vendor.qtmaterialsymbols import get_icon
 
 
-class AYButton(QtWidgets.QPushButton):
+class AYButton(StyleMixin, QtWidgets.QPushButton):
     Variants = QPushButtonVariants
 
     def __init__(
@@ -45,9 +46,6 @@ class AYButton(QtWidgets.QPushButton):
         # style params
         self._variant_str: str = variant.value
         self._style_data = StyleDict()
-        self._style_palette = QPalette()
-        self._style_font = QFont()
-        self._style_font_metrics: QFontMetrics | None = None
 
         # widget params
         self._icon_size = icon_size
@@ -101,7 +99,7 @@ class AYButton(QtWidgets.QPushButton):
             self._name_id = name_id
 
         use_fixed_width = (
-            self._style_data.get("fixed-width", True)
+            (not bool(self.text()))  # only fixed when icon-only
             if fixed_width is None
             else fixed_width
         )
@@ -150,20 +148,6 @@ class AYButton(QtWidgets.QPushButton):
                 self.palette().color(self.foregroundRole()),
             )
             self._style_palette.setColor(self.foregroundRole(), txt_color)
-
-    def palette(self) -> QPalette:
-        return self._style_palette
-
-    def set_font(self, font: QFont) -> None:
-        self._style_font = font
-        self._style_font_metrics = QFontMetrics(font)
-
-    def font(self) -> QFont:
-        return self._style_font
-
-    def fontMetrics(self) -> QFontMetrics:
-        assert self._style_font_metrics is not None
-        return self._style_font_metrics
 
     def initStyleOption(self, option: QtWidgets.QStyleOptionButton) -> None:
         super().initStyleOption(option)

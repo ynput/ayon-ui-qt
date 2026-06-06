@@ -24,8 +24,9 @@ class WidgetTest:
     size: tuple[int, int] = (800, 600)
     tolerance: float = 0.0
 
-    def __init__(self) -> None:
+    def __init__(self, qbot=None) -> None:
         self.widget: Optional[QWidget] = None
+        self._qbot = qbot
 
     @abstractmethod
     def build(self) -> QWidget:
@@ -65,5 +66,15 @@ class WidgetTest:
 
               def wait_loaded(self, qtbot) -> None:
                   qtbot.waitUntil(lambda: not self._model.is_loading)
+        """
+        return
+
+    def cleanup(self, step_name: str) -> None:
+        """Clean up after a step.
+
+        Called by the test runner after each step, before the next step is
+        executed. The default implementation is a no-op. Override in subclasses
+        that need to clean up after a step, e.g. to close a popup menu or reset
+        the mouse position.
         """
         return

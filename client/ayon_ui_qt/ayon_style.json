@@ -3,8 +3,9 @@
     "version": "1.0.0-a.1",
     "global": {
         "font-family": "Nunito Sans",
-        "font-size": 12,
-        "font-weight": 500
+        "font-size": 10.5,
+        "font-size-darwin": 12,
+        "font-weight": 400
     },
     "widgets": {
         "QPushButton": {
@@ -421,6 +422,14 @@
                 }
             }
         },
+        "QScrollArea": {
+            "default-variant": "default",
+            "variants": {
+                "default": {
+                    "background-color": "--md-sys-color-surface-container-low-dark"
+                }
+            }
+        },
         "QFrame": {
             "states": [
                 "hover",
@@ -615,7 +624,7 @@
                     "border-radius": 4,
                     "border-width": 0,
                     "border-color": "--md-sys-color-background-dark",
-                    "indent": 20,
+                    "indent": 22,
                     "item-height": 28,
                     "item-padding": [
                         4,
@@ -623,7 +632,11 @@
                     ],
                     "icon-text-spacing": 6,
                     "branch-indicator-color": "--md-sys-color-on-surface-dark",
+                    "expand-icon-name": "keyboard_arrow_right",
+                    "expanded-icon-name": "keyboard_arrow_down",
+                    "expand-icon-size": 16,
                     "hover": {
+                        "branch-indicator-color": "--md-sys-color-primary-dark",
                         "background-color": "--md-sys-color-surface-container-high-dark"
                     },
                     "selected": {
@@ -632,10 +645,7 @@
                     },
                     "disabled": {
                         "opacity": 0.5
-                    },
-                    "expand-icon-name": "keyboard_arrow_right",
-                    "expanded-icon-name": "keyboard_arrow_down",
-                    "expand-icon-size": 16
+                    }
                 },
                 "low": {
                     "background-color": "--md-sys-color-surface-container-low-dark"
@@ -691,6 +701,10 @@
                         8
                     ],
                     "icon-text-spacing": 6,
+                    "branch-indicator-color": "--md-sys-color-on-surface-dark",
+                    "expand-icon-name": "keyboard_arrow_right",
+                    "expanded-icon-name": "keyboard_arrow_down",
+                    "expand-icon-size": 16,
                     "header-background-color": "--md-sys-color-surface-container-lowest-dark",
                     "header-color": "--md-sys-color-on-surface-variant-dark",
                     "header-border-color": "--md-sys-color-surface-container-dark",
@@ -705,6 +719,7 @@
                     "header-sort-indicator-size": 18,
                     "disabled-opacity": 0.5,
                     "hover": {
+                        "branch-indicator-color": "--md-sys-color-primary-dark",
                         "background-color": "--color-table-row-hover"
                     },
                     "selected": {

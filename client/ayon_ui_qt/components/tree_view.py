@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
-from qtpy.QtCore import Qt, Signal, QItemSelection
-from qtpy.QtGui import QColor, QPaintEvent, QPainter, QPalette
-from qtpy.QtWidgets import QTreeView, QWidget
+from qtpy.QtCore import QEvent, QItemSelection, Qt, Signal
+from qtpy.QtGui import (
+    QColor,
+    QCursor,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+)
+from qtpy.QtWidgets import QStyle, QStyleOption, QTreeView, QWidget
 
-from ..style import TreeViewItemDelegate, get_ayon_style
+from ..style import TreeViewItemDelegate, enum_to_str, get_ayon_style
 from ..variants import QTreeViewVariants
 from .scroll_area import AYScrollBar
+from .style_mixin import StyleMixin
 
 
-class AYTreeView(QTreeView):
+class AYTreeView(StyleMixin, QTreeView):
     """AYON-styled tree view.
 
     Fully self-contained: uses AYONStyle for all painting, a custom
@@ -26,6 +34,7 @@ class AYTreeView(QTreeView):
 
     Variants = QTreeViewVariants
     selection_changed = Signal(QItemSelection, QItemSelection)
+    double_clicked = Signal(QMouseEvent)
 
     def __init__(
         self,
@@ -48,6 +57,10 @@ class AYTreeView(QTreeView):
         self.viewport().setAttribute(
             Qt.WidgetAttribute.WA_TranslucentBackground, False
         )
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.viewport().setMouseTracking(True)
+        self.viewport().installEventFilter(self)
+        self._hovered_row_key: tuple | None = None
         self._sync_viewport_palette()
 
         # Custom item delegate — paints items directly, avoids QSS.
@@ -107,6 +120,70 @@ class AYTreeView(QTreeView):
         # Let QTreeView draw its items on top.
         super().paintEvent(event)
 
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            if event.type() == QEvent.Type.MouseMove:
+                idx = self.indexAt(event.pos())
+                key = (idx.row(), idx.parent()) if idx.isValid() else None
+                if key != self._hovered_row_key:
+                    self._hovered_row_key = key
+                    self.viewport().update()
+            elif event.type() == QEvent.Type.Leave:
+                if self._hovered_row_key is not None:
+                    self._hovered_row_key = None
+                    self.viewport().update()
+        return super().eventFilter(obj, event)
+
+    def drawBranches(self, painter, rect, index):
+        """Draw branch indicators with AYONStyle directly.
+
+        Bypasses ``self.style()`` because, when an application-level QSS is
+        active, Qt wraps the widget's style in a ``QStyleSheetStyle`` proxy
+        which would otherwise intercept ``PE_IndicatorBranch`` and apply
+        QSS ``QTreeView::branch`` rules on top of (or instead of) ours.
+        """
+        style = get_ayon_style()  # the raw AYONStyle, never wrapped
+
+        opt = QStyleOption()
+        opt.rect = rect
+        opt.palette = self.palette()
+        state = QStyle.StateFlag.State_Item
+        if self.model() is not None and self.model().hasChildren(index):
+            state |= QStyle.StateFlag.State_Children
+        if self.isExpanded(index):
+            state |= QStyle.StateFlag.State_Open
+        if self.selectionModel().isSelected(index):
+            state |= QStyle.StateFlag.State_Selected
+        if self.isEnabled():
+            state |= QStyle.StateFlag.State_Enabled
+
+        # Row-level hover: is the cursor on the same row as `index`?
+        hovered_index = self.indexAt(
+            self.viewport().mapFromGlobal(QCursor.pos())
+        )
+        if (
+            hovered_index.isValid()
+            and hovered_index.row() == index.row()
+            and hovered_index.parent() == index.parent()
+        ):
+            state |= QStyle.StateFlag.State_MouseOver
+
+        opt.state = state
+
+        # Call our drawer directly, not through self.style().
+        style.drawers[
+            enum_to_str(
+                QStyle.PrimitiveElement,
+                QStyle.PrimitiveElement.PE_IndicatorBranch,
+                "QTreeView",
+            )
+        ](opt, painter, self)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        """Emit double_clicked signal on double-click."""
+        self.double_clicked.emit(event)
+        super().mouseDoubleClickEvent(event)
+
     def mousePressEvent(self, event) -> None:
         """Deselect all items when clicking in an empty area."""
         index = self.indexAt(event.pos())
@@ -148,7 +225,7 @@ if __name__ == "__main__":
     def _build() -> QtWidgets.QWidget:
         """Show one AYTreeView per variant with lazy-loaded fake data."""
         from .layouts import AYVBoxLayout
-        from .tree_model import LazyTreeModel, TreeNode, PRODUCTS_TEST_DATA
+        from .tree_model import PRODUCTS_TEST_DATA, LazyTreeModel, TreeNode
 
         def fetch_children(
             parent_id: str | None,
