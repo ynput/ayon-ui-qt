@@ -18,7 +18,7 @@ from qtpy.QtWidgets import (
 from ._utils import do_nothing, enum_to_str, get_icon
 
 if TYPE_CHECKING:
-    from ..style import AYONStyle, StyleData
+    from ..style import AYONStyle
 
 
 class ComboBoxDrawer:

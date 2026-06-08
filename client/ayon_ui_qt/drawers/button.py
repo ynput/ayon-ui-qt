@@ -16,10 +16,10 @@ from qtpy.QtGui import (
     QPen,
 )
 from qtpy.QtWidgets import (
+    QPushButton,
     QStyle,
     QStyleOption,
     QStyleOptionButton,
-    QPushButton,
     QWidget,
 )
 
