@@ -138,7 +138,9 @@ class TextBoxTest(WidgetTest):
             "## Title\nSome **bold** and *italic* text.\n"
             "- [ ] Task one\n- [x] Task two\n"
         )
-        self._text_box_no_cat.set_markdown("Plain comment with `inline code`.\n")
+        self._text_box_no_cat.set_markdown(
+            "Plain comment with `inline code`.\n"
+        )
 
     def wait_loaded(self, qtbot) -> None:
         """Flush pending paint events."""

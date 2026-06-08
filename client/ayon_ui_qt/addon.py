@@ -2,6 +2,7 @@
 
 This module provides the client-side addon integration with AYON.
 """
+
 from __future__ import annotations
 
 from ayon_core.addon import AYONAddon

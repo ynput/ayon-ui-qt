@@ -17,25 +17,73 @@ from ayon_ui_qt.components.label import AYLabel
 
 _TREE_DATA: dict[str | None, list[TreeNode]] = {
     None: [
-        TreeNode(id="assets",  label="Assets",  has_children=True,  icon="folder",      icon_color="#f4c430"),
-        TreeNode(id="shots",   label="Shots",   has_children=True,  icon="movie",       icon_color="#74b9ff"),
-        TreeNode(id="renders", label="Renders", has_children=False, icon="photo_library",icon_color="#a29bfe"),
+        TreeNode(
+            id="assets",
+            label="Assets",
+            has_children=True,
+            icon="folder",
+            icon_color="#f4c430",
+        ),
+        TreeNode(
+            id="shots",
+            label="Shots",
+            has_children=True,
+            icon="movie",
+            icon_color="#74b9ff",
+        ),
+        TreeNode(
+            id="renders",
+            label="Renders",
+            has_children=False,
+            icon="photo_library",
+            icon_color="#a29bfe",
+        ),
     ],
     "assets": [
-        TreeNode(id="chars",  label="Characters", has_children=True,  icon="person",    icon_color="#fd79a8"),
-        TreeNode(id="props",  label="Props",      has_children=False, icon="category",  icon_color="#fdcb6e"),
+        TreeNode(
+            id="chars",
+            label="Characters",
+            has_children=True,
+            icon="person",
+            icon_color="#fd79a8",
+        ),
+        TreeNode(
+            id="props",
+            label="Props",
+            has_children=False,
+            icon="category",
+            icon_color="#fdcb6e",
+        ),
     ],
     "shots": [
-        TreeNode(id="sq010", label="sq010", has_children=True,  icon="local_movies", icon_color="#55efc4"),
-        TreeNode(id="sq020", label="sq020", has_children=False, icon="local_movies", icon_color="#55efc4"),
+        TreeNode(
+            id="sq010",
+            label="sq010",
+            has_children=True,
+            icon="local_movies",
+            icon_color="#55efc4",
+        ),
+        TreeNode(
+            id="sq020",
+            label="sq020",
+            has_children=False,
+            icon="local_movies",
+            icon_color="#55efc4",
+        ),
     ],
     "chars": [
-        TreeNode(id="hero",     label="hero",     has_children=False, icon="person"),
-        TreeNode(id="villain",  label="villain",  has_children=False, icon="person"),
+        TreeNode(id="hero", label="hero", has_children=False, icon="person"),
+        TreeNode(
+            id="villain", label="villain", has_children=False, icon="person"
+        ),
     ],
     "sq010": [
-        TreeNode(id="sh010", label="sh010", has_children=False, icon="videocam"),
-        TreeNode(id="sh020", label="sh020", has_children=False, icon="videocam"),
+        TreeNode(
+            id="sh010", label="sh010", has_children=False, icon="videocam"
+        ),
+        TreeNode(
+            id="sh020", label="sh020", has_children=False, icon="videocam"
+        ),
     ],
 }
 
@@ -88,6 +136,7 @@ class TreeViewTest(WidgetTest):
     def wait_loaded(self, qtbot) -> None:  # type: ignore[no-untyped-def]
         """Flush pending paint events; data was loaded synchronously."""
         from qtpy.QtWidgets import QApplication
+
         QApplication.processEvents()
 
     def steps(self):

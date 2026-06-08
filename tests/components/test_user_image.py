@@ -11,7 +11,9 @@ from ayon_ui_qt.components.user_image import AYUserImage
 from ayon_ui_qt.components.container import AYContainer
 from ayon_ui_qt.components.label import AYLabel
 
-_RSRC = Path(__file__).parent.parent.parent / "client" / "ayon_ui_qt" / "resources"
+_RSRC = (
+    Path(__file__).parent.parent.parent / "client" / "ayon_ui_qt" / "resources"
+)
 
 
 class UserImageTest(WidgetTest):
@@ -33,9 +35,17 @@ class UserImageTest(WidgetTest):
             layout_spacing=16,
         )
         row1.add_widget(AYLabel("highlight=False:"))
-        row1.add_widget(AYUserImage(name="jd",   full_name="John Doe",   size=40, highlight=False))
-        row1.add_widget(AYUserImage(name="ab",   full_name="Alice Brown", size=40, highlight=False))
-        row1.add_widget(AYUserImage(name="?",    size=32, highlight=False))
+        row1.add_widget(
+            AYUserImage(
+                name="jd", full_name="John Doe", size=40, highlight=False
+            )
+        )
+        row1.add_widget(
+            AYUserImage(
+                name="ab", full_name="Alice Brown", size=40, highlight=False
+            )
+        )
+        row1.add_widget(AYUserImage(name="?", size=32, highlight=False))
         row1.addStretch(1)
         root.add_widget(row1)
 
@@ -45,8 +55,16 @@ class UserImageTest(WidgetTest):
             layout_spacing=16,
         )
         row2.add_widget(AYLabel("highlight=True:"))
-        row2.add_widget(AYUserImage(name="jd",   full_name="John Doe",   size=40, highlight=True))
-        row2.add_widget(AYUserImage(name="ab",   full_name="Alice Brown", size=40, highlight=True))
+        row2.add_widget(
+            AYUserImage(
+                name="jd", full_name="John Doe", size=40, highlight=True
+            )
+        )
+        row2.add_widget(
+            AYUserImage(
+                name="ab", full_name="Alice Brown", size=40, highlight=True
+            )
+        )
         row2.addStretch(1)
         root.add_widget(row2)
 
@@ -56,8 +74,14 @@ class UserImageTest(WidgetTest):
             layout_spacing=16,
         )
         row3.add_widget(AYLabel("outline=False:"))
-        row3.add_widget(AYUserImage(name="jd", full_name="John Doe", size=40, outline=False))
-        row3.add_widget(AYUserImage(name="ab", size=40, outline=False, highlight=True))
+        row3.add_widget(
+            AYUserImage(
+                name="jd", full_name="John Doe", size=40, outline=False
+            )
+        )
+        row3.add_widget(
+            AYUserImage(name="ab", size=40, outline=False, highlight=True)
+        )
         row3.addStretch(1)
         root.add_widget(row3)
 
@@ -93,8 +117,12 @@ class UserImageMainTest(WidgetTest):
         w.add_widget(AYUserImage(name="Oliver", outline=False))
         w.add_widget(AYUserImage(name="Oliver", outline=False, highlight=True))
         # Large (size=60)
-        w.add_widget(AYUserImage(src=_RSRC / "avatar1.jpg", outline=False, size=60))
-        w.add_widget(AYUserImage(src=_RSRC / "avatar2.jpg", highlight=True, size=60))
+        w.add_widget(
+            AYUserImage(src=_RSRC / "avatar1.jpg", outline=False, size=60)
+        )
+        w.add_widget(
+            AYUserImage(src=_RSRC / "avatar2.jpg", highlight=True, size=60)
+        )
         w.add_widget(AYUserImage(full_name="Oliver Cromwell", size=60))
         w.add_widget(AYUserImage(name="Oliver", outline=False, size=60))
         # Entity_Card variant (size=24)
