@@ -10,11 +10,9 @@ from pathlib import Path
 from qtpy import QtCore, QtGui, QtWidgets
 from qtpy.QtCore import QRect, QRectF, Qt
 from qtpy.QtGui import (
-    QAction,
     QBrush,
     QColor,
     QFont,
-    QKeySequence,
     QPainter,
     QPen,
 )
@@ -25,7 +23,6 @@ from qtpy.QtWidgets import (
     QFrame,
     QHeaderView,
     QLabel,
-    QMenu,
     QStyle,
     QStyleOption,
     QWidget,
@@ -47,7 +44,6 @@ from .drawers import (
     ItemViewItemDrawer,
     LabelDrawer,
     LineEditDrawer,
-    MenuDrawer,
     ScrollAreaDrawer,
     ScrollBarDrawer,
     TableHeaderDrawer,
@@ -214,8 +210,6 @@ def style_widget_and_siblings(widget: QWidget, fix_app: bool = False) -> None:
         app.setStyleSheet(qss)
 
 
-
-
 # ----------------------------------------------------------------------------
 W_T = {}
 
@@ -248,7 +242,6 @@ class AYONStyle(QCommonStyle):
             TableHeaderDrawer(self),
             ItemViewItemDrawer(self),
             ScrollAreaDrawer(self),
-            MenuDrawer(self),
         ]
         for obj in self.drawer_objs:
             self.base_classes.update(obj.base_class)
@@ -762,39 +755,6 @@ if __name__ == "__main__":
         )
         usr_ly.addWidget(AYUserImage(full_name="John Doe"))
         col3_lyt.addLayout(usr_ly)
-
-        from qtpy.QtGui import QIcon as _QIcon
-        from qtpy.QtWidgets import QAction as _QAction
-        from qtpy.QtWidgets import QMenu as _QMenu
-
-        from .drawers import get_icon as _get_icon
-
-        ctx_menu_label = AYLabel(
-            "Right-click here for a menu",
-            variant=AYLabel.Variants.Default,
-            rel_text_size=2,
-            icon="menu",
-        )
-        col3_lyt.addWidget(ctx_menu_label)
-        # add a context menu to the label
-        menu = QMenu(parent=ctx_menu_label)
-        icn = _get_icon("content_copy", color="#f2f2f3")
-        a1 = QAction(
-            icn,
-            "Action 1",
-            menu,
-        )
-        a1.setShortcut(QKeySequence("Ctrl+C"))
-        menu.addAction(a1)
-        menu.addAction("Action 2")
-        menu.addSeparator()
-        menu.addAction("Action 3")
-        ctx_menu_label.setContextMenuPolicy(
-            Qt.ContextMenuPolicy.CustomContextMenu
-        )
-        ctx_menu_label.customContextMenuRequested.connect(
-            lambda pos: menu.exec_(ctx_menu_label.mapToGlobal(pos))
-        )
 
         col3_lyt.addStretch()
         container_3.add_layout(col3_lyt)
