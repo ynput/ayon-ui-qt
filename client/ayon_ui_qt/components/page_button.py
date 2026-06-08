@@ -453,7 +453,10 @@ if __name__ == "__main__":
             ("Featured version", "Done", "star"),
             ("Settings", "", "settings"),
             (
-                "A very long label that should be elided when the window is narrow",
+                (
+                    "A very long label that should be elided when the window"
+                    " is narrow"
+                ),
                 "Value",
                 "info",
             ),

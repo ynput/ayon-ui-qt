@@ -594,7 +594,9 @@ class AYCardView(QAbstractItemView):
     def scrollTo(
         self,
         index: QModelIndex | QPersistentModelIndex,
-        hint: QAbstractItemView.ScrollHint = QAbstractItemView.ScrollHint.EnsureVisible,
+        hint: QAbstractItemView.ScrollHint = (
+            QAbstractItemView.ScrollHint.EnsureVisible
+        ),
     ) -> None:
         if not index.isValid():
             return

@@ -725,7 +725,10 @@ class AYLabel(StyleMixin, QtWidgets.QLabel):
             )
             content_w = icon_w + spacing + text_w
             content_h = max(text_h, icon_h)
-            # print(f"{self._text!r}: {content_w + 2 * pad_h} x {content_h + 2 * pad_v}")
+            # print(
+            #     f"{self._text!r}: {content_w + 2 * pad_h} x "
+            #     f"{content_h + 2 * pad_v}"
+            # )
         elif icon_w:
             content_w = icon_w
             content_h = icon_h
@@ -925,7 +928,10 @@ if __name__ == "__main__":
                 icon_size=16,
                 variant=AYLabel.Variants.Entity_Label_Filled,
             )
-            # print(f"Entity_Label_Filled: {json.dumps(l9._style_data, indent=4)}")
+            # print(
+            #     "Entity_Label_Filled: "
+            #     f"{json.dumps(l9._style_data, indent=4)}"
+            # )
             row.add_widget(l9, stretch=0)
             row.addStretch()
 
