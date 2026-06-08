@@ -131,7 +131,7 @@ class ComboBoxDrawer:
             # Draw expand_more arrow if show_chevron is True
             show_chevron = getattr(w, "show_chevron", True)
             if show_chevron:
-                arrow_rect = super(AYONStyle, self.style_inst).subControlRect(
+                arrow_rect = self._super.subControlRect(
                     QStyle.ComplexControl.CC_ComboBox,
                     opt,
                     QStyle.SubControl.SC_ComboBoxArrow,
