@@ -532,13 +532,18 @@ class CheckboxHandler(QObject):
         Returns:
             GitHub-flavored markdown string with checkbox syntax.
         """
+        # Serialize via markdown_with_clean_emphasis rather than plain
+        # toMarkdown(): the AYON style's Medium application font otherwise
+        # makes the writer wrap every weight-less run in ``**``.
+        from .comment_completion import markdown_with_clean_emphasis
+
         if not self._checkboxes:
-            return self._text_edit.toMarkdown(MD_DIALECT)
+            return markdown_with_clean_emphasis(self._text_edit, MD_DIALECT)
 
         # Get current text and replace placeholders with checkbox syntax
-        # we use toMarkdown() to make sure the other formatted items have
-        # already been dealt with.
-        text = self._text_edit.toMarkdown(MD_DIALECT)
+        # we use the markdown serializer to make sure the other formatted
+        # items have already been dealt with.
+        text = markdown_with_clean_emphasis(self._text_edit, MD_DIALECT)
         lines = text.split("\n")
         result_lines: List[str] = []
 

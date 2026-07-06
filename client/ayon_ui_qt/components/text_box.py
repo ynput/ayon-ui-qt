@@ -43,11 +43,15 @@ from .combo_box import AYComboBox
 from .comment_completion import (
     apply_code_block_backgrounds,
     format_comment_on_change,
-    on_completer_activated,
+    markdown_with_clean_emphasis,
     on_completer_key_press,
     on_completer_text_changed,
+    on_tasks_updated,
+    on_teams_updated,
     on_users_updated,
-    setup_user_completer,
+    on_versions_updated,
+    sanitize_invalid_emphasis,
+    setup_mention_completer,
     CODE_FG,
     CODE_BG
 )
@@ -72,6 +76,9 @@ class AYTextEditor(AYTextEdit):
         num_lines: int = 0,
         read_only: bool = False,
         user_list: list[User] | None,
+        team_list: list | None = None,
+        version_list: list | None = None,
+        task_list: list | None = None,
         variant: Variants = Variants.Default,
         **kwargs,
     ):
@@ -79,6 +86,9 @@ class AYTextEditor(AYTextEdit):
         self.num_lines: int = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
+        self._team_list: list = team_list or []
+        self._version_list: list = version_list or []
+        self._task_list: list = task_list or []
         self._variant_str: str = variant.value
         self._checkbox_handler: CheckboxHandler | None = None
         # Guard flag: when True, format_comment_on_change is a no-op.
@@ -117,16 +127,15 @@ class AYTextEditor(AYTextEdit):
 
         if not self._read_only:
             self.setPlaceholderText(
-                "Comment or mention with @user, @@version, @@@task..."
+                "Comment or mention with @user/@team, @@version, @@@task..."
             )
         self.setReadOnly(self._read_only)
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("white"))
         self.setPalette(palette)
-        # Setup user completer
-        setup_user_completer(
+        # Setup multi-level @mention completer (user / version / task)
+        setup_mention_completer(
             self,
-            self._on_completer_activated,
             self._on_text_changed,
         )
 
@@ -146,10 +155,6 @@ class AYTextEditor(AYTextEdit):
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
         on_completer_text_changed(self)
-
-    def _on_completer_activated(self, text: str) -> None:
-        """Handle completer selection."""
-        on_completer_activated(self, text)
 
     def keyPressEvent(self, event) -> None:
         """Handle key press events for completer."""
@@ -257,6 +262,10 @@ class AYTextEditor(AYTextEdit):
         Args:
             md: Markdown text to display
         """
+        # Repair invalid ``** text**`` emphasis from comments stored before
+        # the Medium-font-weight serialization fix, which would otherwise
+        # render as literal asterisks.
+        md = sanitize_invalid_emphasis(md)
         if CheckboxHandler.contains_checkboxes(md):
             self._setup_checkbox_handler()
             assert self._checkbox_handler is not None
@@ -273,7 +282,7 @@ class AYTextEditor(AYTextEdit):
         """
         if self._checkbox_handler and self._checkbox_handler.has_checkboxes():
             return self._checkbox_handler.to_markdown()
-        return self.document().toMarkdown(MD_DIALECT)
+        return markdown_with_clean_emphasis(self, MD_DIALECT)
 
     def _is_checkbox_at_cursor(
         self, click_pos: QPoint
@@ -336,6 +345,27 @@ class AYTextEditor(AYTextEdit):
             self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
         super().mouseMoveEvent(event)
 
+    @staticmethod
+    def _trim_selection_whitespace(cursor: QTextCursor) -> None:
+        """Shrink *cursor*'s selection to exclude leading/trailing spaces.
+
+        Emphasis applied to a span with boundary whitespace serializes to
+        invalid CommonMark (e.g. ``** text**``), which renders as literal
+        asterisks. Trimming the selection first keeps the emphasis markers
+        adjacent to non-whitespace. No-op when the selection is empty or
+        entirely whitespace.
+        """
+        if not cursor.hasSelection():
+            return
+        start, end = cursor.selectionStart(), cursor.selectionEnd()
+        text = cursor.selectedText()
+        lead = len(text) - len(text.lstrip())
+        trail = len(text) - len(text.rstrip())
+        if lead + trail >= (end - start):
+            return  # nothing but whitespace selected
+        cursor.setPosition(start + lead)
+        cursor.setPosition(end - trail, QTextCursor.MoveMode.KeepAnchor)
+
     def set_style(self, style: str) -> None:
         """Apply a character style to the current selection or cursor.
 
@@ -365,6 +395,7 @@ class AYTextEditor(AYTextEdit):
             fmt.setFontWeight(new_weight)
 
             if cursor.hasSelection():
+                self._trim_selection_whitespace(cursor)
                 cursor.mergeCharFormat(fmt)
             else:
                 self.mergeCurrentCharFormat(fmt)
@@ -378,6 +409,7 @@ class AYTextEditor(AYTextEdit):
             fmt.setFontItalic(new_italic)
 
             if cursor.hasSelection():
+                self._trim_selection_whitespace(cursor)
                 cursor.mergeCharFormat(fmt)
             else:
                 self.mergeCurrentCharFormat(fmt)
@@ -720,11 +752,9 @@ class AYTextBox(AYContainer):
         "fmt_checklist": "checklist",
     }
     mention_map = {
-        "person": "@",
-        # TODO: Implement support for version and task mentions in completer
-        #  before enabling these
-        # "layers": "@@",
-        # "check_circle": "@@@",
+        "person": "@",        # user mention
+        "layers": "@@",       # version mention
+        "check_circle": "@@@",  # task mention
     }
 
     def __init__(
@@ -733,6 +763,9 @@ class AYTextBox(AYContainer):
         num_lines=0,
         show_categories=False,
         user_list: list[User] | None = None,
+        team_list: list | None = None,
+        version_list: list | None = None,
+        task_list: list | None = None,
         variant: Variants = Variants.Default,
         **kwargs,
     ):
@@ -747,8 +780,15 @@ class AYTextBox(AYContainer):
 
         self.show_categories = show_categories
         self.comment_categories: list[dict] = _dict_from_comment_category([])
-        self.category = self.comment_categories[0]["text"]
+        # Index 0 is the NO_CATEGORY placeholder: submitting must send an
+        # empty category, not the placeholder's display text — AYON treats
+        # any non-empty ``data.category`` as an access-controlled activity
+        # category and hides the comment from users without access to it.
+        self.category = ""
         self._user_list: list[User] = user_list or []
+        self._team_list: list = team_list or []
+        self._version_list: list = version_list or []
+        self._task_list: list = task_list or []
         # Store attachments - unified list for both screenshots and files
         self._attachments = []  # List of dicts: {'type': 'screenshot'|'file', 'path': str, 'filename': str}
         self.screenshot_handler = None  # Will be initialized in _build
@@ -821,6 +861,9 @@ class AYTextBox(AYContainer):
             self,
             num_lines=num_lines,
             user_list=self._user_list,
+            team_list=self._team_list,
+            version_list=self._version_list,
+            task_list=self._task_list,
             variant=AYTextEditor.Variants.Default,
         )
         for var in self.style_icons:
@@ -1029,7 +1072,41 @@ class AYTextBox(AYContainer):
         if self.show_categories:
             self.com_cat.update_items(self.comment_categories)
         self.edit_field._user_list = self._user_list = data.users
+        self.edit_field._team_list = self._team_list = data.teams
+        # Rebuilds the merged user+team completer model.
         on_users_updated(self.edit_field)
+
+    def set_team_list(self, teams: list) -> None:
+        """Update the data source for ``@team`` mention completion.
+
+        Args:
+            teams: List of :class:`~..data_models.Team` for the current
+                project. Teams share the ``@`` completer level with users.
+        """
+        self.edit_field._team_list = self._team_list = teams or []
+        on_teams_updated(self.edit_field)
+
+    def set_version_list(self, versions: list) -> None:
+        """Update the data source for ``@@version`` mention completion.
+
+        Args:
+            versions: List of :class:`~..data_models.MentionEntity` (or any
+                object exposing ``id``/``label``/``type``) for the versions
+                in the current review context.
+        """
+        self.edit_field._version_list = self._version_list = versions or []
+        on_versions_updated(self.edit_field)
+
+    def set_task_list(self, tasks: list) -> None:
+        """Update the data source for ``@@@task`` mention completion.
+
+        Args:
+            tasks: List of :class:`~..data_models.MentionEntity` (or any
+                object exposing ``id``/``label``/``type``) for the tasks in
+                the current review context.
+        """
+        self.edit_field._task_list = self._task_list = tasks or []
+        on_tasks_updated(self.edit_field)
 
     def _build(self, num_lines):
         self.add_layout(self._build_upper_bar())

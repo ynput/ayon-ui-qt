@@ -48,10 +48,11 @@ from .combo_box import ALL_STATUSES
 from .comment_completion import (
     apply_code_block_backgrounds,
     format_comment_on_change,
-    on_completer_activated,
+    markdown_with_clean_emphasis,
     on_completer_key_press,
     on_completer_text_changed,
-    setup_user_completer,
+    setup_mention_completer,
+    style_mention_anchors,
 )
 from .container import AYContainer, AYFrame
 from .gallery_dialog import GalleryDialog
@@ -232,6 +233,7 @@ class AYCommentField(AYTextEdit):
         read_only: bool = False,
         num_lines: int = 0,
         user_list: list[User] | None = None,
+        team_list: list | None = None,
         model: CommentModel | None = None,
         variant: Variants = Variants.Default,
         **kwargs,
@@ -240,6 +242,7 @@ class AYCommentField(AYTextEdit):
         self._num_lines = num_lines
         self._read_only: bool = read_only
         self._user_list: list[User] = user_list or []
+        self._team_list: list = team_list or []
         self._data = model
         self._bg_color = None
         self._checkbox_handler: CheckboxHandler | None = None
@@ -268,14 +271,13 @@ class AYCommentField(AYTextEdit):
 
         if not self._read_only:
             self.setPlaceholderText(
-                "Comment or mention with @user, @@version, @@@task..."
+                "Comment or mention with @user/@team, @@version, @@@task..."
             )
         self.setReadOnly(self._read_only)
 
-        # Setup user completer
-        setup_user_completer(
+        # Setup multi-level @mention completer (user / version / task)
+        setup_mention_completer(
             self,
-            self._on_completer_activated,
             self._on_text_changed,
         )
 
@@ -320,6 +322,7 @@ class AYCommentField(AYTextEdit):
             assert self._checkbox_handler is not None
             self._checkbox_handler.parse_and_render(md)
             if self._read_only:
+                style_mention_anchors(self)
                 self._adjust_height_to_content()
             return
 
@@ -327,6 +330,7 @@ class AYCommentField(AYTextEdit):
         apply_code_block_backgrounds(self)
 
         if self._read_only:
+            style_mention_anchors(self)
             self._adjust_height_to_content()
 
     def _setup_checkbox_handler(self) -> None:
@@ -354,15 +358,11 @@ class AYCommentField(AYTextEdit):
         """
         if self._checkbox_handler and self._checkbox_handler.has_checkboxes():
             return self._checkbox_handler.to_markdown()
-        return self.document().toMarkdown(MD_DIALECT)
+        return markdown_with_clean_emphasis(self, MD_DIALECT)
 
     def _on_text_changed(self) -> None:
         """Handle text changes to show/hide completer."""
         on_completer_text_changed(self)
-
-    def _on_completer_activated(self, text: str) -> None:
-        """Handle completer selection."""
-        on_completer_activated(self, text)
 
     def _adjust_height_to_content(self) -> None:
         """Adjust widget height to fit document content (read-only mode only)."""
@@ -856,10 +856,12 @@ class AYComment(AYContainer):
         *args,
         data: CommentModel | None = None,
         user_list: list[User] | None = None,
+        team_list: list | None = None,
         **kwargs,
     ):
         self._data = data if data else CommentModel()
         self._user_list: list[User] = user_list or []
+        self._team_list: list = team_list or []
         self._bg_color = None
         self._image_widgets = {}
         self._attachments_built = False
@@ -976,6 +978,7 @@ class AYComment(AYContainer):
             text=self._data.comment,
             read_only=True,
             user_list=self._user_list,
+            team_list=self._team_list,
             model=self._data,
             variant=AYCommentField.Variants.High,
         )

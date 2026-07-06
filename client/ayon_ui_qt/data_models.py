@@ -192,6 +192,22 @@ class User:
 
 
 @dataclass
+class MentionEntity:
+    """Lightweight entity used to build an AYON mention link.
+
+    A mention is serialized into a comment body as the markdown link
+    ``[label](type:id)`` (see :func:`insert_mention_from_index`). The AYON
+    server auto-extracts references from that markup. For ``type="user"``
+    the ``id`` is the username; for ``type="team"`` it is the team name;
+    for versions/tasks it is the entity UUID.
+    """
+
+    id: str
+    label: str
+    type: str  # "user" | "team" | "version" | "task"
+
+
+@dataclass
 class Team:
     name: str
     members: List[str]
